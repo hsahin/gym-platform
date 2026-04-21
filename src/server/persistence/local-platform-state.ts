@@ -2,6 +2,11 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppError, createPrefixedIdGenerator } from "@claimtech/core";
+import {
+  MongoDatabaseClient,
+  createMongoClient,
+  type GlobalCollection,
+} from "@claimtech/database";
 import { toTenantId, type TenantId } from "@claimtech/tenant";
 import {
   createDefaultBillingSettings,
@@ -28,8 +33,14 @@ import {
 
 const stateVersion = 2;
 const accountIdGenerator = createPrefixedIdGenerator({ prefix: "staff" });
+const mongoPlatformStateCollection = "platform_state";
+const mongoPlatformStateDocumentId = "gym-platform-state";
+const productName = "gym-platform";
 
 let mutationQueue = Promise.resolve();
+let mongoStateCollectionPromise:
+  | Promise<GlobalCollection<MongoLocalPlatformStateDocument> | null>
+  | null = null;
 
 export interface LocalTenantProfile {
   readonly id: TenantId;
@@ -119,11 +130,52 @@ type PersistedLocalPlatformState = Omit<LocalPlatformState, "tenants"> & {
   readonly tenants: ReadonlyArray<PersistedLocalTenantProfile>;
 };
 
+type MongoLocalPlatformStateDocument = PersistedLocalPlatformState & {
+  readonly id: string;
+};
+
 function getStateFilePath() {
   return (
     process.env.LOCAL_PLATFORM_STATE_FILE ||
     path.join(process.cwd(), ".data", "gym-platform-state.json")
   );
+}
+
+function shouldUseMongoPlatformState() {
+  if (process.env.PLATFORM_STATE_BACKEND === "file") {
+    return false;
+  }
+
+  return process.env.PLATFORM_STATE_BACKEND === "mongo" || Boolean(process.env.MONGODB_URI);
+}
+
+async function resolveMongoStateCollection() {
+  if (!shouldUseMongoPlatformState()) {
+    return null;
+  }
+
+  if (!mongoStateCollectionPromise) {
+    mongoStateCollectionPromise = (async () => {
+      if (!process.env.MONGODB_URI) {
+        return null;
+      }
+
+      const client = createMongoClient({
+        uri: process.env.MONGODB_URI,
+        appName: productName,
+      });
+      await client.connect();
+
+      const dbName = process.env.MONGODB_DB_NAME ?? productName;
+      const databaseClient = new MongoDatabaseClient(client.db(dbName));
+
+      return databaseClient
+        .global()
+        .collection<MongoLocalPlatformStateDocument>(mongoPlatformStateCollection);
+    })();
+  }
+
+  return mongoStateCollectionPromise;
 }
 
 function normalizeEmail(email: string) {
@@ -260,6 +312,34 @@ function migrateLegacyState(parsed: LegacyLocalPlatformState): LocalPlatformStat
 }
 
 async function persistState(state: LocalPlatformState) {
+  const collection = await resolveMongoStateCollection();
+
+  if (collection) {
+    const document: MongoLocalPlatformStateDocument = {
+      id: mongoPlatformStateDocumentId,
+      ...state,
+    };
+    const existing = await collection.findOne({ id: mongoPlatformStateDocumentId });
+
+    if (!existing) {
+      await collection.insertOne(document);
+      return;
+    }
+
+    await collection.updateOne(
+      { id: mongoPlatformStateDocumentId },
+      {
+        set: {
+          version: document.version,
+          tenants: document.tenants,
+          accounts: document.accounts,
+          data: document.data,
+        },
+      },
+    );
+    return;
+  }
+
   const stateFilePath = getStateFilePath();
   await mkdir(path.dirname(stateFilePath), { recursive: true });
   await writeFile(stateFilePath, JSON.stringify(state, null, 2), "utf8");
@@ -282,6 +362,31 @@ async function withStateMutation<T>(
 }
 
 export async function readLocalPlatformState(): Promise<LocalPlatformState | null> {
+  const collection = await resolveMongoStateCollection();
+
+  if (collection) {
+    const document = await collection.findOne({ id: mongoPlatformStateDocumentId });
+
+    if (!document) {
+      return null;
+    }
+
+    if (document.version !== stateVersion || !("tenants" in document)) {
+      throw new AppError("De platformstate in de database heeft een onverwachte versie.", {
+        code: "INVALID_INPUT",
+        details: { expectedVersion: stateVersion, actualVersion: document.version },
+      });
+    }
+
+    const normalized = normalizeState(document);
+
+    if (normalized.changed) {
+      await persistState(normalized.state);
+    }
+
+    return normalized.state;
+  }
+
   try {
     const raw = await readFile(getStateFilePath(), "utf8");
     const parsed = JSON.parse(raw) as PersistedLocalPlatformState | LegacyLocalPlatformState;

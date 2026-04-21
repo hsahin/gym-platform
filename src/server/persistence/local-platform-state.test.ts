@@ -18,10 +18,12 @@ let tempDir = "";
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-state-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
+  process.env.PLATFORM_STATE_BACKEND = "file";
 });
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
+  delete process.env.PLATFORM_STATE_BACKEND;
   await rm(tempDir, { recursive: true, force: true });
 });
 
