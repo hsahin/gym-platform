@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { BookingManagementView } from "@/components/BookingManagementView";
 import { PlatformWorkbench } from "@/components/PlatformWorkbench";
+import { getDashboardPageLayout } from "@/lib/dashboard-page-layout";
 import { getDashboardPages, type DashboardPageKey } from "@/lib/dashboard-pages";
 import { getMembershipBillingCycleLabel } from "@/lib/memberships";
 import type { GymDashboardSnapshot } from "@/server/types";
@@ -139,6 +140,7 @@ export function GymDashboard({
     canManageRemoteAccess: snapshot.uiCapabilities.canManageRemoteAccess,
     canManageStaff: snapshot.uiCapabilities.canManageStaff,
   });
+  const pageLayout = getDashboardPageLayout(currentPage);
 
   const totalCapacity = snapshot.classSessions.reduce(
     (sum, classSession) => sum + classSession.capacity,
@@ -150,47 +152,51 @@ export function GymDashboard({
 
   return (
     <div className="space-y-6 p-5 lg:p-8">
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="Active members"
-          value={String(activeMembers.length)}
-          helper={`${snapshot.members.length} leden totaal in deze gym`}
-          trend={activeMembers.length > 0 ? "Live" : undefined}
-        />
-        <MetricCard
-          label="Classes"
-          value={String(snapshot.classSessions.length)}
-          helper={`${confirmedBookings.length} bevestigde reserveringen`}
-          trend={`${occupancy}% bezet`}
-        />
-        <MetricCard
-          label="Revenue MTD"
-          value={snapshot.projectedRevenueLabel}
-          helper="Gebaseerd op actieve contracten"
-          trend={snapshot.membershipPlans.length > 0 ? "Projected" : undefined}
-        />
-        <MetricCard
-          label="Attention"
-          value={String(pendingWaivers.length + waitlistedBookings.length + openHealthChecks.length)}
-          helper="Waivers, wachtlijst en owner checks"
-        />
-      </section>
+      {pageLayout.showOverviewCards ? (
+        <>
+          <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <MetricCard
+              label="Active members"
+              value={String(activeMembers.length)}
+              helper={`${snapshot.members.length} leden totaal in deze gym`}
+              trend={activeMembers.length > 0 ? "Live" : undefined}
+            />
+            <MetricCard
+              label="Classes"
+              value={String(snapshot.classSessions.length)}
+              helper={`${confirmedBookings.length} bevestigde reserveringen`}
+              trend={`${occupancy}% bezet`}
+            />
+            <MetricCard
+              label="Revenue MTD"
+              value={snapshot.projectedRevenueLabel}
+              helper="Gebaseerd op actieve contracten"
+              trend={snapshot.membershipPlans.length > 0 ? "Projected" : undefined}
+            />
+            <MetricCard
+              label="Attention"
+              value={String(pendingWaivers.length + waitlistedBookings.length + openHealthChecks.length)}
+              helper="Waivers, wachtlijst en owner checks"
+            />
+          </section>
 
-      <section className="grid gap-3 md:grid-cols-4">
-        {dashboardPages.map((page) => (
-          <Link
-            key={page.key}
-            href={page.href}
-            className={`glass-card-hover p-4 ${
-              currentPage === page.key ? "border-orange-500/40 bg-orange-500/10" : ""
-            }`}
-          >
-            <p className="text-sm font-medium text-white">{page.title}</p>
-            <p className="mt-2 text-2xl font-bold text-white">{page.value}</p>
-            <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/40">{page.helper}</p>
-          </Link>
-        ))}
-      </section>
+          <section className="grid gap-3 md:grid-cols-4">
+            {dashboardPages.map((page) => (
+              <Link
+                key={page.key}
+                href={page.href}
+                className={`glass-card-hover p-4 ${
+                  currentPage === page.key ? "border-orange-500/40 bg-orange-500/10" : ""
+                }`}
+              >
+                <p className="text-sm font-medium text-white">{page.title}</p>
+                <p className="mt-2 text-2xl font-bold text-white">{page.value}</p>
+                <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/40">{page.helper}</p>
+              </Link>
+            ))}
+          </section>
+        </>
+      ) : null}
 
       {currentPage === "overview" ? (
         <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">

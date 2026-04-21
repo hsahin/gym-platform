@@ -1,0 +1,38 @@
+import { describe, expect, it } from "vitest";
+import { DASHBOARD_PAGE_KEYS } from "@/lib/dashboard-pages";
+import { getDashboardPageLayout } from "@/lib/dashboard-page-layout";
+
+describe("dashboard page layout", () => {
+  it("shows the repeated owner fact cards only on the dashboard overview", () => {
+    const layouts = DASHBOARD_PAGE_KEYS.map((page) => ({
+      page,
+      layout: getDashboardPageLayout(page),
+    }));
+
+    expect(layouts.filter(({ layout }) => layout.showOverviewCards)).toEqual([
+      {
+        page: "overview",
+        layout: expect.objectContaining({ showOverviewCards: true }),
+      },
+    ]);
+  });
+
+  it("gives each management page direct form titles instead of launch-step labels", () => {
+    expect(getDashboardPageLayout("classes").formTitles).toEqual(["Les plannen"]);
+    expect(getDashboardPageLayout("members").formTitles).toEqual(["Lid toevoegen"]);
+    expect(getDashboardPageLayout("contracts").formTitles).toEqual([
+      "Contract toevoegen",
+      "Contracten en klanten importeren",
+    ]);
+    expect(getDashboardPageLayout("access").formTitles).toEqual(["Smartdeur koppelen"]);
+    expect(getDashboardPageLayout("payments").formTitles).toEqual([
+      "Mollie betalingen koppelen",
+    ]);
+    expect(getDashboardPageLayout("settings").formTitles).toEqual([
+      "Vestiging toevoegen",
+      "Trainer toevoegen",
+      "Teamlid uitnodigen",
+      "Contracten en klanten importeren",
+    ]);
+  });
+});

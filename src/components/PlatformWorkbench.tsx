@@ -83,6 +83,7 @@ async function submitJson<TResponse>(
 function FormCard({
   visible = true,
   sectionId,
+  eyebrow,
   title,
   description,
   countLabel,
@@ -94,6 +95,7 @@ function FormCard({
 }: {
   visible?: boolean;
   sectionId?: string;
+  eyebrow?: string;
   title: string;
   description: string;
   countLabel: string;
@@ -118,7 +120,7 @@ function FormCard({
       <div className="relative space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="eyebrow">{title.split(".")[0]}</p>
+            <p className="eyebrow">{eyebrow ?? "Beheerformulier"}</p>
             <h4 className="text-lg font-semibold text-slate-950">{title}</h4>
             <p className="max-w-xl text-sm leading-6 text-slate-600">{description}</p>
           </div>
@@ -431,6 +433,14 @@ export function PlatformWorkbench({
     return visibleSections.has(section);
   }
 
+  function formTitle(launchTitle: string, pageTitle: string) {
+    return showLaunchHeader ? launchTitle : pageTitle;
+  }
+
+  function formEyebrow(step: number) {
+    return showLaunchHeader ? `Stap ${step}` : "Beheerformulier";
+  }
+
   function toggleBillingMethod(
     paymentMethod: (typeof snapshot.payments.paymentMethods)[number],
     checked: boolean,
@@ -623,8 +633,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("locations")}
           sectionId="platform-step-locations"
           highlighted={highlightStepKey === "locations"}
-          title="1. Voeg een vestiging toe"
-          description="Begin met een locatie. Die vormt de basis voor trainers, leden en lessen."
+          eyebrow={formEyebrow(1)}
+          title={formTitle("1. Voeg een vestiging toe", "Vestiging toevoegen")}
+          description="Maak een echte locatie aan met manager, capaciteit, stad, wijk en faciliteiten. Deze vestiging wordt daarna direct beschikbaar voor trainers, leden en lessen."
           countLabel={stepByKey.get("locations")?.countLabel ?? "0 vestigingen"}
           statusLabel={stepByKey.get("locations")?.statusLabel ?? "Nu"}
           statusTone={stepByKey.get("locations")?.statusTone ?? "current"}
@@ -721,8 +732,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("contracts")}
           sectionId="platform-step-memberships"
           highlighted={highlightStepKey === "memberships"}
-          title="2. Maak een membership"
-          description="Zodra memberships bestaan kun je leden koppelen en omzet opbouwen."
+          eyebrow={formEyebrow(2)}
+          title={formTitle("2. Maak een membership", "Contract toevoegen")}
+          description="Leg een verkoopbaar contract vast: maand, 6 maanden of jaar, inclusief prijs en voordelen voor leden."
           countLabel={stepByKey.get("memberships")?.countLabel ?? "0 memberships"}
           statusLabel={stepByKey.get("memberships")?.statusLabel ?? "Daarna"}
           statusTone={stepByKey.get("memberships")?.statusTone ?? "upcoming"}
@@ -807,8 +819,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("trainers")}
           sectionId="platform-step-trainers"
           highlighted={highlightStepKey === "trainers"}
-          title="3. Voeg een trainer toe"
-          description="Trainers zijn nodig voordat je lessen kunt plannen."
+          eyebrow={formEyebrow(3)}
+          title={formTitle("3. Voeg een trainer toe", "Trainer toevoegen")}
+          description="Voeg een coach toe met thuisvestiging, specialisaties en certificeringen zodat lessen meteen geloofwaardig worden."
           countLabel={stepByKey.get("trainers")?.countLabel ?? "0 trainers"}
           statusLabel={stepByKey.get("trainers")?.statusLabel ?? "Daarna"}
           statusTone={stepByKey.get("trainers")?.statusTone ?? "upcoming"}
@@ -895,8 +908,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("classes")}
           sectionId="platform-step-classes"
           highlighted={highlightStepKey === "classes"}
-          title="4. Plan je eerste les"
-          description="Zodra je een trainer en vestiging hebt, kun je lessen en daarna boekingen aanmaken."
+          eyebrow={formEyebrow(4)}
+          title={formTitle("4. Plan je eerste les", "Les plannen")}
+          description="Plan een les met datum, tijd, trainer, vestiging, niveau, focus en capaciteit. Deze les verschijnt direct in de publieke reserveringsflow."
           countLabel={stepByKey.get("classes")?.countLabel ?? "0 lessen"}
           statusLabel={stepByKey.get("classes")?.statusLabel ?? "Nu"}
           statusTone={stepByKey.get("classes")?.statusTone ?? "upcoming"}
@@ -1040,8 +1054,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("members")}
           sectionId="platform-step-members"
           highlighted={highlightStepKey === "members"}
-          title="5. Voeg later je eerste lid toe"
-          description="Dit hoeft niet direct. Zodra je aanbod live staat, voeg je leden toe voor waivers, boekingen en opvolging."
+          eyebrow={formEyebrow(5)}
+          title={formTitle("5. Voeg later je eerste lid toe", "Lid toevoegen")}
+          description="Maak een lid aan met contactgegevens, contract, thuisvestiging, status, waiver en tags. Nieuwe publieke reserveringen kunnen ook automatisch trial-leden aanmaken."
           countLabel={stepByKey.get("members")?.countLabel ?? "0 leden"}
           statusLabel={stepByKey.get("members")?.statusLabel ?? "Later"}
           statusTone={stepByKey.get("members")?.statusTone ?? "upcoming"}
@@ -1201,8 +1216,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("imports")}
           sectionId="platform-step-imports"
           highlighted={highlightStepKey === "imports"}
-          title="6. Importeer bestaande contracten en klanten"
-          description="Heb je al een klantenlijst of lopende contracten? Plak je export hier en laat het platform memberships en leden automatisch opbouwen."
+          eyebrow={formEyebrow(6)}
+          title={formTitle("6. Importeer bestaande contracten en klanten", "Contracten en klanten importeren")}
+          description="Plak je bestaande klantenlijst of contractexport. Het platform maakt ontbrekende contracttypes en leden automatisch aan."
           countLabel={formatCountLabel(snapshot.members.length, "lid live", "leden live")}
           statusLabel={snapshot.locations.length > 0 ? "Import klaar" : "Eerst vestiging"}
           statusTone={snapshot.locations.length > 0 ? "current" : "locked"}
@@ -1288,8 +1304,9 @@ export function PlatformWorkbench({
           visible={shouldShowSection("staff")}
           sectionId="platform-step-staff"
           highlighted={highlightStepKey === "staff"}
-          title="7. Nodig een teamlid uit"
-          description="Voeg echte accounts toe voor operations, trainer of frontdesk."
+          eyebrow={formEyebrow(7)}
+          title={formTitle("7. Nodig een teamlid uit", "Teamlid uitnodigen")}
+          description="Maak een echt account aan voor owner, manager, trainer of frontdesk met tijdelijk wachtwoord en juiste rol."
           countLabel={stepByKey.get("staff")?.countLabel ?? "0 accounts live"}
           statusLabel={stepByKey.get("staff")?.statusLabel ?? "Owner-only"}
           statusTone={stepByKey.get("staff")?.statusTone ?? "locked"}
@@ -1390,8 +1407,9 @@ export function PlatformWorkbench({
         <FormCard
           visible={shouldShowSection("remote-access")}
           sectionId="platform-step-remote-access"
-          title="8. Beheer remote toegang"
-          description="Owner-only instelling om slimme sloten zoals Nuki te koppelen en de gym op afstand te openen."
+          eyebrow={formEyebrow(8)}
+          title={formTitle("8. Beheer remote toegang", "Smartdeur koppelen")}
+          description="Koppel een slim slot zoals Nuki, wijs het aan een vestiging toe en beheer owner-only remote openen."
           countLabel={remoteAccessCountLabel}
           statusLabel={snapshot.remoteAccess.statusLabel}
           statusTone={remoteAccessStatusTone}
@@ -1565,8 +1583,9 @@ export function PlatformWorkbench({
         <FormCard
           visible={shouldShowSection("payments")}
           sectionId="platform-step-payments"
-          title="9. Koppel betalingen"
-          description="Owner-only instelling voor Mollie, zodat je memberships, losse sales en deelbare betaalverzoeken per gym kunt voorbereiden."
+          eyebrow={formEyebrow(9)}
+          title={formTitle("9. Koppel betalingen", "Mollie betalingen koppelen")}
+          description="Configureer Mollie voor automatische incasso, eenmalige betalingen en deelbare betaalverzoeken per gym."
           countLabel={paymentsCountLabel}
           statusLabel={snapshot.payments.statusLabel}
           statusTone={paymentsStatusTone}
