@@ -6,21 +6,39 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^18",
-    "react-dom": "^18",
-    "next": "14.2.35"
+    "@claimtech/auth": "0.2.3",
+    "@claimtech/cache": "0.2.3",
+    "@claimtech/core": "0.2.3",
+    "@claimtech/database": "0.2.3",
+    "@claimtech/feature-flags": "0.2.3",
+    "@claimtech/i18n": "0.2.4",
+    "@claimtech/messaging": "0.2.3",
+    "@claimtech/ops": "0.2.4",
+    "@claimtech/permissions": "0.2.3",
+    "@claimtech/storage": "0.2.3",
+    "@claimtech/tenant": "0.2.3",
+    "@claimtech/ui": "0.2.3",
+    "@claimtech/users": "0.2.3",
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "typescript": "^5",
+    "vitest": "4.1.4"
   }
 }
