@@ -407,6 +407,66 @@ describe("gym platform services", () => {
     expect(result.booking.status).toBe("confirmed");
   });
 
+  it("turns a new public reserver into a trial member before booking", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+    const membershipPlan = await services.createMembershipPlan(
+      ownerActor,
+      tenantContext,
+      {
+        name: "Trial",
+        priceMonthly: 0,
+        billingCycle: "monthly",
+        perks: ["Eerste proefles"],
+      },
+    );
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: [],
+      certifications: [],
+    });
+    const classSession = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Sunday Mobility",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-04-27T10:00:00.000Z",
+      durationMinutes: 45,
+      capacity: 12,
+      level: "beginner",
+      focus: "Mobility",
+    });
+
+    const result = await services.createPublicReservation({
+      classSessionId: classSession.id,
+      fullName: "Noor Bakker",
+      email: "noor@example.nl",
+      phone: "0612345678",
+      phoneCountry: "NL",
+    });
+    const members = await services.listMembers(ownerActor, tenantContext);
+    const createdMember = members.find((member) => member.email === "noor@example.nl");
+
+    expect(createdMember).toMatchObject({
+      fullName: "Noor Bakker",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "trial",
+      waiverStatus: "pending",
+    });
+    expect(result.booking.memberId).toBe(createdMember?.id);
+    expect(result.booking.memberName).toBe("Noor Bakker");
+    expect(result.booking.status).toBe("confirmed");
+  });
+
   it("describes an existing checked-in reservation correctly in the public flow", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 

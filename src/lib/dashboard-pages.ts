@@ -8,16 +8,13 @@ function formatCountLabel(
 
 export const DASHBOARD_PAGE_KEYS = [
   "overview",
-  "reservations",
+  "classes",
   "members",
   "contracts",
-  "schedule",
-  "locations",
-  "staff",
+  "access",
   "payments",
-  "smartdoors",
-  "imports",
-  "status",
+  "marketing",
+  "settings",
 ] as const;
 
 export type DashboardPageKey = (typeof DASHBOARD_PAGE_KEYS)[number];
@@ -50,6 +47,27 @@ export function isDashboardPageKey(input: string): input is DashboardPageKey {
   return DASHBOARD_PAGE_KEYS.includes(input as DashboardPageKey);
 }
 
+export function resolveDashboardRouteKey(input: string): DashboardPageKey | null {
+  if (isDashboardPageKey(input)) {
+    return input;
+  }
+
+  switch (input) {
+    case "reservations":
+    case "schedule":
+      return "classes";
+    case "smartdoors":
+      return "access";
+    case "locations":
+    case "staff":
+    case "imports":
+    case "status":
+      return "settings";
+    default:
+      return null;
+  }
+}
+
 export function getDashboardPageHref(key: DashboardPageKey) {
   return key === "overview" ? "/dashboard" : `/dashboard/${key}`;
 }
@@ -58,23 +76,21 @@ export function getDashboardPageForWorkbenchStep(
   stepKey: string,
 ): DashboardPageKey {
   switch (stepKey) {
-    case "locations":
-      return "locations";
     case "memberships":
       return "contracts";
-    case "trainers":
-    case "staff":
-      return "staff";
     case "classes":
-      return "schedule";
+      return "classes";
     case "members":
       return "members";
-    case "imports":
-      return "imports";
     case "remote-access":
-      return "smartdoors";
+      return "access";
     case "payments":
       return "payments";
+    case "locations":
+    case "trainers":
+    case "staff":
+    case "imports":
+      return "settings";
     default:
       return "overview";
   }
@@ -86,19 +102,19 @@ export function getDashboardPages(
   const pages: ReadonlyArray<Omit<DashboardPageDefinition, "href">> = [
     {
       key: "overview",
-      title: "Overzicht",
-      value: formatCountLabel(input.classSessionsCount, "les", "lessen"),
-      helper: "Dagstart met planning, open acties en de belangrijkste clubsituatie.",
+      title: "Dashboard",
+      value: formatCountLabel(input.membersCount, "lid", "leden"),
+      helper: "Owner facts, planning, recente reserveringen en launch-signalen.",
     },
     {
-      key: "reservations",
-      title: "Reserveringen",
-      value: formatCountLabel(input.bookingsCount, "reservering", "reserveringen"),
-      helper: "Boekingen, check-ins, no-shows, annuleringen en wachtlijstbeheer.",
+      key: "classes",
+      title: "Classes",
+      value: formatCountLabel(input.classSessionsCount, "les", "lessen"),
+      helper: "Rooster, reserveringen, check-ins, capaciteit en wachtlijstbeheer.",
     },
     {
       key: "members",
-      title: "Leden",
+      title: "Members",
       value: formatCountLabel(input.membersCount, "lid", "leden"),
       helper: "Leden, intake-status, tags en membercontext per vestiging.",
     },
@@ -109,24 +125,12 @@ export function getDashboardPages(
       helper: "Maand, 6 maanden en jaarcontracten beheren voor memberships.",
     },
     {
-      key: "schedule",
-      title: "Rooster",
-      value: formatCountLabel(input.classSessionsCount, "les", "lessen"),
-      helper: "Lessen plannen, capaciteit bepalen en trainers koppelen.",
-    },
-    {
-      key: "locations",
-      title: "Vestigingen",
-      value: formatCountLabel(input.locationsCount, "vestiging", "vestigingen"),
-      helper: "Alle gym-locaties met capaciteit, manager en faciliteiten.",
-    },
-    {
-      key: "staff",
-      title: "Personeel",
-      value: input.canManageStaff
-        ? formatCountLabel(input.staffCount, "account", "accounts")
+      key: "access",
+      title: "Smartdeurs",
+      value: input.canManageRemoteAccess
+        ? input.remoteAccessStatusLabel
         : "Owner-only",
-      helper: "Teamaccounts, trainers, frontdesk en operationsrollen apart beheren.",
+      helper: "Remote toegang voor Nuki en andere gangbare slimme sloten.",
     },
     {
       key: "payments",
@@ -135,27 +139,19 @@ export function getDashboardPages(
       helper: "Mollie, incasso, eenmalige betalingen en betaalverzoeken per gym.",
     },
     {
-      key: "smartdoors",
-      title: "Smartdeurs",
-      value: input.canManageRemoteAccess
-        ? input.remoteAccessStatusLabel
-        : "Owner-only",
-      helper: "Remote toegang voor Nuki en andere gangbare slimme sloten.",
+      key: "marketing",
+      title: "Marketing",
+      value: input.bookingsCount > 0 ? "Segmenten klaar" : "Eerste data nodig",
+      helper: "Campagnes, retentie-signalen en bookingmomenten zonder losse tooling.",
     },
     {
-      key: "imports",
-      title: "Import",
-      value: input.locationsCount > 0 ? "CSV klaar" : "Vestiging nodig",
-      helper: "Bestaande klanten en lopende contracten gecontroleerd importeren.",
-    },
-    {
-      key: "status",
-      title: "Status",
+      key: "settings",
+      title: "Settings",
       value:
         input.healthAttentionCount === 0
           ? "Alles gezond"
           : formatCountLabel(input.healthAttentionCount, "check", "checks"),
-      helper: "Platformstatus, modules, omzetprojectie en auditlog zonder technische ruis.",
+      helper: "Vestigingen, personeel, imports, platformstatus en owner-instellingen.",
     },
   ];
 

@@ -9,6 +9,7 @@ import { getGymPlatformServices } from "@/server/runtime/gym-services";
 const createPublicReservationSchema = z.object({
   tenantSlug: z.string().min(2).optional(),
   classSessionId: z.string().min(1),
+  fullName: z.string().min(2).max(120).optional(),
   email: z.string().email(),
   phone: z.string().min(3),
   phoneCountry: z.string().length(2).optional(),
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
       return services.createPublicReservation({
         tenantSlug: payload.tenantSlug,
         classSessionId: payload.classSessionId,
+        fullName: payload.fullName,
         email: payload.email,
         phone: payload.phone,
         phoneCountry: payload.phoneCountry as never,

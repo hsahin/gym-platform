@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { getPublicLandingContent } from "@/lib/marketing-content";
+import {
+  ArrowRightIcon,
+  CalendarIcon,
+  CheckIcon,
+  ChartIcon,
+  CreditCardIcon,
+  DumbbellIcon,
+  GymOsAmbient,
+  GymOsBadge,
+  GymOsLogo,
+  LockIcon,
+  UsersIcon,
+  ZapIcon,
+} from "@/components/GymOsPrimitives";
 import type { PublicReservationSnapshot } from "@/server/types";
 
 function formatSessionMoment(startsAt: string) {
@@ -18,259 +31,275 @@ export function PublicLandingPage({
 }: {
   snapshot: PublicReservationSnapshot;
 }) {
-  const content = getPublicLandingContent(snapshot);
+  const highlightedClasses = snapshot.classSessions.slice(0, 3);
+  const activeGymCount =
+    snapshot.availableGyms.length > 0
+      ? snapshot.availableGyms.length
+      : snapshot.tenantSlug
+        ? 1
+        : 0;
+  const totalCapacity = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.capacity,
+    0,
+  );
+  const bookedSpots = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.bookedCount,
+    0,
+  );
+  const occupancy =
+    totalCapacity > 0 ? Math.round((bookedSpots / totalCapacity) * 100) : 0;
 
   return (
-    <main className="relative overflow-hidden px-4 py-6 md:px-8 md:py-8">
-      <div className="halo-orb halo-orb-left" aria-hidden="true" />
-      <div className="halo-orb halo-orb-right" aria-hidden="true" />
+    <main className="min-h-screen overflow-hidden bg-[#0a0a0a] text-white">
+      <GymOsAmbient />
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <section className="spotlight-shell overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/30 to-transparent" />
-          <div className="relative grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-7">
-              <div className="flex flex-wrap gap-2">
-                <span className="metric-chip">Live reserveringen</span>
-                <span className="metric-chip">Multi-locatie klaar</span>
-              </div>
+      <nav className="relative z-50 border-b border-white/[0.06]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <GymOsLogo />
 
-              <div className="space-y-5">
-                <p className="eyebrow">Premium gym OS</p>
-                <h1 className="max-w-4xl text-5xl font-semibold tracking-[-0.04em] text-slate-950 md:text-7xl">
-                  {content.heroTitle}
-                </h1>
-                <p className="max-w-2xl text-base leading-8 text-slate-700 md:text-xl">
-                  Van eerste indruk tot reservering en dagelijkse operatie:
-                  deze ervaring laat zowel gym owners als leden meteen voelen dat
-                  het platform premium, snel en klaar voor groei is.
-                </p>
-              </div>
+          <div className="hidden items-center gap-8 md:flex">
+            <Link href="#features" className="text-sm text-white/60 transition-colors hover:text-white">
+              Features
+            </Link>
+            <Link href="/pricing" className="text-sm text-white/60 transition-colors hover:text-white">
+              Prijzen
+            </Link>
+            <Link href="/reserve" className="text-sm text-white/60 transition-colors hover:text-white">
+              Boek een les
+            </Link>
+          </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Link href="/login" className="cta-primary">
-                  {content.primaryCta}
-                </Link>
-                <Link href="/reserve" className="cta-secondary">
-                  {content.secondaryCta}
-                </Link>
-              </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="hidden rounded-xl px-4 py-2 text-sm font-medium text-white/70 transition hover:bg-white/[0.05] hover:text-white sm:inline-flex"
+            >
+              Inloggen
+            </Link>
+            <Link href="/login?mode=signup" className="gym-os-button">
+              Gym aanmelden
+              <ArrowRightIcon className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </nav>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                {content.proofCards.map((card) => (
-                  <div key={card.label} className="signal-card">
-                    <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                    <p className="mt-3 text-3xl font-semibold text-slate-950">
-                      {card.value}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {card.helper}
-                    </p>
-                  </div>
-                ))}
-              </div>
+      <section className="relative z-10 px-6 pb-28 pt-16 md:pt-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-4xl">
+            <div className="mb-8 flex flex-wrap items-center gap-3">
+              <GymOsBadge>
+                <ZapIcon className="mr-2 h-3.5 w-3.5" />
+                Nu live
+              </GymOsBadge>
+              <GymOsBadge tone="neutral">Multi-gym platform</GymOsBadge>
+              <GymOsBadge tone="neutral">Zonder demo-data op de homepage</GymOsBadge>
             </div>
 
-            <div className="relative flex flex-col gap-4">
-              <div className="float-card stage-card">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">Owner pulse</p>
-                    <p className="mt-2 text-2xl font-semibold text-slate-950">
-                      {snapshot.tenantName}
-                    </p>
-                  </div>
-                  <div
-                    className={
-                      content.ownerStage.statusTone === "live"
-                        ? "rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
-                        : "rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700"
-                    }
-                  >
-                    {content.ownerStage.statusLabel}
-                  </div>
-                </div>
+            <h1 className="mb-8 text-5xl font-bold leading-[1.08] tracking-tight text-white md:text-7xl">
+              Run je gym als een{" "}
+              <span className="text-gradient-orange">premium merk</span>
+            </h1>
 
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-3xl bg-slate-950 px-5 py-4 text-white">
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                      {content.ownerStage.primaryMetric.label}
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold">
-                      {content.ownerStage.primaryMetric.value}
-                    </p>
-                  </div>
-                  <div className="rounded-3xl bg-amber-100 px-5 py-4 text-slate-950">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                      {content.ownerStage.secondaryMetric.label}
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold">
-                      {content.ownerStage.secondaryMetric.value}
-                    </p>
-                  </div>
-                </div>
+            <p className="mb-12 max-w-2xl text-lg leading-relaxed text-white/50 md:text-xl">
+              Eén platform voor meerdere sportscholen: inschrijven, reserveren,
+              ledenbeheer, contracten, betalingen en smart access in een ervaring
+              die meteen vertrouwen geeft.
+            </p>
 
-                <p className="mt-5 text-sm leading-6 text-slate-600">
-                  {content.ownerStage.helper}
-                </p>
+            <div className="mb-16 flex flex-wrap gap-4">
+              <Link href="/login?mode=signup" className="inline-flex h-14 items-center gap-2 rounded-xl bg-orange-500 px-8 text-lg font-semibold text-white shadow-2xl shadow-orange-500/25 transition hover:bg-orange-600 hover:shadow-orange-500/40">
+                Start als gym owner
+                <ArrowRightIcon className="h-5 w-5" />
+              </Link>
+              <Link href="/reserve" className="inline-flex h-14 items-center rounded-xl border border-white/10 px-8 text-lg font-semibold text-white/80 transition hover:bg-white/[0.05] hover:text-white">
+                Boek een les
+              </Link>
+            </div>
+
+            <div className="grid max-w-2xl gap-6 sm:grid-cols-3">
+              <div className="relative">
+                <div className="absolute -left-4 bottom-0 top-0 w-px bg-gradient-to-b from-orange-500/50 to-transparent" />
+                <p className="mb-1 text-3xl font-bold text-white">{activeGymCount}</p>
+                <p className="text-sm text-white/40">Gyms beschikbaar</p>
+                <p className="mt-1 text-xs text-white/25">Uit tenantlijst</p>
               </div>
+              <div className="relative">
+                <div className="absolute -left-4 bottom-0 top-0 w-px bg-gradient-to-b from-orange-500/30 to-transparent" />
+                <p className="mb-1 text-3xl font-bold text-white">{snapshot.classSessions.length}</p>
+                <p className="text-sm text-white/40">Lessen zichtbaar</p>
+                <p className="mt-1 text-xs text-white/25">Uit roosterdata</p>
+              </div>
+              <div className="relative">
+                <div className="absolute -left-4 bottom-0 top-0 w-px bg-gradient-to-b from-orange-500/20 to-transparent" />
+                <p className="mb-1 text-3xl font-bold text-white">{occupancy}%</p>
+                <p className="text-sm text-white/40">Bezetting</p>
+                <p className="mt-1 text-xs text-white/25">Boekingen/capaciteit</p>
+              </div>
+            </div>
+          </div>
 
-              <div className="stage-card float-card delay-card">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">Member flow</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-                      Zien, voelen, boeken
-                    </h2>
+          <div className="absolute right-6 top-24 hidden w-[500px] xl:block">
+            <div className="relative">
+              <div className="glass-card animate-float p-6">
+                <div className="mb-5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
+                      <ChartIcon className="h-5 w-5 text-orange-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">Live owner pulse</p>
+                      <p className="text-sm text-white/40">{snapshot.tenantName}</p>
+                    </div>
                   </div>
-                  <span className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700">
-                    Consument-proof
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+                    operationeel
                   </span>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  {content.highlightedClasses.length > 0 ? (
-                    content.highlightedClasses.map((classSession) => (
-                      <div key={classSession.id} className="live-class-card">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-slate-950">
-                              {classSession.title}
-                            </p>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">
-                              {formatSessionMoment(classSession.startsAt)} ·{" "}
-                              {classSession.locationName}
-                            </p>
-                          </div>
-                          <div className="rounded-full border border-slate-200/80 bg-white px-4 py-2 text-sm font-medium text-slate-800">
-                            {classSession.fillLabel}
-                          </div>
-                        </div>
-                        <p className="mt-3 text-sm leading-6 text-slate-600">
-                          Coach {classSession.trainerName} · {classSession.focus} ·{" "}
-                          {classSession.level}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white/50">Lesbezetting</span>
+                    <span className="text-sm font-medium text-white">{occupancy}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500"
+                      style={{ width: `${Math.min(100, occupancy)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-white/40">{bookedSpots} reserveringen</span>
+                    <span className="text-emerald-400">{totalCapacity} plekken totaal</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card absolute -bottom-24 -left-16 animate-float p-4" style={{ animationDelay: "2s" }}>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20">
+                    <CheckIcon className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">Nieuwe reservering</p>
+                    <p className="text-xs text-white/40">Direct zichtbaar in dashboard</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card absolute -right-8 bottom-[-150px] p-4">
+                <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/30">
+                  Volgende lessen
+                </p>
+                <div className="space-y-3">
+                  {highlightedClasses.length > 0 ? (
+                    highlightedClasses.map((classSession) => (
+                      <div key={classSession.id} className="rounded-xl bg-white/[0.04] p-3">
+                        <p className="text-sm font-medium text-white">{classSession.title}</p>
+                        <p className="mt-1 text-xs text-white/40">
+                          {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
                         </p>
                       </div>
                     ))
                   ) : (
-                    <div className="live-class-card">
-                      <p className="font-semibold text-slate-950">
-                        Klaar om live te gaan
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        Voeg je eerste rooster toe en laat meteen een merkervaring
-                        zien waar leden zonder uitleg doorheen gaan.
-                      </p>
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-white/45">
+                      Kies een gym om live lessen te zien.
                     </div>
                   )}
                 </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="section-shell space-y-5">
-            <div className="space-y-2">
-              <p className="eyebrow">{content.ownerSectionTitle}</p>
-              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
-                Van launch tot volle lesroosters zonder enterprise-frictie.
-              </h2>
-              <p className="text-base leading-7 text-slate-600">
-                Alles voelt premium voor je merk, maar ook praktisch voor je team.
-                Geen losse systemen, geen demo-gevoel, geen rommelige operatie.
-              </p>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">{content.ownerHighlights[0]}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Het platform ziet eruit alsof je club al een gevestigde brand is,
-                  nog voordat je salespitch begint.
-                </p>
-              </div>
-              <div className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">
-                  {content.ownerHighlights[1]}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Leden, lesdrukte, reserveringen en frontdesk-werk zitten in één
-                  ritme, zodat eigenaarschap niet voelt als handmatig coördineren.
-                </p>
-              </div>
-              <div className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">{content.ownerHighlights[2]}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Start met een lege tenant, voeg je echte locaties en accounts toe
-                  en ga live zonder workspaces of prototype-omwegen.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="section-shell space-y-5">
-            <div className="space-y-2">
-              <p className="eyebrow">{content.memberSectionTitle}</p>
-              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
-                Een booking-ervaring die aanvoelt als een premium studio.
-              </h2>
-              <p className="text-base leading-7 text-slate-600">
-                Leden hoeven niets uit te zoeken. Ze zien direct wat relevant is,
-                voelen schaarste op de juiste manier en boeken zonder twijfel.
-              </p>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">
-                  {content.memberHighlights[0]}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Rooster, coach, locatie en beschikbaarheid staan meteen helder in beeld.
-                </p>
-              </div>
-              <div className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">
-                  {content.memberHighlights[1]}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Vrije plekken en wachtlijst maken urgentie tastbaar zonder stressvol te voelen.
-                </p>
-              </div>
-              <div className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">
-                  {content.memberHighlights[2]}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  De flow voelt als het begin van lidmaatschap, niet als een kale formulierstap.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section-shell flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="max-w-3xl space-y-3">
-            <p className="eyebrow">Launch-ready</p>
-            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
-              Laat een eigenaar meteen “dit wil ik” voelen en een lid meteen “hier wil ik trainen”.
+      <section id="features" className="relative z-10 border-t border-white/[0.04] px-6 py-24">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-16 text-center">
+            <GymOsBadge tone="neutral">Voor gym owners</GymOsBadge>
+            <h2 className="mx-auto mb-6 mt-6 max-w-3xl text-4xl font-bold text-white md:text-5xl">
+              Een dashboard dat voelt alsof je club al groot is
             </h2>
-            <p className="text-base leading-7 text-slate-600">
-              Bekijk eerst de owner-setup of loop de member-reserveringsflow direct door.
+            <p className="mx-auto max-w-2xl text-lg leading-8 text-white/40">
+              Geen tab-chaos en geen technische meldingen voor de gebruiker. Elke
+              hoofdtaak heeft een eigen pagina en een duidelijke actie.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link href="/login" className="cta-primary">
-              Start owner flow
-            </Link>
-            <Link href="/reserve" className="cta-secondary">
-              Bekijk member experience
-            </Link>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                title: "Rooster & reserveringen",
+                copy: "Plan lessen, beheer capaciteit en zie reserveringen direct terug.",
+                icon: CalendarIcon,
+              },
+              {
+                title: "Leden & contracten",
+                copy: "Maand, 6 maanden en jaarcontracten inclusief import van bestaande klanten.",
+                icon: UsersIcon,
+              },
+              {
+                title: "Betalingen via Mollie",
+                copy: "Voor automatische incasso, eenmalige betalingen en betaalverzoeken.",
+                icon: CreditCardIcon,
+              },
+              {
+                title: "Smartdeurs",
+                copy: "Owner-only instellingen voor Nuki en andere gangbare smart locks.",
+                icon: LockIcon,
+              },
+              {
+                title: "Multi-gym klaar",
+                copy: "Elke sportschool heeft eigen accounts, data en publieke reserveringsflow.",
+                icon: DumbbellIcon,
+              },
+              {
+                title: "Premium conversie",
+                copy: "Consumenten zien wat vrij is, voelen vertrouwen en boeken zonder gedoe.",
+                icon: ZapIcon,
+              },
+            ].map((feature) => (
+              <div key={feature.title} className="glass-card-hover group p-8">
+                <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500/10 transition-colors group-hover:bg-orange-500/15">
+                  <feature.icon className="h-6 w-6 text-orange-400" />
+                </div>
+                <h3 className="mb-3 text-xl font-semibold text-white">{feature.title}</h3>
+                <p className="leading-relaxed text-white/40">{feature.copy}</p>
+              </div>
+            ))}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 px-6 py-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="overflow-hidden rounded-[2rem] border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-white/[0.03] to-transparent p-8 md:p-12">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-2xl">
+                <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-orange-300">
+                  Klaar voor livegang
+                </p>
+                <h2 className="mb-4 text-3xl font-bold text-white md:text-4xl">
+                  Laat owners én leden direct denken: dit wil ik gebruiken.
+                </h2>
+                <p className="text-lg leading-8 text-white/45">
+                  Start met owner signup, voeg echte data toe en laat leden via de
+                  publieke reserveringsflow instromen.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link href="/login?mode=signup" className="gym-os-button">
+                  Owner aanmelden
+                  <ArrowRightIcon className="h-4 w-4" />
+                </Link>
+                <Link href="/reserve" className="gym-os-button-secondary">
+                  Member flow bekijken
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

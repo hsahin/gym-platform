@@ -15,9 +15,9 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Atlas Gym Platform",
+  title: "GymOS | Premium gym platform",
   description:
-    "Premium sportschoolplatform voor eigenaars, teams en leden: reserveringen, operations en merkervaring in één product.",
+    "Premium sportschoolplatform voor meerdere gyms: reserveringen, leden, contracten, betalingen, smart access en operations in één product.",
 };
 
 export default function RootLayout({

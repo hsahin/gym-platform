@@ -1007,6 +1007,7 @@ export interface GymPlatformServices {
   createPublicReservation(input: {
     readonly tenantSlug?: string;
     readonly classSessionId: string;
+    readonly fullName?: string;
     readonly email: string;
     readonly phone: string;
     readonly phoneCountry: CreateBookingInput["phoneCountry"];
@@ -1848,20 +1849,71 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         input.phone,
         input.phoneCountry ?? "NL",
       );
-      const members = await runtime.store.listMembers(tenantContext);
-      const member = members.find(
+      const [members, classSession] = await Promise.all([
+        runtime.store.listMembers(tenantContext),
+        runtime.store.getClassSession(tenantContext, input.classSessionId),
+      ]);
+
+      if (!classSession) {
+        throw new AppError("Les kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      let member = members.find(
         (entry) =>
           normalizeEmailValue(entry.email) === normalizedEmail &&
           entry.phone === normalizedPhone,
       );
 
       if (!member) {
-        throw new AppError(
-          "We konden geen lid vinden met deze combinatie van e-mail en mobiel nummer.",
-          {
-            code: "RESOURCE_NOT_FOUND",
-          },
+        const membershipPlans = await runtime.store.listMembershipPlans(
+          tenantContext,
         );
+        const membershipPlan = membershipPlans[0];
+
+        if (!membershipPlan) {
+          throw new AppError(
+            "Deze gym heeft nog geen contracttype voor nieuwe reserveringen.",
+            {
+              code: "RESOURCE_NOT_FOUND",
+            },
+          );
+        }
+
+        const fallbackName = normalizedEmail
+          .split("@")[0]
+          ?.replace(/[._-]+/g, " ")
+          .trim();
+
+        member = await runtime.store.createMember(tenantContext, {
+          fullName: input.fullName?.trim() || fallbackName || "Nieuw lid",
+          email: normalizedEmail,
+          phone: normalizedPhone,
+          phoneCountry: input.phoneCountry ?? "NL",
+          membershipPlanId: membershipPlan.id,
+          homeLocationId: classSession.locationId,
+          status: "trial",
+          tags: ["public-reservation"],
+          waiverStatus: "pending",
+        });
+
+        await runtime.auditLogger.write({
+          action: "member.created",
+          category: "members",
+          actorId: "public-portal",
+          tenantId: tenantContext.tenantId,
+          metadata: {
+            memberId: member.id,
+            source: "public-reservation",
+          },
+        });
+      }
+
+      if (!member) {
+        throw new AppError("Lid kon niet worden aangemaakt.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
       }
 
       if (member.status === "paused") {
@@ -1870,10 +1922,6 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         });
       }
 
-      const classSession = await runtime.store.getClassSession(
-        tenantContext,
-        input.classSessionId,
-      );
       const actor = createPublicBookingActor(tenantProfile.id, member);
 
       return createBookingFlow(

@@ -11,16 +11,13 @@ describe("dashboard pages", () => {
   it("exposes every full management page outside the launch flow", () => {
     expect(DASHBOARD_PAGE_KEYS).toEqual([
       "overview",
-      "reservations",
+      "classes",
       "members",
       "contracts",
-      "schedule",
-      "locations",
-      "staff",
+      "access",
       "payments",
-      "smartdoors",
-      "imports",
-      "status",
+      "marketing",
+      "settings",
     ]);
   });
 
@@ -44,16 +41,13 @@ describe("dashboard pages", () => {
     expect(pages.map((page) => page.key)).toEqual(DASHBOARD_PAGE_KEYS);
     expect(pages.map((page) => page.href)).toEqual([
       "/dashboard",
-      "/dashboard/reservations",
+      "/dashboard/classes",
       "/dashboard/members",
       "/dashboard/contracts",
-      "/dashboard/schedule",
-      "/dashboard/locations",
-      "/dashboard/staff",
+      "/dashboard/access",
       "/dashboard/payments",
-      "/dashboard/smartdoors",
-      "/dashboard/imports",
-      "/dashboard/status",
+      "/dashboard/marketing",
+      "/dashboard/settings",
     ]);
     expect(pages).toEqual(
       expect.arrayContaining([
@@ -68,12 +62,12 @@ describe("dashboard pages", () => {
           value: "Mollie live",
         }),
         expect.objectContaining({
-          key: "smartdoors",
+          key: "access",
           title: "Smartdeurs",
           value: "Nuki gekoppeld",
         }),
         expect.objectContaining({
-          key: "status",
+          key: "settings",
           value: "Alles gezond",
         }),
       ]),
@@ -101,11 +95,11 @@ describe("dashboard pages", () => {
       value: "Owner-only",
       helper: expect.not.stringContaining("Mollie API"),
     });
-    expect(pages.find((page) => page.key === "smartdoors")).toMatchObject({
+    expect(pages.find((page) => page.key === "access")).toMatchObject({
       value: "Owner-only",
       helper: expect.not.stringContaining("Nuki API"),
     });
-    expect(pages.find((page) => page.key === "status")).toMatchObject({
+    expect(pages.find((page) => page.key === "settings")).toMatchObject({
       value: "2 checks",
     });
   });
@@ -115,7 +109,8 @@ describe("dashboard pages", () => {
     expect(isDashboardPageKey("payments")).toBe(true);
     expect(isDashboardPageKey("platform")).toBe(false);
     expect(getDashboardPageForWorkbenchStep("memberships")).toBe("contracts");
-    expect(getDashboardPageForWorkbenchStep("remote-access")).toBe("smartdoors");
-    expect(getDashboardPageForWorkbenchStep("classes")).toBe("schedule");
+    expect(getDashboardPageForWorkbenchStep("remote-access")).toBe("access");
+    expect(getDashboardPageForWorkbenchStep("classes")).toBe("classes");
+    expect(getDashboardPageForWorkbenchStep("staff")).toBe("settings");
   });
 });

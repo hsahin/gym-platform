@@ -1,4 +1,5 @@
 import { PublicReservationPortal } from "@/components/PublicReservationPortal";
+import { GymOsAmbient } from "@/components/GymOsPrimitives";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +21,8 @@ export default async function ReservePage({
   });
 
   return (
-    <main className="relative overflow-hidden px-4 py-8 md:px-8 md:py-10">
-      <div className="halo-orb halo-orb-left" aria-hidden="true" />
-      <div className="halo-orb halo-orb-right" aria-hidden="true" />
+    <main className="min-h-screen overflow-hidden bg-[#0a0a0a] px-6 py-6 text-white md:py-8">
+      <GymOsAmbient />
       <div className="mx-auto w-full max-w-7xl">
         <PublicReservationPortal snapshot={snapshot} />
       </div>

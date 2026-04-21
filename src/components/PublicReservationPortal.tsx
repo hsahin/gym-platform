@@ -1,20 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Badge, Button, PhoneNumberField } from "@claimtech/ui";
-import { getReservationExperience } from "@/lib/reservation-experience";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  ClockIcon,
+  DumbbellIcon,
+  GymOsBadge,
+  GymOsLogo,
+  MapPinIcon,
+  UsersIcon,
+} from "@/components/GymOsPrimitives";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type { PublicReservationSnapshot } from "@/server/types";
 
-function fieldClassName() {
-  return "brand-input mt-2 h-12 w-full rounded-2xl px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400";
-}
-
-function textareaClassName() {
-  return "brand-textarea mt-2 min-h-24 w-full rounded-2xl px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400";
-}
+type BookingStep = "gym" | "classes" | "confirm" | "done";
 
 function formatSessionMoment(startsAt: string) {
   return new Intl.DateTimeFormat("nl-NL", {
@@ -27,12 +30,23 @@ function formatSessionMoment(startsAt: string) {
   }).format(new Date(startsAt));
 }
 
+function formatShortTime(startsAt: string) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Amsterdam",
+  }).format(new Date(startsAt));
+}
+
 export function PublicReservationPortal({
   snapshot,
 }: {
   snapshot: PublicReservationSnapshot;
 }) {
-  const experience = getReservationExperience(snapshot);
+  const [bookingStep, setBookingStep] = useState<BookingStep>(
+    snapshot.tenantSlug ? "classes" : "gym",
+  );
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneCountry, setPhoneCountry] = useState("NL");
@@ -48,6 +62,12 @@ export function PublicReservationPortal({
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    setBookingStep(snapshot.tenantSlug ? "classes" : "gym");
+    setSelectedClassSessionId(snapshot.classSessions[0]?.id ?? "");
+    setLastResult(null);
+  }, [snapshot.tenantSlug, snapshot.classSessions]);
+
   const selectedClass = useMemo(
     () =>
       snapshot.classSessions.find(
@@ -56,8 +76,25 @@ export function PublicReservationPortal({
     [selectedClassSessionId, snapshot.classSessions],
   );
 
+  const totalCapacity = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.capacity,
+    0,
+  );
+  const bookedSpots = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.bookedCount,
+    0,
+  );
+  const remainingSpots = selectedClass
+    ? Math.max(selectedClass.capacity - selectedClass.bookedCount, 0)
+    : 0;
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!selectedClassSessionId) {
+      toast.error("Kies eerst een les.");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -71,6 +108,7 @@ export function PublicReservationPortal({
           body: JSON.stringify({
             tenantSlug: snapshot.tenantSlug ?? undefined,
             classSessionId: selectedClassSessionId,
+            fullName,
             email,
             phone,
             phoneCountry,
@@ -105,6 +143,7 @@ export function PublicReservationPortal({
           messagePreview: payload.data.messagePreview,
           alreadyExisted: payload.data.alreadyExisted,
         });
+        setBookingStep("done");
 
         toast.success(
           payload.data.alreadyExisted
@@ -124,335 +163,377 @@ export function PublicReservationPortal({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="spotlight-shell overflow-hidden">
-        <div className="relative space-y-6">
-          <div className="flex flex-wrap gap-2">
-            {experience.heroBadges.map((badge) => (
-              <span key={badge} className="metric-chip">
-                {badge}
-              </span>
-            ))}
-          </div>
+    <div className="relative z-10">
+      <nav className="mb-10 flex items-center justify-between">
+        <GymOsLogo />
+        <Link href="/login" className="gym-os-button-secondary">
+          Team login
+        </Link>
+      </nav>
 
-          <div className="space-y-3">
-            <p className="eyebrow">Leden reserveren</p>
-            <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-slate-950 md:text-6xl">
-              {snapshot.tenantSlug
-                ? `Reserveer je volgende les bij ${snapshot.tenantName}`
-                : "Kies eerst welke gym je wilt openen"}
+      {bookingStep !== "gym" && bookingStep !== "done" ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (bookingStep === "classes") {
+              setBookingStep("gym");
+            }
+
+            if (bookingStep === "confirm") {
+              setBookingStep("classes");
+            }
+          }}
+          className="mb-8 flex items-center gap-2 text-sm text-white/50 transition hover:text-white"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Terug
+        </button>
+      ) : null}
+
+      {bookingStep === "gym" ? (
+        <section>
+          <div className="mb-12 max-w-2xl">
+            <GymOsBadge>Boek een les</GymOsBadge>
+            <h1 className="mb-4 mt-5 text-4xl font-bold leading-tight text-white md:text-5xl">
+              Kies je sportschool
             </h1>
-            <p className="max-w-2xl text-base leading-8 text-slate-700 md:text-lg">
-              {snapshot.tenantSlug
-                ? "Deze flow moet voelen als een high-end studio: helder rooster, directe bevestiging en nul ruis tussen zien en boeken."
-                : "Het platform ondersteunt meerdere gyms. Kies eerst de juiste club, daarna openen we het rooster en de reserveringsflow van die sportschool."}
+            <p className="text-xl leading-8 text-white/50">
+              Dit platform is multi-gym. Elke gym heeft een eigen rooster,
+              capaciteit en member flow.
             </p>
           </div>
 
-          {snapshot.availableGyms.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {snapshot.availableGyms.map((gym) => (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {snapshot.availableGyms.length > 0 ? (
+              snapshot.availableGyms.map((gym) => (
                 <Link
                   key={gym.id}
                   href={`/reserve?gym=${gym.slug}`}
-                  className={`signal-card transition ${
-                    snapshot.tenantSlug === gym.slug
-                      ? "border-teal-200 bg-teal-50/90"
-                      : ""
-                  }`}
+                  className="glass-card-hover group p-8 text-left"
                 >
-                  <p className="eyebrow">Gym</p>
-                  <p className="mt-3 text-xl font-semibold text-slate-950">{gym.name}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Open deze club als owner, manager, trainer of lidflow.
+                  <div className="mb-6 flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500/10 transition-colors group-hover:bg-orange-500/15">
+                      <DumbbellIcon className="h-6 w-6 text-orange-400" />
+                    </div>
+                    <ArrowRightIcon className="h-5 w-5 text-white/20 transition-colors group-hover:text-orange-400" />
+                  </div>
+                  <h2 className="mb-2 text-xl font-semibold text-white">{gym.name}</h2>
+                  <p className="mb-6 text-sm leading-6 text-white/40">
+                    Open het live rooster en reserveer direct binnen deze gym.
                   </p>
+                  <span className="inline-flex items-center gap-1.5 text-sm text-white/40">
+                    <MapPinIcon className="h-4 w-4" />
+                    Eigen tenant en reserveringsflow
+                  </span>
                 </Link>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 md:grid-cols-[1.35fr_0.8fr_0.8fr]">
-            <div className="signal-card md:col-span-2">
-              <p className="eyebrow">{experience.rosterSummary.label}</p>
-              <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-                {experience.rosterSummary.value}
-              </p>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                {experience.rosterSummary.helper}
-              </p>
-            </div>
-            {experience.insightCards.map((card) => (
-              <div key={card.label} className="signal-card">
-                <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                <p className="mt-3 text-2xl font-semibold text-slate-950">
-                  {card.value}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {card.helper}
-                </p>
+              ))
+            ) : (
+              <div className="glass-card p-8 text-white/45">
+                Er is nog geen gym aangemaakt. Meld eerst een gym owner aan.
               </div>
-            ))}
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {bookingStep === "classes" ? (
+        <section>
+          <div className="mb-12 max-w-3xl">
+            <GymOsBadge>{snapshot.tenantName}</GymOsBadge>
+            <h1 className="mb-4 mt-5 text-4xl font-bold leading-tight text-white md:text-5xl">
+              Kies je les
+            </h1>
+            <p className="text-xl leading-8 text-white/50">
+              Zie direct coach, locatie, focus en beschikbaarheid. Geen account
+              nodig: reserveren moet snel voelen.
+            </p>
           </div>
 
-          {selectedClass ? (
-            <div className="stage-card">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="eyebrow">Nu geselecteerd</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">
-                    {selectedClass.title}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {formatSessionMoment(selectedClass.startsAt)} ·{" "}
-                    {selectedClass.locationName} · coach {selectedClass.trainerName}
-                  </p>
+          <div className="mb-8 grid gap-4 md:grid-cols-3">
+            <div className="glass-card p-5">
+              <p className="text-sm text-white/40">Lessen</p>
+              <p className="mt-2 text-3xl font-bold text-white">{snapshot.classSessions.length}</p>
+            </div>
+            <div className="glass-card p-5">
+              <p className="text-sm text-white/40">Plekken totaal</p>
+              <p className="mt-2 text-3xl font-bold text-white">{totalCapacity}</p>
+            </div>
+            <div className="glass-card p-5">
+              <p className="text-sm text-white/40">Al geboekt</p>
+              <p className="mt-2 text-3xl font-bold text-white">{bookedSpots}</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {snapshot.classSessions.length > 0 ? (
+              snapshot.classSessions.map((classSession) => {
+                const freeSpots = Math.max(
+                  classSession.capacity - classSession.bookedCount,
+                  0,
+                );
+
+                return (
+                  <button
+                    key={classSession.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedClassSessionId(classSession.id);
+                      setBookingStep("confirm");
+                    }}
+                    className="glass-card-hover w-full p-5 text-left"
+                  >
+                    <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-orange-500/10 text-orange-300">
+                          <ClockIcon className="mb-1 h-4 w-4" />
+                          <span className="text-xs font-semibold">
+                            {formatShortTime(classSession.startsAt)}
+                          </span>
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-semibold text-white">
+                            {classSession.title}
+                          </h2>
+                          <p className="mt-1 text-sm leading-6 text-white/45">
+                            {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
+                          </p>
+                          <p className="mt-2 text-sm text-white/35">
+                            Coach {classSession.trainerName} · {classSession.focus} · {classSession.level}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span
+                          className={`rounded-full border px-3 py-1.5 text-sm ${
+                            freeSpots > 0
+                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                              : "border-amber-500/20 bg-amber-500/10 text-amber-300"
+                          }`}
+                        >
+                          {freeSpots > 0
+                            ? `${freeSpots} plek${freeSpots === 1 ? "" : "ken"} vrij`
+                            : "Wachtlijst"}
+                        </span>
+                        <ArrowRightIcon className="h-5 w-5 text-white/20" />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="glass-card p-8">
+                <h2 className="mb-2 text-2xl font-semibold text-white">
+                  Nog geen lessen live
+                </h2>
+                <p className="leading-7 text-white/45">
+                  De gym is aangemaakt, maar er staat nog geen rooster klaar.
+                  Plan een les vanuit het dashboard zodat leden direct kunnen boeken.
+                </p>
+                <Link href="/login" className="gym-os-button mt-6">
+                  Naar owner login
+                </Link>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {bookingStep === "confirm" && selectedClass ? (
+        <section className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+          <aside className="glass-card h-fit p-6">
+            <GymOsBadge>{snapshot.tenantName}</GymOsBadge>
+            <h1 className="mb-4 mt-5 text-3xl font-bold leading-tight text-white">
+              Bevestig je plek
+            </h1>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+                <p className="font-semibold text-white">{selectedClass.title}</p>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  {formatSessionMoment(selectedClass.startsAt)} · {selectedClass.locationName}
+                </p>
+                <p className="mt-2 text-sm text-white/35">
+                  Coach {selectedClass.trainerName} · {selectedClass.durationMinutes} min
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+                  <p className="text-sm text-white/40">Beschikbaar</p>
+                  <p className="mt-2 text-2xl font-bold text-white">{remainingSpots}</p>
                 </div>
-                <Badge
-                  variant={
-                    selectedClass.capacity - selectedClass.bookedCount > 0
-                      ? "success"
-                      : "warning"
-                  }
-                >
-                  {selectedClass.capacity - selectedClass.bookedCount > 0
-                    ? `${selectedClass.capacity - selectedClass.bookedCount} plekken vrij`
-                    : "Wachtlijst actief"}
-                </Badge>
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+                  <p className="text-sm text-white/40">Wachtlijst</p>
+                  <p className="mt-2 text-2xl font-bold text-white">{selectedClass.waitlistCount}</p>
+                </div>
               </div>
             </div>
-          ) : null}
+          </aside>
 
-          {snapshot.classSessions.length > 0 && snapshot.tenantSlug ? (
-            <form className="space-y-5" onSubmit={handleSubmit}>
-              <label className="text-sm font-medium text-slate-800">
-                Kies een les
+          <form onSubmit={handleSubmit} className="glass-card p-6 md:p-8">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white">Jouw gegevens</h2>
+              <p className="mt-2 text-sm leading-6 text-white/45">
+                Je reservering wordt direct opgeslagen en is beheerbaar in het
+                dashboard van de gym.
+              </p>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="block space-y-2 text-sm font-medium text-white/70 md:col-span-2">
+                <span>Naam</span>
+                <input
+                  className="gym-os-input"
+                  type="text"
+                  autoComplete="name"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  placeholder="Bijvoorbeeld: Noor Bakker"
+                  required
+                />
+              </label>
+
+              <label className="block space-y-2 text-sm font-medium text-white/70">
+                <span>E-mailadres</span>
+                <input
+                  className="gym-os-input"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="jij@voorbeeld.nl"
+                  required
+                />
+              </label>
+
+              <label className="block space-y-2 text-sm font-medium text-white/70">
+                <span>Landcode</span>
                 <select
-                  className={`${fieldClassName()} brand-select`}
-                  value={selectedClassSessionId}
-                  onChange={(event) => setSelectedClassSessionId(event.target.value)}
+                  className="gym-os-select"
+                  value={phoneCountry}
+                  onChange={(event) => setPhoneCountry(event.target.value)}
                   required
                 >
-                  {snapshot.classSessions.map((classSession) => (
-                    <option key={classSession.id} value={classSession.id}>
-                      {classSession.title} · {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
-                    </option>
-                  ))}
+                  <option value="NL">NL +31</option>
+                  <option value="BE">BE +32</option>
+                  <option value="DE">DE +49</option>
                 </select>
               </label>
 
-              <div className="grid gap-5 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  E-mailadres
-                  <input
-                    className={fieldClassName()}
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="jij@voorbeeld.nl"
-                    required
-                  />
-                </label>
-
-                <PhoneNumberField
-                  country={phoneCountry as never}
-                  onCountryChange={(value) => setPhoneCountry(value)}
-                  phone={phone}
-                  onPhoneChange={setPhone}
-                  language="nl"
-                  countryLabel="Landcode"
-                  phoneLabel="Mobiel nummer"
+              <label className="block space-y-2 text-sm font-medium text-white/70 md:col-span-2">
+                <span>Mobiel nummer</span>
+                <input
+                  className="gym-os-input"
+                  type="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="06 12345678"
+                  required
                 />
-              </div>
+              </label>
 
-              <label className="text-sm font-medium text-slate-800">
-                Opmerking voor de club (optioneel)
+              <label className="block space-y-2 text-sm font-medium text-white/70 md:col-span-2">
+                <span>Opmerking voor de club (optioneel)</span>
                 <textarea
-                  className={textareaClassName()}
+                  className="min-h-28 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/30"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Bijvoorbeeld: eerste proefles of ik kom 5 minuten later binnen."
                 />
               </label>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="bg-teal-700 hover:bg-teal-800"
-                  disabled={isPending || !selectedClassSessionId}
-                >
-                  {isPending ? "Bezig met reserveren..." : "Reserveer les"}
-                </Button>
-
-                <Button asChild variant="outline" size="lg" className="bg-white/90">
-                  <Link href="/login">Terug naar teamlogin</Link>
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <div className="stage-card space-y-4 text-sm leading-6 text-slate-600">
-              <div className="space-y-2">
-                <p className="eyebrow">Pre-launch member flow</p>
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-                  {snapshot.tenantSlug
-                    ? experience.emptyState?.title ?? "Nieuwe class drops openen hier als eerste."
-                    : "Kies een gym om het rooster en de reserveringsflow te openen."}
-                </h2>
-                <p>
-                  {snapshot.tenantSlug
-                    ? experience.emptyState?.description ??
-                      "Deze member-ervaring staat al klaar in premium vorm."
-                    : "Zodra je een gym kiest, tonen we alleen de lessen, coaches en beschikbaarheid van die club."}
-                </p>
-              </div>
-
-              <div className="grid gap-3">
-                {(snapshot.tenantSlug
-                  ? experience.emptyState?.highlights ?? []
-                  : snapshot.availableGyms.map(
-                      (gym) => `${gym.name} · open via /reserve?gym=${gym.slug}`,
-                    )
-                ).map((highlight) => (
-                  <div
-                    key={highlight}
-                    className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3"
-                  >
-                    {highlight}
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <Link href="/login" className="cta-primary">
-                  Open owner launch
-                </Link>
-                <Link href="/" className="cta-secondary">
-                  Terug naar homepage
-                </Link>
-              </div>
             </div>
-          )}
-        </div>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button
+                type="submit"
+                className="gym-os-button h-12"
+                disabled={isPending || !selectedClassSessionId}
+              >
+                {isPending ? "Bezig met reserveren..." : "Reserveer les"}
+                <ArrowRightIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookingStep("classes")}
+                className="gym-os-button-secondary h-12"
+              >
+                Andere les kiezen
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+
+      {bookingStep === "done" ? (
+        <section className="mx-auto max-w-2xl">
+          <div className="glass-card p-8 text-center md:p-12">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
+              <CheckIcon className="h-8 w-8 text-emerald-400" />
+            </div>
+            <GymOsBadge tone="green">Reservering ontvangen</GymOsBadge>
+            <h1 className="mb-4 mt-5 text-4xl font-bold text-white">
+              Je plek is geregeld
+            </h1>
+            <p className="text-lg leading-8 text-white/50">
+              {lastResult?.alreadyExisted
+                ? "Deze reservering bestond al; we hebben dezelfde booking opnieuw opgehaald."
+                : lastResult?.status === "waitlisted"
+                  ? "De les is vol, daarom sta je automatisch op de wachtlijst."
+                  : "De club ziet je reservering nu direct in het beheerportaal."}
+            </p>
+
+            {lastResult ? (
+              <div className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 text-left">
+                <p className="text-sm font-medium text-white">Bevestiging</p>
+                <p className="mt-2 break-words text-sm leading-6 text-white/45">
+                  {lastResult.messagePreview}
+                </p>
+                <p className="mt-3 text-xs text-white/25">Booking ID: {lastResult.bookingId}</p>
+              </div>
+            ) : null}
+
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setBookingStep("classes")}
+                className="gym-os-button"
+              >
+                Nog een les boeken
+              </button>
+              <Link href="/" className="gym-os-button-secondary">
+                Terug naar homepage
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mt-16 grid gap-6 md:grid-cols-3">
+        {[
+          {
+            title: "Direct bevestigd",
+            copy: "Beschikbare plekken worden meteen gecontroleerd en opgeslagen.",
+            icon: CheckIcon,
+          },
+          {
+            title: "Realtime capaciteit",
+            copy: "Vol is vol: daarna kom je automatisch op de wachtlijst.",
+            icon: UsersIcon,
+          },
+          {
+            title: "Beheerbaar voor de gym",
+            copy: "Owner, manager en frontdesk zien de booking in hun dashboard.",
+            icon: DumbbellIcon,
+          },
+        ].map((item) => (
+          <div key={item.title} className="glass-card p-6">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
+              <item.icon className="h-5 w-5 text-orange-400" />
+            </div>
+            <h2 className="mb-2 font-semibold text-white">{item.title}</h2>
+            <p className="text-sm leading-6 text-white/40">{item.copy}</p>
+          </div>
+        ))}
       </section>
-
-      <aside className="space-y-5">
-        <section className="section-shell space-y-4">
-          <div className="space-y-2">
-            <p className="eyebrow">Beschikbare lessen</p>
-            <h2 className="text-2xl font-semibold text-slate-950">
-              {experience.hasClasses
-                ? "Wat staat er op het rooster?"
-                : "Wat leden straks als eerste gaan zien"}
-            </h2>
-          </div>
-
-          <div className="grid gap-3">
-            {snapshot.classSessions.length > 0 ? (
-              snapshot.classSessions.map((classSession) => {
-              const remainingSpots = Math.max(
-                classSession.capacity - classSession.bookedCount,
-                0,
-              );
-
-              return (
-                <div
-                  key={classSession.id}
-                  className="live-class-card"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-900">{classSession.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">
-                        {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={remainingSpots > 0 ? "success" : "warning"}
-                    >
-                      {remainingSpots > 0
-                        ? `${remainingSpots} plek${remainingSpots === 1 ? "" : "ken"} vrij`
-                        : "Wachtlijst actief"}
-                    </Badge>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {classSession.focus} · {classSession.level} · coach {classSession.trainerName}
-                  </p>
-                </div>
-              );
-              })
-            ) : (
-              <div className="stage-card text-sm leading-6 text-slate-600">
-                <p className="font-semibold text-slate-950">Founder preview</p>
-                <p className="mt-2">
-                  Zodra je eerste les is ingepland verschijnen hier direct je class
-                  cards, plekken vrij, coachinformatie en locatiecontext in dezelfde
-                  premium stijl.
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="section-shell space-y-4">
-          <div className="space-y-2">
-            <p className="eyebrow">Waarom dit werkt</p>
-            <h2 className="text-2xl font-semibold text-slate-950">
-              Consumentvriendelijk zonder vaag te worden
-            </h2>
-          </div>
-
-          <div className="grid gap-3">
-            {experience.promiseCards.map((card) => (
-              <div key={card.title} className="signal-card">
-                <p className="text-lg font-semibold text-slate-950">{card.title}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {card.copy}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="section-shell space-y-4">
-          <div className="space-y-2">
-            <p className="eyebrow">Na je reservering</p>
-            <h2 className="text-2xl font-semibold text-slate-950">
-              Bevestiging en status
-            </h2>
-          </div>
-
-          {selectedClass ? (
-            <div className="stage-card text-sm leading-6 text-slate-600">
-              <p className="font-medium text-slate-900">{selectedClass.title}</p>
-              <p className="mt-2">
-                Je reservering komt direct in het beheerportaal van de club terecht.
-                Balie, operations en eigenaar kunnen hem daar zien en beheren.
-              </p>
-            </div>
-          ) : null}
-
-          {lastResult ? (
-            <div className="rounded-3xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 text-sm leading-6 text-teal-950 shadow-[0_18px_55px_-40px_rgba(15,118,110,0.65)]">
-              <p className="font-medium">
-                {lastResult.alreadyExisted
-                  ? "Deze reservering bestond al."
-                  : `Status: ${lastResult.status}`}
-              </p>
-              <p className="mt-2 break-words">{lastResult.messagePreview}</p>
-              <p className="mt-2 text-xs text-teal-700">
-                Booking ID: {lastResult.bookingId}
-              </p>
-            </div>
-          ) : (
-            <div className="stage-card text-sm leading-6 text-slate-600">
-              {experience.hasClasses
-                ? "Na versturen tonen we hier direct of je reservering bevestigd is of op de wachtlijst staat."
-                : "Zodra de eerste les live staat, zie je hier direct bevestiging, wachtlijst of herhaalde boeking terug."}
-            </div>
-          )}
-        </section>
-      </aside>
     </div>
   );
 }

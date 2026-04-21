@@ -1,175 +1,106 @@
 "use client";
 
 import Link from "next/link";
-import { formatPhoneForDisplay } from "@claimtech/i18n";
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CurrencyValue,
-} from "@claimtech/ui";
 import { AttendanceButton } from "@/components/AttendanceButton";
-import { BookingDialog } from "@/components/BookingDialog";
 import { BookingManagementView } from "@/components/BookingManagementView";
-import { ClassSessionView } from "@/components/ClassSessionView";
-import { DashboardLiveSync } from "@/components/DashboardLiveSync";
-import { LocationView } from "@/components/LocationView";
-import { MemberView } from "@/components/MemberView";
 import { PlatformWorkbench } from "@/components/PlatformWorkbench";
-import { getDashboardExperience } from "@/lib/dashboard-experience";
-import {
-  getDashboardPageForWorkbenchStep,
-  getDashboardPageHref,
-  getDashboardPages,
-  type DashboardPageKey,
-} from "@/lib/dashboard-pages";
+import { getDashboardPages, type DashboardPageKey } from "@/lib/dashboard-pages";
 import { getMembershipBillingCycleLabel } from "@/lib/memberships";
 import type { GymDashboardSnapshot } from "@/server/types";
 
-function formatSessionMoment(startsAt: string) {
+function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("nl-NL", {
     weekday: "short",
+    day: "2-digit",
+    month: "short",
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/Amsterdam",
-  }).format(new Date(startsAt));
+  }).format(new Date(value));
 }
 
-function getFeatureVariant(enabled: boolean) {
-  return enabled ? "success" : "secondary";
+function formatCurrency(value: number, currency = "EUR") {
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
-function getMetricToneLabel(tone: string) {
-  if (tone === "success") {
-    return "Groeit gezond";
-  }
-
-  if (tone === "warning") {
-    return "Aandacht gewenst";
-  }
-
-  if (tone === "info") {
-    return "Live inzicht";
-  }
-
-  return "Operationeel";
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }
 
-function getBookingVariant(status: string) {
-  if (status === "checked_in") {
-    return "success";
+function statusClass(status: string) {
+  if (["active", "confirmed", "checked_in", "healthy", "configured"].includes(status)) {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
   }
 
-  if (status === "waitlisted") {
-    return "warning";
+  if (["waitlisted", "trial", "degraded", "attention", "requested"].includes(status)) {
+    return "border-amber-500/20 bg-amber-500/10 text-amber-300";
   }
 
-  return "info";
+  return "border-white/10 bg-white/[0.04] text-white/50";
 }
 
-function getFeatureLabel(featureKey: string) {
-  switch (featureKey) {
-    case "bookings.waitlist":
-      return "Wachtlijst";
-    case "attendance.self_check_in":
-      return "Self check-in";
-    case "waivers.digital_upload":
-      return "Digitale waivers";
-    case "marketing.automations":
-      return "Marketing opvolging";
-    case "analytics.multi_location":
-      return "Multi-locatie inzichten";
-    default:
-      return featureKey;
-  }
+function MetricCard({
+  label,
+  value,
+  helper,
+  trend,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  trend?: string;
+}) {
+  return (
+    <div className="glass-card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-white/40">{label}</p>
+        {trend ? (
+          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
+            {trend}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-3xl font-bold text-white">{value}</p>
+      <p className="mt-2 text-sm leading-6 text-white/40">{helper}</p>
+    </div>
+  );
 }
 
-function getAuditActionLabel(action: string) {
-  switch (action) {
-    case "platform.runtime_ready":
-      return "Platform is klaar voor gebruik";
-    case "staff.created":
-      return "Teamlid toegevoegd";
-    case "location.created":
-      return "Vestiging toegevoegd";
-    case "membership.created":
-    case "membership_plan.created":
-      return "Contract aangemaakt";
-    case "trainer.created":
-      return "Trainer toegevoegd";
-    case "class.created":
-    case "class_session.created":
-      return "Les gepland";
-    case "member.created":
-      return "Lid toegevoegd";
-    case "booking.created":
-      return "Reservering aangemaakt";
-    case "booking.cancelled":
-      return "Reservering geannuleerd";
-    case "attendance.recorded":
-      return "Check-in geregistreerd";
-    case "remote_access.updated":
-      return "Remote toegang bijgewerkt";
-    case "billing.updated":
-      return "Betalingen bijgewerkt";
-    default:
-      return action.replaceAll(".", " ");
-  }
+function SectionHeader({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h2 className="text-xl font-semibold text-white">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-white/40">{description}</p>
+      </div>
+      {action}
+    </div>
+  );
 }
 
-function getAuditCategoryLabel(category: string) {
-  switch (category) {
-    case "system":
-      return "Systeem";
-    case "staff":
-      return "Personeel";
-    case "locations":
-    case "location":
-      return "Vestigingen";
-    case "memberships":
-    case "membership":
-      return "Contracten";
-    case "members":
-    case "member":
-      return "Leden";
-    case "bookings":
-    case "booking":
-      return "Reserveringen";
-    case "attendance":
-      return "Check-ins";
-    case "settings":
-      return "Instellingen";
-    default:
-      return category;
-  }
-}
-
-function getFriendlyHealthSummary(summary: string) {
-  const lowerSummary = summary.toLowerCase();
-
-  if (lowerSummary.includes("redis") || lowerSummary.includes("cache")) {
-    return "Je dashboard draait soepel voor de launch. Bij hogere drukte kan performance later worden opgeschaald.";
-  }
-
-  if (lowerSummary.includes("mongo") || lowerSummary.includes("database")) {
-    return "Je dataopslag is klaar voor leden, contracten, reserveringen en teambeheer.";
-  }
-
-  if (
-    lowerSummary.includes("waha") ||
-    lowerSummary.includes("whatsapp") ||
-    lowerSummary.includes("messaging")
-  ) {
-    return "Berichten zijn voorbereid voor bevestigingen en opvolging richting leden.";
-  }
-
-  if (lowerSummary.includes("spaces") || lowerSummary.includes("storage")) {
-    return "Documenten en uploads zijn voorbereid voor waivers en ledenbestanden.";
-  }
-
-  return summary;
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-white/[0.12] bg-white/[0.02] p-5 text-sm leading-6 text-white/45">
+      {children}
+    </div>
+  );
 }
 
 export function GymDashboard({
@@ -179,55 +110,20 @@ export function GymDashboard({
   snapshot: GymDashboardSnapshot;
   currentPage?: DashboardPageKey;
 }) {
-  const planById = new Map(
-    snapshot.membershipPlans.map((plan) => [plan.id, plan] as const),
-  );
-  const locationById = new Map(
-    snapshot.locations.map((location) => [location.id, location] as const),
-  );
-  const trainerById = new Map(
-    snapshot.trainers.map((trainer) => [trainer.id, trainer] as const),
-  );
-
+  const planById = new Map(snapshot.membershipPlans.map((plan) => [plan.id, plan]));
+  const locationById = new Map(snapshot.locations.map((location) => [location.id, location]));
+  const trainerById = new Map(snapshot.trainers.map((trainer) => [trainer.id, trainer]));
+  const classById = new Map(snapshot.classSessions.map((classSession) => [classSession.id, classSession]));
   const upcomingSessions = [...snapshot.classSessions].sort((left, right) =>
     left.startsAt.localeCompare(right.startsAt),
   );
-  const nextSession = upcomingSessions[0];
-  const pendingWaivers = snapshot.waivers.filter(
-    (waiver) => waiver.status !== "signed",
-  );
-  const openChecks = snapshot.healthReport.checks.filter(
-    (check) => check.status !== "healthy",
-  );
-  const highlightedMembers = [...snapshot.members].sort((left, right) => {
-    const priorityFor = (member: (typeof snapshot.members)[number]) =>
-      (member.waiverStatus !== "complete" ? 2 : 0) +
-      (member.status !== "active" ? 1 : 0);
-
-    return (
-      priorityFor(right) - priorityFor(left) ||
-      left.fullName.localeCompare(right.fullName)
-    );
-  });
-  const recentBookings = snapshot.bookings.slice(0, 4);
+  const activeMembers = snapshot.members.filter((member) => member.status === "active");
+  const pendingWaivers = snapshot.waivers.filter((waiver) => waiver.status !== "signed");
   const confirmedBookings = snapshot.bookings.filter(
     (booking) => booking.status === "confirmed" || booking.status === "checked_in",
   );
-  const waitlistedBookings = snapshot.bookings.filter(
-    (booking) => booking.status === "waitlisted",
-  );
-  const activeMembers = snapshot.members.filter(
-    (member) => member.status === "active",
-  );
-  const dashboardExperience = getDashboardExperience({
-    locationsCount: snapshot.locations.length,
-    membershipPlansCount: snapshot.membershipPlans.length,
-    trainersCount: snapshot.trainers.length,
-    membersCount: snapshot.members.length,
-    classSessionsCount: snapshot.classSessions.length,
-    bookingsCount: snapshot.bookings.length,
-    healthAttentionCount: openChecks.length,
-  });
+  const waitlistedBookings = snapshot.bookings.filter((booking) => booking.status === "waitlisted");
+  const openHealthChecks = snapshot.healthReport.checks.filter((check) => check.status !== "healthy");
   const dashboardPages = getDashboardPages({
     locationsCount: snapshot.locations.length,
     membershipPlansCount: snapshot.membershipPlans.length,
@@ -236,708 +132,332 @@ export function GymDashboard({
     classSessionsCount: snapshot.classSessions.length,
     bookingsCount: snapshot.bookings.length,
     staffCount: snapshot.staff.length,
-    healthAttentionCount: openChecks.length,
+    healthAttentionCount: openHealthChecks.length,
     paymentsStatusLabel: snapshot.payments.statusLabel,
     remoteAccessStatusLabel: snapshot.remoteAccess.statusLabel,
     canManagePayments: snapshot.uiCapabilities.canManagePayments,
     canManageRemoteAccess: snapshot.uiCapabilities.canManageRemoteAccess,
     canManageStaff: snapshot.uiCapabilities.canManageStaff,
   });
-  const currentPageDetails =
-    dashboardPages.find((page) => page.key === currentPage) ?? dashboardPages[0]!;
 
-  const pageContent = {
-    overview: (
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h3 className="text-xl font-semibold text-slate-950">
-              Planning vandaag
-            </h3>
-            <p className="text-sm leading-6 text-slate-600">
-              De eerstvolgende lessen met bezetting, coach en locatie.
-            </p>
-          </div>
+  const totalCapacity = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.capacity,
+    0,
+  );
+  const occupancy = totalCapacity === 0
+    ? 0
+    : Math.round((confirmedBookings.length / totalCapacity) * 100);
 
-          {upcomingSessions.length > 0 ? (
-            upcomingSessions.map((classSession) => (
-              <ClassSessionView
-                key={classSession.id}
-                classSession={classSession}
-                trainerName={trainerById.get(classSession.trainerId)?.fullName}
-                locationName={locationById.get(classSession.locationId)?.name}
-              />
-            ))
-          ) : (
-            <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-              Nog geen lessen ingepland. Open Rooster om je eerste les toe te voegen.
-            </p>
-          )}
-        </div>
+  return (
+    <div className="space-y-6 p-5 lg:p-8">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <MetricCard
+          label="Active members"
+          value={String(activeMembers.length)}
+          helper={`${snapshot.members.length} leden totaal in deze gym`}
+          trend={activeMembers.length > 0 ? "Live" : undefined}
+        />
+        <MetricCard
+          label="Classes"
+          value={String(snapshot.classSessions.length)}
+          helper={`${confirmedBookings.length} bevestigde reserveringen`}
+          trend={`${occupancy}% bezet`}
+        />
+        <MetricCard
+          label="Revenue MTD"
+          value={snapshot.projectedRevenueLabel}
+          helper="Gebaseerd op actieve contracten"
+          trend={snapshot.membershipPlans.length > 0 ? "Projected" : undefined}
+        />
+        <MetricCard
+          label="Attention"
+          value={String(pendingWaivers.length + waitlistedBookings.length + openHealthChecks.length)}
+          helper="Waivers, wachtlijst en owner checks"
+        />
+      </section>
 
-        <div className="space-y-4">
-          <Card className="border-slate-200/80 bg-white/80">
-            <CardHeader>
-              <CardTitle className="text-lg">Open acties</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {pendingWaivers.length > 0 ? (
-                pendingWaivers.map((waiver) => (
-                  <div key={waiver.id} className="soft-card p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-slate-900">
-                          {waiver.memberName}
-                        </p>
-                        <p className="text-sm text-slate-600">
-                          {waiver.fileName ?? "Nog geen upload ontvangen"}
-                        </p>
+      <section className="grid gap-3 md:grid-cols-4">
+        {dashboardPages.map((page) => (
+          <Link
+            key={page.key}
+            href={page.href}
+            className={`glass-card-hover p-4 ${
+              currentPage === page.key ? "border-orange-500/40 bg-orange-500/10" : ""
+            }`}
+          >
+            <p className="text-sm font-medium text-white">{page.title}</p>
+            <p className="mt-2 text-2xl font-bold text-white">{page.value}</p>
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/40">{page.helper}</p>
+          </Link>
+        ))}
+      </section>
+
+      {currentPage === "overview" ? (
+        <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+          <section className="glass-card p-6">
+            <SectionHeader
+              title="Today's schedule"
+              description="Echte lessen uit je gym, inclusief capaciteit en coach."
+              action={<Link href="/dashboard/classes" className="gym-os-button-secondary">View all</Link>}
+            />
+            <div className="space-y-3">
+              {upcomingSessions.length > 0 ? (
+                upcomingSessions.slice(0, 5).map((classSession) => (
+                  <div key={classSession.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="min-w-[86px] text-sm font-semibold text-orange-300">
+                          {formatDateTime(classSession.startsAt)}
+                        </div>
+                        <div>
+                          <p className="font-medium text-white">{classSession.title}</p>
+                          <p className="mt-1 text-sm text-white/40">
+                            {trainerById.get(classSession.trainerId)?.fullName ?? "Trainer"} ·{" "}
+                            {locationById.get(classSession.locationId)?.name ?? "Locatie"} · {classSession.focus}
+                          </p>
+                        </div>
                       </div>
-                      <Badge variant="warning">{waiver.status}</Badge>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-white/60">
+                          {classSession.bookedCount}/{classSession.capacity}
+                        </span>
+                        <div className="h-2 w-24 overflow-hidden rounded-full bg-white/[0.08]">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500"
+                            style={{
+                              width: `${Math.min(100, (classSession.bookedCount / classSession.capacity) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                  Geen open acties. Alle waivers zijn afgerond.
-                </p>
+                <EmptyState>Plan je eerste class om je rooster, bookingflow en dashboard te activeren.</EmptyState>
               )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-slate-200/80 bg-white/80">
-            <CardHeader>
-              <CardTitle className="text-lg">Laatste reserveringen</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {recentBookings.length > 0 ? (
-                recentBookings.map((booking) => {
-                  const classSession = snapshot.classSessions.find(
-                    (entry) => entry.id === booking.classSessionId,
-                  );
-
-                  return (
-                    <div key={booking.id} className="soft-card p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-slate-900">
-                            {booking.memberName}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            {classSession?.title ?? "Onbekende les"} ·{" "}
-                            {formatPhoneForDisplay(
-                              booking.phone,
-                              booking.phoneCountry,
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {snapshot.uiCapabilities.canRecordAttendance &&
-                          booking.status === "confirmed" ? (
-                            <AttendanceButton
-                              bookingId={booking.id}
-                              expectedVersion={booking.version}
-                            />
-                          ) : null}
-                          <Badge variant={getBookingVariant(booking.status)}>
-                            {booking.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                  Nog geen reserveringen. Zodra leden boeken, zie je ze hier direct.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    ),
-    reservations: <BookingManagementView snapshot={snapshot} />,
-    members: (
-      <div className="space-y-5">
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h3 className="text-xl font-semibold text-slate-950">
-                Leden die aandacht vragen
-              </h3>
-              <p className="text-sm leading-6 text-slate-600">
-                Trialleden, open waivers en gepauzeerde leden komen automatisch bovenaan.
-              </p>
             </div>
+          </section>
 
-            {highlightedMembers.length > 0 ? (
-              highlightedMembers.map((member) => (
-                <MemberView
-                  key={member.id}
-                  member={member}
-                  plan={planById.get(member.membershipPlanId)}
-                  homeLocationName={locationById.get(member.homeLocationId)?.name}
-                />
-              ))
-            ) : (
-              <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                Nog geen leden. Voeg leden toe of importeer bestaande klanten.
-              </p>
-            )}
-          </div>
-
-          <Card className="border-slate-200/80 bg-white/80">
-            <CardHeader>
-              <CardTitle className="text-lg">Ledenfacts</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="soft-card p-4">
-                <p className="text-sm text-slate-500">Actief</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-950">
-                  {activeMembers.length}
-                </p>
-              </div>
-              <div className="soft-card p-4">
-                <p className="text-sm text-slate-500">Open waivers</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-950">
-                  {pendingWaivers.length}
-                </p>
-              </div>
-              <div className="soft-card p-4">
-                <p className="text-sm text-slate-500">Contracttypes</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-950">
-                  {snapshot.membershipPlans.length}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <PlatformWorkbench
-          snapshot={snapshot}
-          sections={["members"]}
-          showLaunchHeader={false}
-        />
-      </div>
-    ),
-    contracts: (
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="border-slate-200/80 bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-lg">Actieve contracten</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {snapshot.membershipPlans.length > 0 ? (
-              snapshot.membershipPlans.map((plan) => (
-                <div key={plan.id} className="soft-card p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-900">{plan.name}</p>
-                      <p className="text-sm text-slate-600">
-                        {plan.activeMembers} actieve leden ·{" "}
-                        {getMembershipBillingCycleLabel(plan.billingCycle)}
-                      </p>
-                    </div>
-                    <CurrencyValue
-                      amount={plan.priceMonthly}
-                      currency={plan.currency}
-                      language="nl"
-                    />
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {plan.perks.join(" · ")}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                Nog geen contracten. Maak een maand-, halfjaar- of jaarcontract aan.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <PlatformWorkbench
-          snapshot={snapshot}
-          sections={["contracts"]}
-          showLaunchHeader={false}
-        />
-      </div>
-    ),
-    schedule: (
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-4">
-          {upcomingSessions.length > 0 ? (
-            upcomingSessions.map((classSession) => (
-              <ClassSessionView
-                key={classSession.id}
-                classSession={classSession}
-                trainerName={trainerById.get(classSession.trainerId)?.fullName}
-                locationName={locationById.get(classSession.locationId)?.name}
-              />
-            ))
-          ) : (
-            <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-              Nog geen lessen. Voeg eerst een vestiging en trainer toe.
-            </p>
-          )}
-        </div>
-
-        <PlatformWorkbench
-          snapshot={snapshot}
-          sections={["classes"]}
-          showLaunchHeader={false}
-        />
-      </div>
-    ),
-    locations: (
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-4">
-          {snapshot.locations.length > 0 ? (
-            snapshot.locations.map((location) => (
-              <LocationView key={location.id} location={location} />
-            ))
-          ) : (
-            <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-              Nog geen vestigingen. Voeg hier je eerste gym-locatie toe.
-            </p>
-          )}
-        </div>
-
-        <PlatformWorkbench
-          snapshot={snapshot}
-          sections={["locations"]}
-          showLaunchHeader={false}
-        />
-      </div>
-    ),
-    staff: (
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <Card className="border-slate-200/80 bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-lg">Teamaccounts</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {snapshot.staff.length > 0 ? (
-              snapshot.staff.map((staff) => (
-                <div key={staff.id} className="soft-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {staff.displayName}
-                      </p>
-                      <p className="text-sm text-slate-600">{staff.email}</p>
-                    </div>
-                    <Badge variant="secondary">{staff.status}</Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {staff.roles.join(" · ")}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                Nog geen teamaccounts. De eigenaar kan hier rollen uitnodigen.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <PlatformWorkbench
-          snapshot={snapshot}
-          sections={["trainers", "staff"]}
-          showLaunchHeader={false}
-        />
-      </div>
-    ),
-    payments: (
-      <PlatformWorkbench
-        snapshot={snapshot}
-        sections={["payments"]}
-        showLaunchHeader={false}
-      />
-    ),
-    smartdoors: (
-      <PlatformWorkbench
-        snapshot={snapshot}
-        sections={["remote-access"]}
-        showLaunchHeader={false}
-      />
-    ),
-    imports: (
-      <PlatformWorkbench
-        snapshot={snapshot}
-        sections={["imports"]}
-        showLaunchHeader={false}
-      />
-    ),
-    status: (
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="border-slate-200/80 bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-lg">Platformstatus</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">
-                Data: {snapshot.runtime.storeMode === "mongo" ? "Live klaar" : "Launch klaar"}
-              </Badge>
-              <Badge variant="outline">
-                Snelheid: {snapshot.runtime.cacheMode === "redis" ? "Opschaalbaar" : "Prima voor launch"}
-              </Badge>
-              <Badge variant="outline">
-                Berichten: {snapshot.runtime.messagingMode === "preview" ? "Klaar voor test" : "Live"}
-              </Badge>
-              <Badge variant="outline">
-                Documenten: {snapshot.runtime.storageMode === "spaces" ? "Cloud klaar" : "Launch klaar"}
-              </Badge>
-            </div>
-
+          <section className="glass-card p-6">
+            <SectionHeader
+              title="Recent bookings"
+              description="Laatste reserveringen en check-in acties."
+            />
             <div className="space-y-3">
-              {snapshot.healthReport.checks.map((check) => (
-                <div key={check.name} className="soft-card p-4">
+              {snapshot.bookings.slice(0, 5).map((booking) => (
+                <div key={booking.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-slate-900">
-                      {check.name}
-                    </p>
-                    <Badge
-                      variant={check.status === "healthy" ? "success" : "warning"}
-                    >
-                      {check.status}
-                    </Badge>
+                    <div>
+                      <p className="font-medium text-white">{booking.memberName}</p>
+                      <p className="mt-1 text-sm text-white/40">
+                        {classById.get(booking.classSessionId)?.title ?? "Class"} · {booking.source}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {snapshot.uiCapabilities.canRecordAttendance && booking.status === "confirmed" ? (
+                        <AttendanceButton bookingId={booking.id} expectedVersion={booking.version} />
+                      ) : null}
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(booking.status)}`}>
+                        {booking.status}
+                      </span>
+                    </div>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {getFriendlyHealthSummary(check.summary)}
-                  </p>
                 </div>
               ))}
+              {snapshot.bookings.length === 0 ? (
+                <EmptyState>Nog geen reserveringen. Open de publieke bookingflow en maak de eerste boeking.</EmptyState>
+              ) : null}
             </div>
-          </CardContent>
-        </Card>
+          </section>
+        </div>
+      ) : null}
 
-        <Card className="border-slate-200/80 bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-lg">Modules</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {snapshot.featureFlags.map((feature) => (
-              <div key={feature.key} className="soft-card p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-900">
-                      {getFeatureLabel(feature.key)}
-                    </p>
-                    <p className="text-sm leading-6 text-slate-600">
-                      {feature.description}
-                    </p>
-                  </div>
-                  <Badge variant={getFeatureVariant(feature.enabled)}>
-                    {feature.enabled ? "Actief" : "Uit"}
-                  </Badge>
-                </div>
+      {currentPage === "classes" ? (
+        <div id="classes-workbench" className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <section className="glass-card p-6">
+            <SectionHeader
+              title="Class schedule"
+              description="Rooster en reserveringen zijn gekoppeld aan echte data."
+            />
+            <BookingManagementView snapshot={snapshot} />
+          </section>
+          <section className="glass-card p-6">
+            <SectionHeader title="Nieuwe class" description="Plan lessen, capaciteit en trainers." />
+            <PlatformWorkbench snapshot={snapshot} sections={["classes"]} showLaunchHeader={false} />
+          </section>
+        </div>
+      ) : null}
+
+      {currentPage === "members" ? (
+        <div id="members-workbench" className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <section className="glass-card overflow-hidden">
+            <div className="p-6">
+              <SectionHeader title="Members" description="Actieve leden, contracten, waivers en status." />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-y border-white/[0.06]">
+                    <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Member</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Contract</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Status</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Waiver</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshot.members.map((member) => {
+                    const plan = planById.get(member.membershipPlanId);
+
+                    return (
+                      <tr key={member.id} className="border-b border-white/[0.04]">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-xs font-medium text-white/60">
+                              {initials(member.fullName)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-white">{member.fullName}</p>
+                              <p className="text-sm text-white/40">{member.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-white/60">{plan?.name ?? "Onbekend"}</td>
+                        <td className="px-6 py-4">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(member.status)}`}>
+                            {member.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-white/60">{member.waiverStatus}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {snapshot.members.length === 0 ? (
+              <div className="p-6">
+                <EmptyState>Voeg je eerste lid toe of importeer bestaande klanten.</EmptyState>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            ) : null}
+          </section>
+          <section className="glass-card p-6">
+            <SectionHeader title="Member acties" description="Nieuwe leden worden direct functioneel opgeslagen." />
+            <PlatformWorkbench snapshot={snapshot} sections={["members"]} showLaunchHeader={false} />
+          </section>
+        </div>
+      ) : null}
 
-        <Card className="border-slate-200/80 bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-lg">Revenue en berichten</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-3xl font-semibold text-slate-950">
-                {snapshot.projectedRevenueLabel}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Geprojecteerd op basis van actieve memberships in deze gym.
-              </p>
+      {currentPage === "contracts" ? (
+        <div id="contracts-workbench" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <section className="glass-card p-6">
+            <SectionHeader title="Contracts" description="Maand, 6 maanden en jaarcontracten." />
+            <div className="space-y-3">
+              {snapshot.membershipPlans.map((plan) => (
+                <div key={plan.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-white">{plan.name}</p>
+                      <p className="mt-1 text-sm text-white/40">
+                        {getMembershipBillingCycleLabel(plan.billingCycle)} · {plan.activeMembers} actieve leden
+                      </p>
+                    </div>
+                    <p className="font-semibold text-orange-300">{formatCurrency(plan.priceMonthly, plan.currency)}</p>
+                  </div>
+                  <p className="mt-3 text-sm text-white/45">{plan.perks.join(" · ")}</p>
+                </div>
+              ))}
+              {snapshot.membershipPlans.length === 0 ? <EmptyState>Maak je eerste contract aan.</EmptyState> : null}
             </div>
+          </section>
+          <section className="glass-card p-6">
+            <SectionHeader title="Contracten & import" description="Maak contracten en importeer bestaande klanten." />
+            <PlatformWorkbench snapshot={snapshot} sections={["contracts", "imports"]} showLaunchHeader={false} />
+          </section>
+        </div>
+      ) : null}
 
-            <div className="rounded-3xl bg-slate-50/90 p-4 text-sm leading-6 text-slate-700">
+      {currentPage === "access" ? (
+        <section id="access-workbench" className="glass-card p-6">
+          <SectionHeader title="Access Control" description="Smart lock instellingen en remote open preview." />
+          <div className="mb-6 grid gap-4 md:grid-cols-3">
+            <MetricCard label="Provider" value={snapshot.remoteAccess.providerLabel} helper={snapshot.remoteAccess.helpText} />
+            <MetricCard label="Status" value={snapshot.remoteAccess.statusLabel} helper={snapshot.remoteAccess.deviceLabel || "Nog geen device label"} />
+            <MetricCard label="Laatste actie" value={snapshot.remoteAccess.lastRemoteActionAt ? formatDateTime(snapshot.remoteAccess.lastRemoteActionAt) : "Nog geen"} helper={snapshot.remoteAccess.lastRemoteActionBy ?? "Owner-only"} />
+          </div>
+          <PlatformWorkbench snapshot={snapshot} sections={["remote-access"]} showLaunchHeader={false} />
+        </section>
+      ) : null}
+
+      {currentPage === "payments" ? (
+        <section id="payments-workbench" className="glass-card p-6">
+          <SectionHeader title="Payments" description="Mollie incasso, eenmalige betalingen en Tikkie-achtige betaalverzoeken." />
+          <div className="mb-6 grid gap-4 md:grid-cols-3">
+            <MetricCard label="Provider" value={snapshot.payments.providerLabel} helper={snapshot.payments.helpText} />
+            <MetricCard label="Status" value={snapshot.payments.statusLabel} helper={snapshot.payments.profileLabel || "Nog geen profiel"} />
+            <MetricCard label="Methodes" value={String(snapshot.payments.paymentMethods.length)} helper={snapshot.payments.paymentMethods.join(" · ") || "Nog niet gekozen"} />
+          </div>
+          <PlatformWorkbench snapshot={snapshot} sections={["payments"]} showLaunchHeader={false} />
+        </section>
+      ) : null}
+
+      {currentPage === "marketing" ? (
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <section className="glass-card p-6">
+            <SectionHeader title="Growth segments" description="Geen fake campagnes: segmenten worden afgeleid uit je echte leden en reserveringen." />
+            <div className="grid gap-4 md:grid-cols-2">
+              <MetricCard label="Actieve leden" value={String(activeMembers.length)} helper="Segment voor retentie en upsell" />
+              <MetricCard label="Wachtlijst" value={String(waitlistedBookings.length)} helper="Urgentie en class demand" />
+              <MetricCard label="Open waivers" value={String(pendingWaivers.length)} helper="Onboarding nudges" />
+              <MetricCard label="Bookings" value={String(snapshot.bookings.length)} helper="Terugkeer- en reminderflow" />
+            </div>
+          </section>
+          <section className="glass-card p-6">
+            <SectionHeader title="Message preview" description="Preview op basis van de bestaande notification-renderer." />
+            <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-5 text-sm leading-7 text-orange-100">
               {snapshot.notificationPreview}
             </div>
-
-            <div className="space-y-2 text-sm text-slate-600">
-              <p className="font-medium text-slate-900">Documenten</p>
-              <p>
-                Waivers en ledenbestanden worden veilig aan de juiste gym en
-                leden gekoppeld.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {snapshot.supportedLanguages.map((language) => (
-                <Badge key={language} variant="secondary">
-                  {language}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200/80 bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-lg">Laatste gebeurtenissen</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {snapshot.auditEntries.map((entry) => (
-              <div key={entry.eventId} className="soft-card p-4">
-                <p className="font-medium text-slate-900">
-                  {getAuditActionLabel(entry.action)}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {getAuditCategoryLabel(entry.category)} ·{" "}
-                  {entry.actorId ?? "systeem"}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    ),
-  } satisfies Record<DashboardPageKey, JSX.Element>;
-
-  return (
-    <div className="space-y-6">
-      <DashboardLiveSync />
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {snapshot.metrics.map((metric) => (
-          <article
-            key={metric.label}
-            className="dashboard-metric-card"
-            data-tone={metric.tone}
-          >
-            <p className="eyebrow">{metric.label}</p>
-            <p className="relative z-10 mt-5 text-4xl font-semibold tracking-tight text-slate-950">
-              {metric.value}
-            </p>
-            <p className="relative z-10 mt-3 max-w-xs text-sm leading-6 text-slate-600">
-              {metric.helper}
-            </p>
-            <div className="relative z-10 mt-5 inline-flex items-center rounded-full border border-slate-900/8 bg-white/70 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-              {getMetricToneLabel(metric.tone)}
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="section-shell grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <p className="eyebrow">Owner facts</p>
-            <h2 className="text-2xl font-semibold text-slate-950 md:text-3xl">
-              Wat moet je vandaag weten?
-            </h2>
-            <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-              Geen configuratiecanvas maar directe bedrijfsinformatie: omzet,
-              bezetting, ledenstatus, planning en risico&apos;s.
-            </p>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="soft-card">
-              <p className="text-sm font-medium text-slate-500">Omzetindicatie</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950">
-                {snapshot.projectedRevenueLabel}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Op basis van actieve contracten.
-              </p>
-            </div>
-            <div className="soft-card">
-              <p className="text-sm font-medium text-slate-500">Volgende les</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950">
-                {nextSession?.title ?? "Geen les"}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                {nextSession
-                  ? `${formatSessionMoment(nextSession.startsAt)} · ${
-                      locationById.get(nextSession.locationId)?.name ?? "Locatie onbekend"
-                    }`
-                  : "Plan je eerste les op de roosterpagina."}
-              </p>
-            </div>
-            <div className="soft-card">
-              <p className="text-sm font-medium text-slate-500">Boekingsdruk</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950">
-                {confirmedBookings.length} / {waitlistedBookings.length}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Bevestigd versus wachtlijst.
-              </p>
-            </div>
-            <div className="soft-card">
-              <p className="text-sm font-medium text-slate-500">Open risico</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-950">
-                {pendingWaivers.length}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Waivers of intakes die opvolging vragen.
-              </p>
-            </div>
-          </div>
+            <Link href={`/reserve?gym=${snapshot.tenantName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`} className="gym-os-button mt-5">
+              Bekijk member experience
+            </Link>
+          </section>
         </div>
+      ) : null}
 
-        <div className="command-deck">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-            Snel handelen
-          </p>
-          <h3 className="mt-3 text-2xl font-semibold text-white">
-            {dashboardExperience.actionTitle}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-white/70">
-            {dashboardExperience.actionDescription}
-          </p>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/50">
-                Live fase
-              </p>
-              <p className="mt-2 text-xl font-semibold text-white">
-                {dashboardExperience.progressValue}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-white/60">
-                {dashboardExperience.progressHelper}
-              </p>
-            </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/6 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/50">
-                Ledenbasis
-              </p>
-              <p className="mt-2 text-xl font-semibold text-white">
-                {activeMembers.length} actief
-              </p>
-              <p className="mt-2 text-sm leading-6 text-white/60">
-                {snapshot.members.length} profielen totaal.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5">
-            {dashboardExperience.isLaunchMode &&
-            snapshot.uiCapabilities.canManagePlatform ? (
+      {currentPage === "settings" ? (
+        <div id="settings-workbench" className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <section className="glass-card p-6">
+            <SectionHeader title="Settings overview" description="Vestigingen, personeel, platformstatus en imports." />
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <MetricCard label="Vestigingen" value={String(snapshot.locations.length)} helper="Locaties met capaciteit en manager" />
+                <MetricCard label="Team" value={String(snapshot.staff.length)} helper="Owner, manager, trainer en frontdesk" />
+              </div>
               <div className="space-y-3">
-                {dashboardExperience.launchSteps.map((step, index) => {
-                  const targetPage = getDashboardPageForWorkbenchStep(step.key);
-                  const targetHref = getDashboardPageHref(targetPage);
-
-                  return (
-                    <div key={step.key} className="launch-step-card">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            Stap {index + 1}
-                          </p>
-                          <p className="mt-1 font-medium text-slate-900">
-                            {step.label}
-                          </p>
-                        </div>
-                        {step.complete ? (
-                          <Badge variant="success">{step.statusLabel}</Badge>
-                        ) : (
-                          <Link href={targetHref}>
-                            <Badge variant="info">{step.statusLabel}</Badge>
-                          </Link>
-                        )}
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {step.helper}
-                      </p>
+                {snapshot.healthReport.checks.map((check) => (
+                  <div key={check.name} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-white">{check.name}</p>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(check.status)}`}>
+                        {check.status}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : snapshot.uiCapabilities.canCreateBooking ? (
-              <BookingDialog
-                members={snapshot.members}
-                classSessions={snapshot.classSessions}
-              />
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/6 p-4 text-sm leading-6 text-white/70">
-                Deze rol kan geen nieuwe bookings aanmaken. Gebruik deze view
-                voor planning, ledencontext en check-ins.
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="section-shell h-fit space-y-4 lg:sticky lg:top-6">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h2 className="mt-2 text-xl font-semibold text-slate-950">
-              Owner menu
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Elke instelling en operatie heeft een eigen pagina.
-            </p>
-          </div>
-
-          <nav className="space-y-2" aria-label="Dashboard pagina's">
-            {dashboardPages.map((page) => {
-              const isActive = page.key === currentPage;
-
-              return (
-                <Link
-                  key={page.key}
-                  href={page.href}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`block rounded-2xl border px-4 py-3 transition ${
-                    isActive
-                      ? "border-teal-200 bg-teal-50 text-teal-950 shadow-[0_18px_45px_-35px_rgba(15,118,110,0.9)]"
-                      : "border-slate-200/80 bg-white/70 text-slate-700 hover:border-teal-100 hover:bg-white"
-                  }`}
-                >
-                  <span className="flex items-start justify-between gap-3">
-                    <span>
-                      <span className="block text-sm font-semibold">
-                        {page.title}
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-slate-500">
-                        {page.helper}
-                      </span>
-                    </span>
-                    <span className="rounded-full bg-white/80 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      {page.value}
-                    </span>
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-        </aside>
-
-        <section className="space-y-5">
-          <div className="section-shell">
-            <p className="eyebrow">Pagina</p>
-            <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                  {currentPageDetails.title}
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  {currentPageDetails.helper}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-right">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Fact
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-slate-950">
-                  {currentPageDetails.value}
-                </p>
+                    <p className="mt-2 text-sm leading-6 text-white/45">{check.summary}</p>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-
-          {pageContent[currentPage]}
-        </section>
-      </section>
+          </section>
+          <section className="glass-card p-6">
+            <SectionHeader title="Owner beheer" description="Alles op aparte pagina, geen tabs." />
+            <PlatformWorkbench
+              snapshot={snapshot}
+              sections={["locations", "trainers", "staff", "imports"]}
+              showLaunchHeader={false}
+            />
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

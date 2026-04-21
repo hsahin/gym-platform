@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { GymDashboardShell } from "@/components/GymDashboardShell";
 import {
-  isDashboardPageKey,
-  type DashboardPageKey,
+  resolveDashboardRouteKey,
 } from "@/lib/dashboard-pages";
 
 export default async function DashboardSectionPage({
@@ -12,11 +11,11 @@ export default async function DashboardSectionPage({
     section: string;
   };
 }) {
-  if (!isDashboardPageKey(params.section) || params.section === "overview") {
+  const currentPage = resolveDashboardRouteKey(params.section);
+
+  if (!currentPage || currentPage === "overview") {
     notFound();
   }
 
-  return (
-    <GymDashboardShell currentPage={params.section as DashboardPageKey} />
-  );
+  return <GymDashboardShell currentPage={currentPage} />;
 }
