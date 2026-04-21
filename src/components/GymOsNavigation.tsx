@@ -262,8 +262,10 @@ export function GymOsNavigation({
       ) : null}
 
       <div
-        className={`fixed inset-x-0 top-[57px] z-40 border-b border-white/[0.06] bg-[#0a0a0a] transition-transform duration-300 lg:hidden ${
-          isOpen ? "translate-y-0" : "-translate-y-full"
+        className={`fixed inset-x-0 top-[57px] z-50 border-b border-white/[0.06] bg-[#0a0a0a] transition-transform duration-300 lg:hidden ${
+          isOpen
+            ? "pointer-events-auto translate-y-0"
+            : "pointer-events-none -translate-y-full"
         }`}
       >
         <nav className="max-h-[calc(100vh-120px)] space-y-1 overflow-y-auto p-4">
