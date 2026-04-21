@@ -81,4 +81,31 @@ describe("reservation experience", () => {
     );
     expect(experience.rosterSummary.value).toBe("Opening in opbouw");
   });
+
+  it("uses singular labels for a single live class and waitlist member", () => {
+    const experience = getReservationExperience({
+      tenantName: "Atlas Horizon Club",
+      tenantSlug: "atlas-horizon-club",
+      availableGyms: liveSnapshot.availableGyms,
+      classSessions: [
+        {
+          id: "class-1",
+          title: "Sunrise Strength",
+          startsAt: "2026-05-01T06:30:00.000Z",
+          durationMinutes: 50,
+          locationName: "Atlas Oost",
+          trainerName: "Milan de Vries",
+          capacity: 16,
+          bookedCount: 15,
+          waitlistCount: 1,
+          level: "mixed",
+          focus: "strength",
+        },
+      ],
+    });
+
+    expect(experience.rosterSummary.value).toBe("1 les live");
+    expect(experience.rosterSummary.helper).toContain("1 openstaande plek");
+    expect(experience.rosterSummary.helper).toContain("1 wachtende");
+  });
 });

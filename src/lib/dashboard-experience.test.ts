@@ -93,4 +93,20 @@ describe("dashboard experience", () => {
       }),
     ]);
   });
+
+  it("shows a healthy platform label when there are no owner checks", () => {
+    const experience = getDashboardExperience({
+      locationsCount: 1,
+      membershipPlansCount: 1,
+      trainersCount: 1,
+      membersCount: 1,
+      classSessionsCount: 1,
+      bookingsCount: 1,
+      healthAttentionCount: 0,
+    });
+
+    expect(experience.screenChapters.find((chapter) => chapter.key === "platform")).toMatchObject({
+      value: "Stack live",
+    });
+  });
 });
