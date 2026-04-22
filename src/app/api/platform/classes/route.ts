@@ -17,6 +17,15 @@ const createClassSchema = z.object({
   level: z.enum(["beginner", "mixed", "advanced"]),
   focus: z.string().min(2),
 });
+const updateClassSchema = createClassSchema.extend({
+  id: z.string().min(1),
+  expectedVersion: z.number().int().positive(),
+  status: z.enum(["active", "paused", "archived"]),
+});
+const entityMutationSchema = z.object({
+  id: z.string().min(1),
+  expectedVersion: z.number().int().positive(),
+});
 
 export async function GET(request: NextRequest) {
   return runApiHandler(request, async () => {
@@ -39,4 +48,46 @@ export async function POST(request: NextRequest) {
     },
     { successStatus: 201 },
   );
+}
+
+export async function PATCH(request: NextRequest) {
+  return runApiHandler(request, async () => {
+    const viewer = await requireViewerFromRequest(request);
+    const services = await getGymPlatformServices();
+    requireMutationSecurity(request);
+    const payload = await request.json();
+
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "operation" in payload &&
+      payload.operation === "archive"
+    ) {
+      return services.archiveClassSession(
+        viewer.actor,
+        viewer.tenantContext,
+        entityMutationSchema.parse(payload),
+      );
+    }
+
+    return services.updateClassSession(
+      viewer.actor,
+      viewer.tenantContext,
+      updateClassSchema.parse(payload),
+    );
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  return runApiHandler(request, async () => {
+    const viewer = await requireViewerFromRequest(request);
+    const services = await getGymPlatformServices();
+    requireMutationSecurity(request);
+    await services.deleteClassSession(
+      viewer.actor,
+      viewer.tenantContext,
+      entityMutationSchema.parse(await request.json()),
+    );
+    return { deleted: true };
+  });
 }

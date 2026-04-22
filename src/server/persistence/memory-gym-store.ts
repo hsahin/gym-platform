@@ -60,15 +60,45 @@ function cloneRecord<T>(record: T): T {
 }
 
 function cloneState(state: MemoryGymStoreState): MemoryGymStoreState {
+  const normalized = normalizeGymStoreState(state);
+
   return {
-    locations: state.locations.map(cloneRecord),
-    membershipPlans: state.membershipPlans.map(cloneRecord),
-    members: state.members.map(cloneRecord),
-    trainers: state.trainers.map(cloneRecord),
-    classSessions: state.classSessions.map(cloneRecord),
-    bookings: state.bookings.map(cloneRecord),
-    attendance: state.attendance.map(cloneRecord),
-    waivers: state.waivers.map(cloneRecord),
+    locations: normalized.locations.map(cloneRecord),
+    membershipPlans: normalized.membershipPlans.map(cloneRecord),
+    members: normalized.members.map(cloneRecord),
+    trainers: normalized.trainers.map(cloneRecord),
+    classSessions: normalized.classSessions.map(cloneRecord),
+    bookings: normalized.bookings.map(cloneRecord),
+    attendance: normalized.attendance.map(cloneRecord),
+    waivers: normalized.waivers.map(cloneRecord),
+  };
+}
+
+export function normalizeGymStoreState(state: MemoryGymStoreState): MemoryGymStoreState {
+  return {
+    locations: state.locations.map((location) => ({
+      ...location,
+      status: location.status ?? "active",
+    })),
+    membershipPlans: state.membershipPlans.map((plan) => ({
+      ...plan,
+      status: plan.status ?? "active",
+    })),
+    members: state.members.map((member) => ({
+      ...member,
+      status: member.status ?? "active",
+    })),
+    trainers: state.trainers.map((trainer) => ({
+      ...trainer,
+      status: trainer.status ?? "active",
+    })),
+    classSessions: state.classSessions.map((classSession) => ({
+      ...classSession,
+      status: classSession.status ?? "active",
+    })),
+    bookings: state.bookings,
+    attendance: state.attendance,
+    waivers: state.waivers,
   };
 }
 
@@ -170,6 +200,48 @@ export function createMemoryGymStore(
     return classSession;
   }
 
+  function assertExpectedVersion(
+    label: string,
+    id: string,
+    actualVersion: number,
+    expectedVersion: number,
+  ) {
+    if (actualVersion !== expectedVersion) {
+      throw new AppError(`${label} is al gewijzigd; laad eerst opnieuw.`, {
+        code: "VERSION_CONFLICT",
+        details: { id, expectedVersion, actualVersion },
+      });
+    }
+  }
+
+  function adjustMembershipActiveMembers(
+    tenantContext: TenantContext,
+    membershipPlanId: string,
+    delta: number,
+    updatedAt: string,
+  ) {
+    if (delta === 0) {
+      return;
+    }
+
+    const planIndex = state.membershipPlans.findIndex(
+      (entry) =>
+        entry.tenantId === tenantContext.tenantId && entry.id === membershipPlanId,
+    );
+
+    if (planIndex === -1) {
+      return;
+    }
+
+    const plan = state.membershipPlans[planIndex]!;
+    state.membershipPlans[planIndex] = {
+      ...plan,
+      version: plan.version + 1,
+      updatedAt,
+      activeMembers: Math.max(0, plan.activeMembers + delta),
+    };
+  }
+
   function findExistingActiveBooking(
     tenantContext: TenantContext,
     memberId: string,
@@ -242,6 +314,96 @@ export function createMemoryGymStore(
       await persistState();
       return cloneRecord(location);
     },
+    async updateLocation(tenantContext, input) {
+      const locationIndex = state.locations.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (locationIndex === -1) {
+        throw new AppError("Vestiging niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { locationId: input.id },
+        });
+      }
+
+      const location = state.locations[locationIndex]!;
+      assertExpectedVersion("Vestiging", location.id, location.version, input.expectedVersion);
+
+      const updatedLocation: GymLocation = {
+        ...location,
+        version: location.version + 1,
+        updatedAt: new Date().toISOString(),
+        name: input.name,
+        city: input.city,
+        neighborhood: input.neighborhood,
+        capacity: input.capacity,
+        managerName: input.managerName,
+        amenities: [...input.amenities],
+        status: input.status,
+      };
+
+      state.locations[locationIndex] = updatedLocation;
+      await persistState();
+      return cloneRecord(updatedLocation);
+    },
+    async archiveLocation(tenantContext, input) {
+      const location = requireLocation(tenantContext, input.id);
+      assertExpectedVersion("Vestiging", location.id, location.version, input.expectedVersion);
+      const locationIndex = state.locations.findIndex((entry) => entry.id === location.id);
+      const updatedLocation = {
+        ...location,
+        version: location.version + 1,
+        updatedAt: new Date().toISOString(),
+        status: "archived" as const,
+      };
+      state.locations[locationIndex] = updatedLocation;
+      await persistState();
+      return cloneRecord(updatedLocation);
+    },
+    async deleteLocation(tenantContext, input) {
+      const locationIndex = state.locations.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (locationIndex === -1) {
+        throw new AppError("Vestiging niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { locationId: input.id },
+        });
+      }
+
+      const location = state.locations[locationIndex]!;
+      assertExpectedVersion("Vestiging", location.id, location.version, input.expectedVersion);
+
+      const isInUse =
+        state.members.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.homeLocationId === location.id,
+        ) ||
+        state.trainers.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.homeLocationId === location.id,
+        ) ||
+        state.classSessions.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.locationId === location.id,
+        );
+
+      if (isInUse) {
+        throw new AppError("Archiveer deze vestiging eerst; er zijn nog gekoppelde leden, trainers of lessen.", {
+          code: "FORBIDDEN",
+          details: { locationId: location.id },
+        });
+      }
+
+      state.locations.splice(locationIndex, 1);
+      await persistState();
+    },
     async createMembershipPlan(tenantContext, input) {
       const now = new Date().toISOString();
       const membershipPlan: MembershipPlan = {
@@ -256,11 +418,89 @@ export function createMemoryGymStore(
         billingCycle: input.billingCycle,
         perks: [...input.perks],
         activeMembers: 0,
+        status: "active",
       };
 
       state.membershipPlans.push(membershipPlan);
       await persistState();
       return cloneRecord(membershipPlan);
+    },
+    async updateMembershipPlan(tenantContext, input) {
+      const planIndex = state.membershipPlans.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (planIndex === -1) {
+        throw new AppError("Membership niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { membershipPlanId: input.id },
+        });
+      }
+
+      const plan = state.membershipPlans[planIndex]!;
+      assertExpectedVersion("Contract", plan.id, plan.version, input.expectedVersion);
+
+      const updatedPlan: MembershipPlan = {
+        ...plan,
+        version: plan.version + 1,
+        updatedAt: new Date().toISOString(),
+        name: input.name,
+        priceMonthly: input.priceMonthly,
+        billingCycle: input.billingCycle,
+        perks: [...input.perks],
+        status: input.status,
+      };
+
+      state.membershipPlans[planIndex] = updatedPlan;
+      await persistState();
+      return cloneRecord(updatedPlan);
+    },
+    async archiveMembershipPlan(tenantContext, input) {
+      const plan = requireMembershipPlan(tenantContext, input.id);
+      assertExpectedVersion("Contract", plan.id, plan.version, input.expectedVersion);
+      const planIndex = state.membershipPlans.findIndex((entry) => entry.id === plan.id);
+      const updatedPlan = {
+        ...plan,
+        version: plan.version + 1,
+        updatedAt: new Date().toISOString(),
+        status: "archived" as const,
+      };
+      state.membershipPlans[planIndex] = updatedPlan;
+      await persistState();
+      return cloneRecord(updatedPlan);
+    },
+    async deleteMembershipPlan(tenantContext, input) {
+      const planIndex = state.membershipPlans.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (planIndex === -1) {
+        throw new AppError("Membership niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { membershipPlanId: input.id },
+        });
+      }
+
+      const plan = state.membershipPlans[planIndex]!;
+      assertExpectedVersion("Contract", plan.id, plan.version, input.expectedVersion);
+
+      if (
+        state.members.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.membershipPlanId === plan.id,
+        )
+      ) {
+        throw new AppError("Archiveer dit contract eerst; er zijn nog leden aan gekoppeld.", {
+          code: "FORBIDDEN",
+          details: { membershipPlanId: plan.id },
+        });
+      }
+
+      state.membershipPlans.splice(planIndex, 1);
+      await persistState();
     },
     async createTrainer(tenantContext, input) {
       requireLocation(tenantContext, input.homeLocationId);
@@ -283,6 +523,85 @@ export function createMemoryGymStore(
       state.trainers.push(trainer);
       await persistState();
       return cloneRecord(trainer);
+    },
+    async updateTrainer(tenantContext, input) {
+      requireLocation(tenantContext, input.homeLocationId);
+
+      const trainerIndex = state.trainers.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (trainerIndex === -1) {
+        throw new AppError("Trainer niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { trainerId: input.id },
+        });
+      }
+
+      const trainer = state.trainers[trainerIndex]!;
+      assertExpectedVersion("Trainer", trainer.id, trainer.version, input.expectedVersion);
+
+      const updatedTrainer: GymTrainer = {
+        ...trainer,
+        version: trainer.version + 1,
+        updatedAt: new Date().toISOString(),
+        fullName: input.fullName,
+        specialties: [...input.specialties],
+        certifications: [...input.certifications],
+        homeLocationId: input.homeLocationId,
+        status: input.status,
+      };
+
+      state.trainers[trainerIndex] = updatedTrainer;
+      await persistState();
+      return cloneRecord(updatedTrainer);
+    },
+    async archiveTrainer(tenantContext, input) {
+      const trainer = requireTrainer(tenantContext, input.id);
+      assertExpectedVersion("Trainer", trainer.id, trainer.version, input.expectedVersion);
+      const trainerIndex = state.trainers.findIndex((entry) => entry.id === trainer.id);
+      const updatedTrainer = {
+        ...trainer,
+        version: trainer.version + 1,
+        updatedAt: new Date().toISOString(),
+        status: "archived" as const,
+      };
+      state.trainers[trainerIndex] = updatedTrainer;
+      await persistState();
+      return cloneRecord(updatedTrainer);
+    },
+    async deleteTrainer(tenantContext, input) {
+      const trainerIndex = state.trainers.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (trainerIndex === -1) {
+        throw new AppError("Trainer niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { trainerId: input.id },
+        });
+      }
+
+      const trainer = state.trainers[trainerIndex]!;
+      assertExpectedVersion("Trainer", trainer.id, trainer.version, input.expectedVersion);
+
+      if (
+        state.classSessions.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.trainerId === trainer.id,
+        )
+      ) {
+        throw new AppError("Archiveer deze trainer eerst; er zijn nog lessen aan gekoppeld.", {
+          code: "FORBIDDEN",
+          details: { trainerId: trainer.id },
+        });
+      }
+
+      state.trainers.splice(trainerIndex, 1);
+      await persistState();
     },
     async createMember(tenantContext, input) {
       const membershipPlan = requireMembershipPlan(tenantContext, input.membershipPlanId);
@@ -347,6 +666,158 @@ export function createMemoryGymStore(
       await persistState();
       return cloneRecord(member);
     },
+    async updateMember(tenantContext, input) {
+      const nextMembershipPlan = requireMembershipPlan(tenantContext, input.membershipPlanId);
+      requireLocation(tenantContext, input.homeLocationId);
+
+      const memberIndex = state.members.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (memberIndex === -1) {
+        throw new AppError("Lid niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { memberId: input.id },
+        });
+      }
+
+      const member = state.members[memberIndex]!;
+      assertExpectedVersion("Lid", member.id, member.version, input.expectedVersion);
+
+      const now = new Date().toISOString();
+      const updatedMember: GymMember = {
+        ...member,
+        version: member.version + 1,
+        updatedAt: now,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        phoneCountry: input.phoneCountry,
+        membershipPlanId: input.membershipPlanId,
+        homeLocationId: input.homeLocationId,
+        status: input.status,
+        tags: [...input.tags],
+        waiverStatus: input.waiverStatus,
+        nextRenewalAt:
+          member.membershipPlanId === input.membershipPlanId
+            ? member.nextRenewalAt
+            : addMonthsToIsoDate(now, getMembershipBillingCycleMonths(nextMembershipPlan.billingCycle)),
+      };
+
+      state.members[memberIndex] = updatedMember;
+
+      if (member.membershipPlanId !== updatedMember.membershipPlanId) {
+        adjustMembershipActiveMembers(
+          tenantContext,
+          member.membershipPlanId,
+          member.status === "active" ? -1 : 0,
+          now,
+        );
+        adjustMembershipActiveMembers(
+          tenantContext,
+          updatedMember.membershipPlanId,
+          updatedMember.status === "active" ? 1 : 0,
+          now,
+        );
+      } else if (member.status !== updatedMember.status) {
+        adjustMembershipActiveMembers(
+          tenantContext,
+          updatedMember.membershipPlanId,
+          (updatedMember.status === "active" ? 1 : 0) -
+            (member.status === "active" ? 1 : 0),
+          now,
+        );
+      }
+
+      const waiverIndex = state.waivers.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.memberId === member.id,
+      );
+
+      if (waiverIndex >= 0) {
+        const waiver = state.waivers[waiverIndex]!;
+        state.waivers[waiverIndex] = {
+          ...waiver,
+          version: waiver.version + 1,
+          updatedAt: now,
+          memberName: updatedMember.fullName,
+          status: input.waiverStatus === "complete" ? "signed" : "requested",
+          uploadedAt: input.waiverStatus === "complete" ? waiver.uploadedAt ?? now : undefined,
+          fileName:
+            input.waiverStatus === "complete"
+              ? waiver.fileName ??
+                `${updatedMember.fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-waiver.pdf`
+              : undefined,
+        };
+      }
+
+      await persistState();
+      return cloneRecord(updatedMember);
+    },
+    async archiveMember(tenantContext, input) {
+      const member = requireMember(tenantContext, input.id);
+      assertExpectedVersion("Lid", member.id, member.version, input.expectedVersion);
+      const memberIndex = state.members.findIndex((entry) => entry.id === member.id);
+      const now = new Date().toISOString();
+      const updatedMember = {
+        ...member,
+        version: member.version + 1,
+        updatedAt: now,
+        status: "archived" as const,
+      };
+      state.members[memberIndex] = updatedMember;
+      adjustMembershipActiveMembers(
+        tenantContext,
+        member.membershipPlanId,
+        member.status === "active" ? -1 : 0,
+        now,
+      );
+      await persistState();
+      return cloneRecord(updatedMember);
+    },
+    async deleteMember(tenantContext, input) {
+      const memberIndex = state.members.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (memberIndex === -1) {
+        throw new AppError("Lid niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { memberId: input.id },
+        });
+      }
+
+      const member = state.members[memberIndex]!;
+      assertExpectedVersion("Lid", member.id, member.version, input.expectedVersion);
+
+      if (
+        state.bookings.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.memberId === member.id,
+        )
+      ) {
+        throw new AppError("Archiveer dit lid eerst; er zijn nog reserveringen aan gekoppeld.", {
+          code: "FORBIDDEN",
+          details: { memberId: member.id },
+        });
+      }
+
+      state.members.splice(memberIndex, 1);
+      adjustMembershipActiveMembers(
+        tenantContext,
+        member.membershipPlanId,
+        member.status === "active" ? -1 : 0,
+        new Date().toISOString(),
+      );
+      state.waivers = state.waivers.filter(
+        (entry) =>
+          entry.tenantId !== tenantContext.tenantId || entry.memberId !== member.id,
+      );
+      await persistState();
+    },
     async createClassSession(tenantContext, input) {
       requireLocation(tenantContext, input.locationId);
       const trainer = requireTrainer(tenantContext, input.trainerId);
@@ -368,6 +839,7 @@ export function createMemoryGymStore(
         waitlistCount: 0,
         level: input.level,
         focus: input.focus,
+        status: "active",
       };
 
       state.classSessions.push(classSession);
@@ -388,6 +860,142 @@ export function createMemoryGymStore(
 
       await persistState();
       return cloneRecord(classSession);
+    },
+    async updateClassSession(tenantContext, input) {
+      requireLocation(tenantContext, input.locationId);
+      const trainer = requireTrainer(tenantContext, input.trainerId);
+
+      const classSessionIndex = state.classSessions.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (classSessionIndex === -1) {
+        throw new AppError("Les niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { classSessionId: input.id },
+        });
+      }
+
+      const classSession = state.classSessions[classSessionIndex]!;
+      assertExpectedVersion("Les", classSession.id, classSession.version, input.expectedVersion);
+
+      const now = new Date().toISOString();
+      const updatedClassSession: ClassSession = {
+        ...classSession,
+        version: classSession.version + 1,
+        updatedAt: now,
+        title: input.title,
+        locationId: input.locationId,
+        trainerId: input.trainerId,
+        startsAt: input.startsAt,
+        durationMinutes: input.durationMinutes,
+        capacity: input.capacity,
+        level: input.level,
+        focus: input.focus,
+        status: input.status,
+      };
+
+      state.classSessions[classSessionIndex] = updatedClassSession;
+
+      if (classSession.trainerId !== input.trainerId) {
+        const previousTrainerIndex = state.trainers.findIndex(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.id === classSession.trainerId,
+        );
+
+        if (previousTrainerIndex >= 0) {
+          const previousTrainer = state.trainers[previousTrainerIndex]!;
+          state.trainers[previousTrainerIndex] = {
+            ...previousTrainer,
+            version: previousTrainer.version + 1,
+            updatedAt: now,
+            classIds: previousTrainer.classIds.filter((id) => id !== classSession.id),
+          };
+        }
+
+        const nextTrainerIndex = state.trainers.findIndex(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId && entry.id === trainer.id,
+        );
+
+        if (nextTrainerIndex >= 0 && !trainer.classIds.includes(classSession.id)) {
+          state.trainers[nextTrainerIndex] = {
+            ...trainer,
+            version: trainer.version + 1,
+            updatedAt: now,
+            classIds: [...trainer.classIds, classSession.id],
+          };
+        }
+      }
+
+      await persistState();
+      return cloneRecord(updatedClassSession);
+    },
+    async archiveClassSession(tenantContext, input) {
+      const classSession = requireClassSession(tenantContext, input.id);
+      assertExpectedVersion("Les", classSession.id, classSession.version, input.expectedVersion);
+      const classSessionIndex = state.classSessions.findIndex(
+        (entry) => entry.id === classSession.id,
+      );
+      const updatedClassSession = {
+        ...classSession,
+        version: classSession.version + 1,
+        updatedAt: new Date().toISOString(),
+        status: "archived" as const,
+      };
+      state.classSessions[classSessionIndex] = updatedClassSession;
+      await persistState();
+      return cloneRecord(updatedClassSession);
+    },
+    async deleteClassSession(tenantContext, input) {
+      const classSessionIndex = state.classSessions.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId && entry.id === input.id,
+      );
+
+      if (classSessionIndex === -1) {
+        throw new AppError("Les niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { classSessionId: input.id },
+        });
+      }
+
+      const classSession = state.classSessions[classSessionIndex]!;
+      assertExpectedVersion("Les", classSession.id, classSession.version, input.expectedVersion);
+
+      if (
+        state.bookings.some(
+          (entry) =>
+            entry.tenantId === tenantContext.tenantId &&
+            entry.classSessionId === classSession.id,
+        )
+      ) {
+        throw new AppError("Archiveer deze les eerst; er zijn nog reserveringen aan gekoppeld.", {
+          code: "FORBIDDEN",
+          details: { classSessionId: classSession.id },
+        });
+      }
+
+      state.classSessions.splice(classSessionIndex, 1);
+      const trainerIndex = state.trainers.findIndex(
+        (entry) =>
+          entry.tenantId === tenantContext.tenantId &&
+          entry.id === classSession.trainerId,
+      );
+
+      if (trainerIndex >= 0) {
+        const trainer = state.trainers[trainerIndex]!;
+        state.trainers[trainerIndex] = {
+          ...trainer,
+          version: trainer.version + 1,
+          updatedAt: new Date().toISOString(),
+          classIds: trainer.classIds.filter((id) => id !== classSession.id),
+        };
+      }
+
+      await persistState();
     },
     async createBooking(tenantContext, input): Promise<BookingMutationResult> {
       const existing = state.bookings.find(

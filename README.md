@@ -81,6 +81,25 @@ dashboardpagina's zoals `/dashboard/members`, `/dashboard/contracts`,
 `/dashboard/payments`, `/dashboard/smartdoors`, `/dashboard/locations` en
 `/dashboard/staff`.
 
+## Productie-eisen
+
+Productie draait bewust niet op local state, browser localStorage of memory
+fallbacks voor gymdata. Zodra `NODE_ENV=production`, `APP_ENV=production` of
+`DIGITALOCEAN_APP_ID` gezet is, zijn deze variabelen verplicht:
+
+- `MONGODB_URI`
+- `MONGODB_DB_NAME`
+- `CLAIMTECH_SESSION_SECRET`
+
+Aanbevolen live-instellingen:
+
+- `REDIS_URL` voor tenant cache over meerdere instances
+- `MONGODB_BACKUP_POLICY=enabled` nadat automatische backups/PITR aanstaan
+- `MIGRATIONS_LOCKED=true` wanneer database-migraties onderdeel zijn van de releaseflow
+- `MONITORING_WEBHOOK_URL` of `SENTRY_DSN` voor error reporting
+- juridische instellingen in `/dashboard/settings`: voorwaarden, privacy, SEPA,
+  contract-PDF template en waiver-opslag
+
 ## Verificatie
 
 Deze checks zijn al succesvol gedraaid:

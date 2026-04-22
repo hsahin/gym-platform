@@ -5,6 +5,7 @@ import type {
   AttendanceRecord,
   ClassBooking,
   ClassSession,
+  EntityStatus,
   GymLocation,
   GymMember,
   GymTrainer,
@@ -43,6 +44,12 @@ export interface CreateLocationInput {
   readonly amenities: ReadonlyArray<string>;
 }
 
+export interface UpdateLocationInput extends CreateLocationInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly status: EntityStatus;
+}
+
 export interface CreateMembershipPlanInput {
   readonly name: string;
   readonly priceMonthly: number;
@@ -50,11 +57,23 @@ export interface CreateMembershipPlanInput {
   readonly perks: ReadonlyArray<string>;
 }
 
+export interface UpdateMembershipPlanInput extends CreateMembershipPlanInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly status: EntityStatus;
+}
+
 export interface CreateTrainerInput {
   readonly fullName: string;
   readonly specialties: ReadonlyArray<string>;
   readonly certifications: ReadonlyArray<string>;
   readonly homeLocationId: string;
+}
+
+export interface UpdateTrainerInput extends CreateTrainerInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly status: GymTrainer["status"];
 }
 
 export interface CreateMemberInput {
@@ -69,6 +88,11 @@ export interface CreateMemberInput {
   readonly waiverStatus: GymMember["waiverStatus"];
 }
 
+export interface UpdateMemberInput extends CreateMemberInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+}
+
 export interface CreateClassSessionInput {
   readonly title: string;
   readonly locationId: string;
@@ -78,6 +102,12 @@ export interface CreateClassSessionInput {
   readonly capacity: number;
   readonly level: ClassSession["level"];
   readonly focus: string;
+}
+
+export interface UpdateClassSessionInput extends CreateClassSessionInput {
+  readonly id: string;
+  readonly expectedVersion: number;
+  readonly status: EntityStatus;
 }
 
 export interface BookingMutationResult {
@@ -125,22 +155,82 @@ export interface GymStore {
     tenantContext: TenantContext,
     input: CreateLocationInput,
   ): Promise<GymLocation>;
+  updateLocation(
+    tenantContext: TenantContext,
+    input: UpdateLocationInput,
+  ): Promise<GymLocation>;
+  archiveLocation(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymLocation>;
+  deleteLocation(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createMembershipPlan(
     tenantContext: TenantContext,
     input: CreateMembershipPlanInput,
   ): Promise<MembershipPlan>;
+  updateMembershipPlan(
+    tenantContext: TenantContext,
+    input: UpdateMembershipPlanInput,
+  ): Promise<MembershipPlan>;
+  archiveMembershipPlan(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<MembershipPlan>;
+  deleteMembershipPlan(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createTrainer(
     tenantContext: TenantContext,
     input: CreateTrainerInput,
   ): Promise<GymTrainer>;
+  updateTrainer(
+    tenantContext: TenantContext,
+    input: UpdateTrainerInput,
+  ): Promise<GymTrainer>;
+  archiveTrainer(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymTrainer>;
+  deleteTrainer(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createMember(
     tenantContext: TenantContext,
     input: CreateMemberInput,
   ): Promise<GymMember>;
+  updateMember(
+    tenantContext: TenantContext,
+    input: UpdateMemberInput,
+  ): Promise<GymMember>;
+  archiveMember(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymMember>;
+  deleteMember(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createClassSession(
     tenantContext: TenantContext,
     input: CreateClassSessionInput,
   ): Promise<ClassSession>;
+  updateClassSession(
+    tenantContext: TenantContext,
+    input: UpdateClassSessionInput,
+  ): Promise<ClassSession>;
+  archiveClassSession(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<ClassSession>;
+  deleteClassSession(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   recordAttendance(
     tenantContext: TenantContext,
     input: RecordAttendanceInput,

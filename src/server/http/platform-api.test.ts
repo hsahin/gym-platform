@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@claimtech/core";
 import { z } from "zod";
 import {
@@ -13,6 +13,12 @@ import {
 } from "@/server/http/platform-api";
 
 describe("platform api helpers", () => {
+  afterEach(() => {
+    delete process.env.MONITORING_WEBHOOK_URL;
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
   it("rejects mutation requests without security headers", () => {
     const request = new Request("http://localhost/api/platform/bookings", {
       method: "POST",
@@ -187,5 +193,94 @@ describe("platform api helpers", () => {
       requestId: "request-error",
       error: { code: "RESOURCE_NOT_FOUND" },
     });
+  });
+
+  it("reports handler errors to the monitoring webhook when configured", async () => {
+    process.env.MONITORING_WEBHOOK_URL = "https://monitoring.example.test/errors";
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("ok"));
+
+    const response = await runApiHandler(
+      new Request("http://localhost/api/platform/overview", {
+        headers: { "x-request-id": "request-monitored-error" },
+      }),
+      async () => {
+        throw new Error("Webhook me");
+      },
+    );
+
+    expect(response.status).toBe(500);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://monitoring.example.test/errors",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+  });
+
+  it("reports non-Error throwables without losing their details", async () => {
+    process.env.MONITORING_WEBHOOK_URL = "https://monitoring.example.test/errors";
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("ok"));
+
+    await runApiHandler(
+      new Request("http://localhost/api/platform/overview", {
+        headers: { "x-request-id": "request-object-error" },
+      }),
+      async () => {
+        throw { code: "CUSTOM", message: "Object failure" };
+      },
+    );
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      error: { code: "CUSTOM", message: "Object failure" },
+    });
+  });
+
+  it("keeps api responses stable when monitoring reporting fails", async () => {
+    process.env.MONITORING_WEBHOOK_URL = "https://monitoring.example.test/errors";
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await runApiHandler(
+      new Request("http://localhost/api/platform/overview", {
+        headers: { "x-request-id": "request-report-failed" },
+      }),
+      async () => {
+        throw new AppError("Geen toegang.", { code: "FORBIDDEN" });
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(console.error).toHaveBeenCalledWith(
+      "Failed to report API error",
+      expect.objectContaining({ requestId: "request-report-failed" }),
+    );
+  });
+
+  it("logs api errors locally when no monitoring webhook is configured outside tests", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await runApiHandler(
+      new Request("http://localhost/api/platform/overview", {
+        method: "PATCH",
+        headers: { "x-request-id": "request-local-log" },
+      }),
+      async () => {
+        throw new AppError("Conflict.", { code: "VERSION_CONFLICT" });
+      },
+    );
+
+    expect(response.status).toBe(409);
+    expect(console.error).toHaveBeenCalledWith(
+      "API error",
+      expect.objectContaining({
+        requestId: "request-local-log",
+        method: "PATCH",
+      }),
+    );
   });
 });

@@ -14,6 +14,11 @@ import type {
   CreateTrainerInput,
   GymStore,
   RecordAttendanceInput,
+  UpdateClassSessionInput,
+  UpdateLocationInput,
+  UpdateMemberInput,
+  UpdateMembershipPlanInput,
+  UpdateTrainerInput,
 } from "@/server/persistence/gym-contracts";
 import type {
   AttendanceRecord,
@@ -39,6 +44,55 @@ const collections = {
   waivers: "gym_waivers",
 } as const;
 
+function withLocationDefaults(location: CollectionDocument<GymLocation>) {
+  return {
+    ...location,
+    status: location.status ?? "active",
+  } satisfies CollectionDocument<GymLocation>;
+}
+
+function withMembershipPlanDefaults(plan: CollectionDocument<MembershipPlan>) {
+  return {
+    ...plan,
+    status: plan.status ?? "active",
+  } satisfies CollectionDocument<MembershipPlan>;
+}
+
+function withMemberDefaults(member: CollectionDocument<GymMember>) {
+  return {
+    ...member,
+    status: member.status ?? "active",
+  } satisfies CollectionDocument<GymMember>;
+}
+
+function withTrainerDefaults(trainer: CollectionDocument<GymTrainer>) {
+  return {
+    ...trainer,
+    status: trainer.status ?? "active",
+  } satisfies CollectionDocument<GymTrainer>;
+}
+
+function withClassSessionDefaults(classSession: CollectionDocument<ClassSession>) {
+  return {
+    ...classSession,
+    status: classSession.status ?? "active",
+  } satisfies CollectionDocument<ClassSession>;
+}
+
+function assertExpectedVersion(
+  label: string,
+  id: string,
+  actualVersion: number,
+  expectedVersion: number,
+) {
+  if (actualVersion !== expectedVersion) {
+    throw new AppError(`${label} is al gewijzigd; laad eerst opnieuw.`, {
+      code: "VERSION_CONFLICT",
+      details: { id, expectedVersion, actualVersion },
+    });
+  }
+}
+
 export class MongoGymStore implements GymStore {
   constructor(private readonly databaseClient: DatabaseClient) {}
 
@@ -47,45 +101,52 @@ export class MongoGymStore implements GymStore {
   }
 
   async listLocations(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const locations = await this.db(tenantContext)
       .collection<CollectionDocument<GymLocation>>(collections.locations)
       .findMany({}, { sort: { name: 1 } });
+    return locations.map(withLocationDefaults);
   }
 
   async listMembershipPlans(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const plans = await this.db(tenantContext)
       .collection<CollectionDocument<MembershipPlan>>(collections.membershipPlans)
       .findMany({}, { sort: { priceMonthly: 1 } });
+    return plans.map(withMembershipPlanDefaults);
   }
 
   async listMembers(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const members = await this.db(tenantContext)
       .collection<CollectionDocument<GymMember>>(collections.members)
       .findMany({}, { sort: { fullName: 1 } });
+    return members.map(withMemberDefaults);
   }
 
   async getMember(tenantContext: TenantContext, memberId: string) {
-    return this.db(tenantContext)
+    const member = await this.db(tenantContext)
       .collection<CollectionDocument<GymMember>>(collections.members)
       .findOne({ id: memberId });
+    return member ? withMemberDefaults(member) : null;
   }
 
   async listTrainers(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const trainers = await this.db(tenantContext)
       .collection<CollectionDocument<GymTrainer>>(collections.trainers)
       .findMany({}, { sort: { fullName: 1 } });
+    return trainers.map(withTrainerDefaults);
   }
 
   async listClassSessions(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const classSessions = await this.db(tenantContext)
       .collection<CollectionDocument<ClassSession>>(collections.classSessions)
       .findMany({}, { sort: { startsAt: 1 } });
+    return classSessions.map(withClassSessionDefaults);
   }
 
   async getClassSession(tenantContext: TenantContext, classSessionId: string) {
-    return this.db(tenantContext)
+    const classSession = await this.db(tenantContext)
       .collection<CollectionDocument<ClassSession>>(collections.classSessions)
       .findOne({ id: classSessionId });
+    return classSession ? withClassSessionDefaults(classSession) : null;
   }
 
   async listBookings(tenantContext: TenantContext) {
@@ -130,6 +191,111 @@ export class MongoGymStore implements GymStore {
     return location;
   }
 
+  async updateLocation(tenantContext: TenantContext, input: UpdateLocationInput) {
+    const locations = this.db(tenantContext)
+      .collection<CollectionDocument<GymLocation>>(collections.locations);
+    const location = await locations.findOne({ id: input.id });
+
+    if (!location) {
+      throw new AppError("Vestiging niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { locationId: input.id },
+      });
+    }
+
+    assertExpectedVersion("Vestiging", location.id, location.version, input.expectedVersion);
+
+    const now = new Date().toISOString();
+    const updateResult = await locations.updateOne(
+      { id: location.id, version: input.expectedVersion },
+      {
+        set: {
+          name: input.name,
+          city: input.city,
+          neighborhood: input.neighborhood,
+          capacity: input.capacity,
+          amenities: [...input.amenities],
+          managerName: input.managerName,
+          status: input.status,
+          updatedAt: now,
+        },
+        increment: { version: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new AppError("Vestiging is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: { locationId: location.id },
+      });
+    }
+
+    const updatedLocation = await locations.findOne({ id: location.id });
+    return withLocationDefaults(updatedLocation!);
+  }
+
+  async archiveLocation(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const location = await this.db(tenantContext)
+      .collection<CollectionDocument<GymLocation>>(collections.locations)
+      .findOne({ id: input.id });
+
+    if (!location) {
+      throw new AppError("Vestiging niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { locationId: input.id },
+      });
+    }
+
+    return this.updateLocation(tenantContext, {
+      ...withLocationDefaults(location),
+      expectedVersion: input.expectedVersion,
+      status: "archived",
+    });
+  }
+
+  async deleteLocation(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const db = this.db(tenantContext);
+    const locations = db.collection<CollectionDocument<GymLocation>>(collections.locations);
+    const location = await locations.findOne({ id: input.id });
+
+    if (!location) {
+      throw new AppError("Vestiging niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { locationId: input.id },
+      });
+    }
+
+    assertExpectedVersion("Vestiging", location.id, location.version, input.expectedVersion);
+
+    const [membersUsingLocation, trainersUsingLocation, classesUsingLocation] =
+      await Promise.all([
+        db.collection<CollectionDocument<GymMember>>(collections.members).count({
+          homeLocationId: location.id,
+        }),
+        db.collection<CollectionDocument<GymTrainer>>(collections.trainers).count({
+          homeLocationId: location.id,
+        }),
+        db.collection<CollectionDocument<ClassSession>>(collections.classSessions).count({
+          locationId: location.id,
+        }),
+      ]);
+
+    if (membersUsingLocation + trainersUsingLocation + classesUsingLocation > 0) {
+      throw new AppError("Archiveer deze vestiging eerst; er zijn nog gekoppelde leden, trainers of lessen.", {
+        code: "FORBIDDEN",
+        details: { locationId: location.id },
+      });
+    }
+
+    await locations.deleteOne({ id: location.id, version: input.expectedVersion });
+  }
+
   async createMembershipPlan(
     tenantContext: TenantContext,
     input: CreateMembershipPlanInput,
@@ -147,6 +313,7 @@ export class MongoGymStore implements GymStore {
       billingCycle: input.billingCycle,
       perks: [...input.perks],
       activeMembers: 0,
+      status: "active",
     };
 
     await this.db(tenantContext)
@@ -154,6 +321,104 @@ export class MongoGymStore implements GymStore {
       .insertOne(membershipPlan);
 
     return membershipPlan;
+  }
+
+  async updateMembershipPlan(
+    tenantContext: TenantContext,
+    input: UpdateMembershipPlanInput,
+  ) {
+    const plans = this.db(tenantContext)
+      .collection<CollectionDocument<MembershipPlan>>(collections.membershipPlans);
+    const plan = await plans.findOne({ id: input.id });
+
+    if (!plan) {
+      throw new AppError("Membership niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { membershipPlanId: input.id },
+      });
+    }
+
+    assertExpectedVersion("Contract", plan.id, plan.version, input.expectedVersion);
+
+    const updateResult = await plans.updateOne(
+      { id: plan.id, version: input.expectedVersion },
+      {
+        set: {
+          name: input.name,
+          priceMonthly: input.priceMonthly,
+          billingCycle: input.billingCycle,
+          perks: [...input.perks],
+          status: input.status,
+          updatedAt: new Date().toISOString(),
+        },
+        increment: { version: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new AppError("Contract is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: { membershipPlanId: plan.id },
+      });
+    }
+
+    const updatedPlan = await plans.findOne({ id: plan.id });
+    return withMembershipPlanDefaults(updatedPlan!);
+  }
+
+  async archiveMembershipPlan(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const plan = await this.db(tenantContext)
+      .collection<CollectionDocument<MembershipPlan>>(collections.membershipPlans)
+      .findOne({ id: input.id });
+
+    if (!plan) {
+      throw new AppError("Membership niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { membershipPlanId: input.id },
+      });
+    }
+
+    return this.updateMembershipPlan(tenantContext, {
+      ...withMembershipPlanDefaults(plan),
+      expectedVersion: input.expectedVersion,
+      status: "archived",
+    });
+  }
+
+  async deleteMembershipPlan(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const db = this.db(tenantContext);
+    const plans = db.collection<CollectionDocument<MembershipPlan>>(
+      collections.membershipPlans,
+    );
+    const plan = await plans.findOne({ id: input.id });
+
+    if (!plan) {
+      throw new AppError("Membership niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { membershipPlanId: input.id },
+      });
+    }
+
+    assertExpectedVersion("Contract", plan.id, plan.version, input.expectedVersion);
+
+    const membersUsingPlan = await db
+      .collection<CollectionDocument<GymMember>>(collections.members)
+      .count({ membershipPlanId: plan.id });
+
+    if (membersUsingPlan > 0) {
+      throw new AppError("Archiveer dit contract eerst; er zijn nog leden aan gekoppeld.", {
+        code: "FORBIDDEN",
+        details: { membershipPlanId: plan.id },
+      });
+    }
+
+    await plans.deleteOne({ id: plan.id, version: input.expectedVersion });
   }
 
   async createTrainer(tenantContext: TenantContext, input: CreateTrainerInput) {
@@ -188,6 +453,107 @@ export class MongoGymStore implements GymStore {
       .insertOne(trainer);
 
     return trainer;
+  }
+
+  async updateTrainer(tenantContext: TenantContext, input: UpdateTrainerInput) {
+    const db = this.db(tenantContext);
+    const trainers = db.collection<CollectionDocument<GymTrainer>>(collections.trainers);
+    const [trainer, location] = await Promise.all([
+      trainers.findOne({ id: input.id }),
+      db.collection<CollectionDocument<GymLocation>>(collections.locations).findOne({
+        id: input.homeLocationId,
+      }),
+    ]);
+
+    if (!trainer || !location) {
+      throw new AppError("Trainer kon niet worden opgeslagen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: {
+          trainerFound: Boolean(trainer),
+          locationFound: Boolean(location),
+        },
+      });
+    }
+
+    assertExpectedVersion("Trainer", trainer.id, trainer.version, input.expectedVersion);
+
+    const updateResult = await trainers.updateOne(
+      { id: trainer.id, version: input.expectedVersion },
+      {
+        set: {
+          fullName: input.fullName,
+          specialties: [...input.specialties],
+          certifications: [...input.certifications],
+          homeLocationId: input.homeLocationId,
+          status: input.status,
+          updatedAt: new Date().toISOString(),
+        },
+        increment: { version: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new AppError("Trainer is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: { trainerId: trainer.id },
+      });
+    }
+
+    const updatedTrainer = await trainers.findOne({ id: trainer.id });
+    return withTrainerDefaults(updatedTrainer!);
+  }
+
+  async archiveTrainer(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const trainer = await this.db(tenantContext)
+      .collection<CollectionDocument<GymTrainer>>(collections.trainers)
+      .findOne({ id: input.id });
+
+    if (!trainer) {
+      throw new AppError("Trainer niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { trainerId: input.id },
+      });
+    }
+
+    return this.updateTrainer(tenantContext, {
+      ...withTrainerDefaults(trainer),
+      expectedVersion: input.expectedVersion,
+      status: "archived",
+    });
+  }
+
+  async deleteTrainer(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const db = this.db(tenantContext);
+    const trainers = db.collection<CollectionDocument<GymTrainer>>(collections.trainers);
+    const trainer = await trainers.findOne({ id: input.id });
+
+    if (!trainer) {
+      throw new AppError("Trainer niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { trainerId: input.id },
+      });
+    }
+
+    assertExpectedVersion("Trainer", trainer.id, trainer.version, input.expectedVersion);
+
+    const classesUsingTrainer = await db
+      .collection<CollectionDocument<ClassSession>>(collections.classSessions)
+      .count({ trainerId: trainer.id });
+
+    if (classesUsingTrainer > 0) {
+      throw new AppError("Archiveer deze trainer eerst; er zijn nog lessen aan gekoppeld.", {
+        code: "FORBIDDEN",
+        details: { trainerId: trainer.id },
+      });
+    }
+
+    await trainers.deleteOne({ id: trainer.id, version: input.expectedVersion });
   }
 
   async createMember(tenantContext: TenantContext, input: CreateMemberInput) {
@@ -273,6 +639,201 @@ export class MongoGymStore implements GymStore {
     return member;
   }
 
+  async updateMember(tenantContext: TenantContext, input: UpdateMemberInput) {
+    const db = this.db(tenantContext);
+    const members = db.collection<CollectionDocument<GymMember>>(collections.members);
+    const plans = db.collection<CollectionDocument<MembershipPlan>>(
+      collections.membershipPlans,
+    );
+    const locations = db.collection<CollectionDocument<GymLocation>>(
+      collections.locations,
+    );
+    const waivers = db.collection<CollectionDocument<WaiverRecord>>(collections.waivers);
+
+    const [member, plan, location] = await Promise.all([
+      members.findOne({ id: input.id }),
+      plans.findOne({ id: input.membershipPlanId }),
+      locations.findOne({ id: input.homeLocationId }),
+    ]);
+
+    if (!member || !plan || !location) {
+      throw new AppError("Lid kon niet worden opgeslagen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: {
+          memberFound: Boolean(member),
+          membershipPlanFound: Boolean(plan),
+          locationFound: Boolean(location),
+        },
+      });
+    }
+
+    const normalizedMember = withMemberDefaults(member);
+    assertExpectedVersion(
+      "Lid",
+      normalizedMember.id,
+      normalizedMember.version,
+      input.expectedVersion,
+    );
+
+    const now = new Date().toISOString();
+    const nextRenewalAt =
+      normalizedMember.membershipPlanId === input.membershipPlanId
+        ? normalizedMember.nextRenewalAt
+        : addMonthsToIsoDate(now, getMembershipBillingCycleMonths(plan.billingCycle));
+
+    const updateResult = await members.updateOne(
+      { id: normalizedMember.id, version: input.expectedVersion },
+      {
+        set: {
+          fullName: input.fullName,
+          email: input.email,
+          phone: input.phone,
+          phoneCountry: input.phoneCountry,
+          membershipPlanId: input.membershipPlanId,
+          homeLocationId: input.homeLocationId,
+          status: input.status,
+          tags: [...input.tags],
+          waiverStatus: input.waiverStatus,
+          nextRenewalAt,
+          updatedAt: now,
+        },
+        increment: { version: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new AppError("Lid is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: { memberId: normalizedMember.id },
+      });
+    }
+
+    if (normalizedMember.membershipPlanId !== input.membershipPlanId) {
+      if (normalizedMember.status === "active") {
+        await plans.updateOne(
+          { id: normalizedMember.membershipPlanId },
+          { set: { updatedAt: now }, increment: { version: 1, activeMembers: -1 } },
+        );
+      }
+
+      if (input.status === "active") {
+        await plans.updateOne(
+          { id: input.membershipPlanId },
+          { set: { updatedAt: now }, increment: { version: 1, activeMembers: 1 } },
+        );
+      }
+    } else if (normalizedMember.status !== input.status) {
+      await plans.updateOne(
+        { id: input.membershipPlanId },
+        {
+          set: { updatedAt: now },
+          increment: {
+            version: 1,
+            activeMembers:
+              (input.status === "active" ? 1 : 0) -
+              (normalizedMember.status === "active" ? 1 : 0),
+          },
+        },
+      );
+    }
+
+    const waiver = await waivers.findOne({ memberId: normalizedMember.id });
+    if (waiver) {
+      await waivers.updateOne(
+        { id: waiver.id },
+        {
+          set: {
+            memberName: input.fullName,
+            status: input.waiverStatus === "complete" ? "signed" : "requested",
+            uploadedAt: input.waiverStatus === "complete" ? waiver.uploadedAt ?? now : undefined,
+            fileName:
+              input.waiverStatus === "complete"
+                ? waiver.fileName ??
+                  `${input.fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-waiver.pdf`
+                : undefined,
+            updatedAt: now,
+          },
+          increment: { version: 1 },
+        },
+      );
+    }
+
+    const updatedMember = await members.findOne({ id: normalizedMember.id });
+    return withMemberDefaults(updatedMember!);
+  }
+
+  async archiveMember(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const member = await this.getMember(tenantContext, input.id);
+
+    if (!member) {
+      throw new AppError("Lid niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { memberId: input.id },
+      });
+    }
+
+    return this.updateMember(tenantContext, {
+      ...member,
+      expectedVersion: input.expectedVersion,
+      status: "archived",
+    });
+  }
+
+  async deleteMember(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const db = this.db(tenantContext);
+    const members = db.collection<CollectionDocument<GymMember>>(collections.members);
+    const member = await members.findOne({ id: input.id });
+
+    if (!member) {
+      throw new AppError("Lid niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { memberId: input.id },
+      });
+    }
+
+    const normalizedMember = withMemberDefaults(member);
+    assertExpectedVersion(
+      "Lid",
+      normalizedMember.id,
+      normalizedMember.version,
+      input.expectedVersion,
+    );
+
+    const linkedBookings = await db
+      .collection<CollectionDocument<ClassBooking>>(collections.bookings)
+      .count({ memberId: normalizedMember.id });
+
+    if (linkedBookings > 0) {
+      throw new AppError("Archiveer dit lid eerst; er zijn nog reserveringen aan gekoppeld.", {
+        code: "FORBIDDEN",
+        details: { memberId: normalizedMember.id },
+      });
+    }
+
+    await members.deleteOne({ id: normalizedMember.id, version: input.expectedVersion });
+    await db
+      .collection<CollectionDocument<WaiverRecord>>(collections.waivers)
+      .deleteOne({ memberId: normalizedMember.id });
+
+    if (normalizedMember.status === "active") {
+      await db
+        .collection<CollectionDocument<MembershipPlan>>(collections.membershipPlans)
+        .updateOne(
+          { id: normalizedMember.membershipPlanId },
+          {
+            set: { updatedAt: new Date().toISOString() },
+            increment: { version: 1, activeMembers: -1 },
+          },
+        );
+    }
+  }
+
   async createClassSession(
     tenantContext: TenantContext,
     input: CreateClassSessionInput,
@@ -319,6 +880,7 @@ export class MongoGymStore implements GymStore {
       waitlistCount: 0,
       level: input.level,
       focus: input.focus,
+      status: "active",
     };
 
     await classSessions.insertOne(classSession);
@@ -331,6 +893,188 @@ export class MongoGymStore implements GymStore {
     );
 
     return classSession;
+  }
+
+  async updateClassSession(
+    tenantContext: TenantContext,
+    input: UpdateClassSessionInput,
+  ) {
+    const db = this.db(tenantContext);
+    const classSessions = db.collection<CollectionDocument<ClassSession>>(
+      collections.classSessions,
+    );
+    const trainers = db.collection<CollectionDocument<GymTrainer>>(collections.trainers);
+    const locations = db.collection<CollectionDocument<GymLocation>>(
+      collections.locations,
+    );
+
+    const [classSession, trainer, location] = await Promise.all([
+      classSessions.findOne({ id: input.id }),
+      trainers.findOne({ id: input.trainerId }),
+      locations.findOne({ id: input.locationId }),
+    ]);
+
+    if (!classSession || !trainer || !location) {
+      throw new AppError("Les kon niet worden opgeslagen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: {
+          classSessionFound: Boolean(classSession),
+          trainerFound: Boolean(trainer),
+          locationFound: Boolean(location),
+        },
+      });
+    }
+
+    const normalizedClassSession = withClassSessionDefaults(classSession);
+    assertExpectedVersion(
+      "Les",
+      normalizedClassSession.id,
+      normalizedClassSession.version,
+      input.expectedVersion,
+    );
+
+    const now = new Date().toISOString();
+    const updateResult = await classSessions.updateOne(
+      { id: normalizedClassSession.id, version: input.expectedVersion },
+      {
+        set: {
+          title: input.title,
+          locationId: input.locationId,
+          trainerId: input.trainerId,
+          startsAt: input.startsAt,
+          durationMinutes: input.durationMinutes,
+          capacity: input.capacity,
+          level: input.level,
+          focus: input.focus,
+          status: input.status,
+          updatedAt: now,
+        },
+        increment: { version: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      throw new AppError("Les is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: { classSessionId: normalizedClassSession.id },
+      });
+    }
+
+    if (normalizedClassSession.trainerId !== input.trainerId) {
+      const previousTrainer = await trainers.findOne({
+        id: normalizedClassSession.trainerId,
+      });
+
+      if (previousTrainer) {
+        await trainers.updateOne(
+          { id: previousTrainer.id },
+          {
+            set: {
+              updatedAt: now,
+              classIds: previousTrainer.classIds.filter(
+                (id) => id !== normalizedClassSession.id,
+              ),
+            },
+            increment: { version: 1 },
+          },
+        );
+      }
+
+      if (!trainer.classIds.includes(normalizedClassSession.id)) {
+        await trainers.updateOne(
+          { id: trainer.id },
+          {
+            set: {
+              updatedAt: now,
+              classIds: [...trainer.classIds, normalizedClassSession.id],
+            },
+            increment: { version: 1 },
+          },
+        );
+      }
+    }
+
+    const updatedClassSession = await classSessions.findOne({
+      id: normalizedClassSession.id,
+    });
+    return withClassSessionDefaults(updatedClassSession!);
+  }
+
+  async archiveClassSession(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const classSession = await this.getClassSession(tenantContext, input.id);
+
+    if (!classSession) {
+      throw new AppError("Les niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { classSessionId: input.id },
+      });
+    }
+
+    return this.updateClassSession(tenantContext, {
+      ...classSession,
+      expectedVersion: input.expectedVersion,
+      status: "archived",
+    });
+  }
+
+  async deleteClassSession(
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ) {
+    const db = this.db(tenantContext);
+    const classSessions = db.collection<CollectionDocument<ClassSession>>(
+      collections.classSessions,
+    );
+    const classSession = await classSessions.findOne({ id: input.id });
+
+    if (!classSession) {
+      throw new AppError("Les niet gevonden binnen deze tenant.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { classSessionId: input.id },
+      });
+    }
+
+    const normalizedClassSession = withClassSessionDefaults(classSession);
+    assertExpectedVersion(
+      "Les",
+      normalizedClassSession.id,
+      normalizedClassSession.version,
+      input.expectedVersion,
+    );
+
+    const linkedBookings = await db
+      .collection<CollectionDocument<ClassBooking>>(collections.bookings)
+      .count({ classSessionId: normalizedClassSession.id });
+
+    if (linkedBookings > 0) {
+      throw new AppError("Archiveer deze les eerst; er zijn nog reserveringen aan gekoppeld.", {
+        code: "FORBIDDEN",
+        details: { classSessionId: normalizedClassSession.id },
+      });
+    }
+
+    await classSessions.deleteOne({
+      id: normalizedClassSession.id,
+      version: input.expectedVersion,
+    });
+
+    const trainers = db.collection<CollectionDocument<GymTrainer>>(collections.trainers);
+    const trainer = await trainers.findOne({ id: normalizedClassSession.trainerId });
+    if (trainer) {
+      await trainers.updateOne(
+        { id: trainer.id },
+        {
+          set: {
+            updatedAt: new Date().toISOString(),
+            classIds: trainer.classIds.filter((id) => id !== normalizedClassSession.id),
+          },
+          increment: { version: 1 },
+        },
+      );
+    }
   }
 
   async createBooking(

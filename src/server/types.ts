@@ -3,7 +3,7 @@ import type { AuditEntry, SystemHealthReport } from "@claimtech/ops";
 import type { TenantId } from "@claimtech/tenant";
 
 export type EntityStatus = "active" | "paused" | "archived";
-export type MemberStatus = "active" | "trial" | "paused";
+export type MemberStatus = "active" | "trial" | "paused" | "archived";
 export type BookingStatus = "confirmed" | "waitlisted" | "checked_in" | "cancelled";
 export type BookingSource = "frontdesk" | "coach" | "member_app";
 export type AttendanceChannel = "qr" | "frontdesk" | "coach";
@@ -42,6 +42,7 @@ export interface MembershipPlan extends TenantOwnedEntity {
   readonly billingCycle: "monthly" | "semiannual" | "annual";
   readonly perks: ReadonlyArray<string>;
   readonly activeMembers: number;
+  readonly status: EntityStatus;
 }
 
 export interface GymMember extends TenantOwnedEntity {
@@ -64,7 +65,7 @@ export interface GymTrainer extends TenantOwnedEntity {
   readonly certifications: ReadonlyArray<string>;
   readonly homeLocationId: string;
   readonly classIds: ReadonlyArray<string>;
-  readonly status: "active" | "away";
+  readonly status: "active" | "away" | "archived";
 }
 
 export interface ClassSession extends TenantOwnedEntity {
@@ -78,6 +79,7 @@ export interface ClassSession extends TenantOwnedEntity {
   readonly waitlistCount: number;
   readonly level: "beginner" | "mixed" | "advanced";
   readonly focus: string;
+  readonly status: EntityStatus;
 }
 
 export interface ClassBooking extends TenantOwnedEntity {
@@ -130,6 +132,8 @@ export interface StaffSummary {
   readonly email: string;
   readonly status: string;
   readonly roles: ReadonlyArray<string>;
+  readonly roleKey?: string;
+  readonly updatedAt?: string;
 }
 
 export interface RuntimeState {
@@ -209,6 +213,19 @@ export interface BillingActionReceipt {
   readonly summary: string;
 }
 
+export interface LegalComplianceSummary {
+  readonly termsUrl: string;
+  readonly privacyUrl: string;
+  readonly sepaCreditorId: string;
+  readonly sepaMandateText: string;
+  readonly contractPdfTemplateKey: string;
+  readonly waiverStorageKey: string;
+  readonly waiverRetentionMonths: number;
+  readonly statusLabel: string;
+  readonly helpText: string;
+  readonly lastValidatedAt?: string;
+}
+
 export interface PublicReservationClassSummary {
   readonly id: string;
   readonly title: string;
@@ -242,6 +259,7 @@ export interface GymDashboardSnapshot {
   readonly uiCapabilities: DashboardUiCapabilities;
   readonly remoteAccess: RemoteAccessSummary;
   readonly payments: BillingSummary;
+  readonly legal: LegalComplianceSummary;
   readonly metrics: ReadonlyArray<DashboardMetric>;
   readonly featureFlags: ReadonlyArray<FeatureState>;
   readonly locations: ReadonlyArray<GymLocation>;

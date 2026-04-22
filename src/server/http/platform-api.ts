@@ -164,6 +164,40 @@ export function jsonError(requestId: string, error: unknown) {
   });
 }
 
+async function reportApiError(request: Request, requestId: string, error: unknown) {
+  const webhookUrl = process.env.MONITORING_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    if (process.env.NODE_ENV !== "test") {
+      console.error("API error", {
+        requestId,
+        url: request.url,
+        method: request.method,
+        error,
+      });
+    }
+    return;
+  }
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        requestId,
+        method: request.method,
+        url: request.url,
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : error,
+      }),
+    });
+  } catch (reportError) {
+    console.error("Failed to report API error", { requestId, reportError });
+  }
+}
+
 export async function runApiHandler<TData>(
   request: Request,
   handler: (requestId: string) => Promise<TData>,
@@ -177,6 +211,7 @@ export async function runApiHandler<TData>(
     const data = await handler(requestId);
     return jsonOk(requestId, data, { status: options?.successStatus ?? 200 });
   } catch (error) {
+    await reportApiError(request, requestId, error);
     return jsonError(requestId, error);
   }
 }

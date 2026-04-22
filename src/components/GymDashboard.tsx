@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { BookingManagementView } from "@/components/BookingManagementView";
+import { DashboardEntityActions } from "@/components/DashboardEntityActions";
 import { PlatformWorkbench } from "@/components/PlatformWorkbench";
+import { filterManagementRecords } from "@/lib/dashboard-management";
 import { getDashboardPageLayout } from "@/lib/dashboard-page-layout";
 import { getDashboardPages, type DashboardPageKey } from "@/lib/dashboard-pages";
 import { getMembershipBillingCycleLabel } from "@/lib/memberships";
@@ -26,6 +29,12 @@ function formatCurrency(value: number, currency = "EUR") {
     currency,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function toLocalDateTimeInput(value: string) {
+  const date = new Date(value);
+  const offsetMilliseconds = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMilliseconds).toISOString().slice(0, 16);
 }
 
 function initials(name: string) {
@@ -104,6 +113,51 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ManagementToolbar({
+  query,
+  onQueryChange,
+  filter,
+  onFilterChange,
+  filterLabel,
+  options,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  filter: string;
+  onFilterChange: (value: string) => void;
+  filterLabel: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+}) {
+  return (
+    <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
+      <label className="text-sm font-medium text-white/55">
+        Zoeken
+        <input
+          className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none placeholder:text-white/25 focus:border-orange-400"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Zoek op naam, mail, locatie, tag..."
+        />
+      </label>
+      <label className="text-sm font-medium text-white/55">
+        {filterLabel}
+        <select
+          className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none focus:border-orange-400"
+          value={filter}
+          onChange={(event) => onFilterChange(event.target.value)}
+        >
+          <option value="all">Alles</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 export function GymDashboard({
   snapshot,
   currentPage = "overview",
@@ -111,6 +165,14 @@ export function GymDashboard({
   snapshot: GymDashboardSnapshot;
   currentPage?: DashboardPageKey;
 }) {
+  const [memberQuery, setMemberQuery] = useState("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState("all");
+  const [contractQuery, setContractQuery] = useState("");
+  const [contractStatusFilter, setContractStatusFilter] = useState("all");
+  const [classQuery, setClassQuery] = useState("");
+  const [classStatusFilter, setClassStatusFilter] = useState("all");
+  const [settingsQuery, setSettingsQuery] = useState("");
+  const [settingsStatusFilter, setSettingsStatusFilter] = useState("all");
   const planById = new Map(snapshot.membershipPlans.map((plan) => [plan.id, plan]));
   const locationById = new Map(snapshot.locations.map((location) => [location.id, location]));
   const trainerById = new Map(snapshot.trainers.map((trainer) => [trainer.id, trainer]));
@@ -149,6 +211,42 @@ export function GymDashboard({
   const occupancy = totalCapacity === 0
     ? 0
     : Math.round((confirmedBookings.length / totalCapacity) * 100);
+  const filteredMembers = filterManagementRecords(snapshot.members, {
+    query: memberQuery,
+    searchKeys: ["fullName", "email", "phone", "tags"],
+    filterKey: "status",
+    filterValue: memberStatusFilter,
+  });
+  const filteredPlans = filterManagementRecords(snapshot.membershipPlans, {
+    query: contractQuery,
+    searchKeys: ["name", "billingCycle", "perks"],
+    filterKey: "status",
+    filterValue: contractStatusFilter,
+  });
+  const filteredClasses = filterManagementRecords(snapshot.classSessions, {
+    query: classQuery,
+    searchKeys: ["title", "focus", "level"],
+    filterKey: "status",
+    filterValue: classStatusFilter,
+  });
+  const filteredLocations = filterManagementRecords(snapshot.locations, {
+    query: settingsQuery,
+    searchKeys: ["name", "city", "neighborhood", "managerName", "amenities"],
+    filterKey: "status",
+    filterValue: settingsStatusFilter,
+  });
+  const filteredTrainers = filterManagementRecords(snapshot.trainers, {
+    query: settingsQuery,
+    searchKeys: ["fullName", "specialties", "certifications"],
+    filterKey: "status",
+    filterValue: settingsStatusFilter,
+  });
+  const filteredStaff = filterManagementRecords(snapshot.staff, {
+    query: settingsQuery,
+    searchKeys: ["displayName", "email", "roles"],
+    filterKey: "status",
+    filterValue: settingsStatusFilter,
+  });
 
   return (
     <div className="space-y-6 p-5 lg:p-8">
@@ -286,6 +384,64 @@ export function GymDashboard({
               title="Class schedule"
               description="Rooster en reserveringen zijn gekoppeld aan echte data."
             />
+            <ManagementToolbar
+              query={classQuery}
+              onQueryChange={setClassQuery}
+              filter={classStatusFilter}
+              onFilterChange={setClassStatusFilter}
+              filterLabel="Lesstatus"
+              options={[
+                { value: "active", label: "Actief" },
+                { value: "paused", label: "Gepauzeerd" },
+                { value: "archived", label: "Gearchiveerd" },
+              ]}
+            />
+            <div className="mb-6 space-y-3">
+              {filteredClasses.map((classSession) => (
+                <div key={classSession.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-medium text-white">{classSession.title}</p>
+                      <p className="mt-1 text-sm text-white/40">
+                        {formatDateTime(classSession.startsAt)} · {trainerById.get(classSession.trainerId)?.fullName ?? "Trainer"} · {locationById.get(classSession.locationId)?.name ?? "Locatie"}
+                      </p>
+                      <p className="mt-1 text-sm text-white/45">{classSession.focus}</p>
+                    </div>
+                    <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(classSession.status)}`}>
+                      {classSession.status}
+                    </span>
+                  </div>
+                  <DashboardEntityActions
+                    endpoint="/api/platform/classes"
+                    entityLabel="Les"
+                    updatePayloadBase={{
+                      id: classSession.id,
+                      expectedVersion: classSession.version,
+                    }}
+                    archivePayload={{
+                      id: classSession.id,
+                      expectedVersion: classSession.version,
+                    }}
+                    deletePayload={{
+                      id: classSession.id,
+                      expectedVersion: classSession.version,
+                    }}
+                    fields={[
+                      { name: "title", label: "Titel", defaultValue: classSession.title },
+                      { name: "startsAt", label: "Start", defaultValue: toLocalDateTimeInput(classSession.startsAt), type: "datetime-local" },
+                      { name: "locationId", label: "Vestiging", defaultValue: classSession.locationId, type: "select", options: snapshot.locations.map((location) => ({ value: location.id, label: location.name })) },
+                      { name: "trainerId", label: "Trainer", defaultValue: classSession.trainerId, type: "select", options: snapshot.trainers.map((trainer) => ({ value: trainer.id, label: trainer.fullName })) },
+                      { name: "durationMinutes", label: "Duur", defaultValue: classSession.durationMinutes, type: "number" },
+                      { name: "capacity", label: "Capaciteit", defaultValue: classSession.capacity, type: "number" },
+                      { name: "level", label: "Niveau", defaultValue: classSession.level, type: "select", options: [{ value: "beginner", label: "Beginner" }, { value: "mixed", label: "Mixed" }, { value: "advanced", label: "Advanced" }] },
+                      { name: "status", label: "Status", defaultValue: classSession.status, type: "select", options: [{ value: "active", label: "Actief" }, { value: "paused", label: "Gepauzeerd" }, { value: "archived", label: "Gearchiveerd" }] },
+                      { name: "focus", label: "Focus", defaultValue: classSession.focus, type: "textarea" },
+                    ]}
+                  />
+                </div>
+              ))}
+              {filteredClasses.length === 0 ? <EmptyState>Geen lessen gevonden met deze zoek/filtercombinatie.</EmptyState> : null}
+            </div>
             <BookingManagementView snapshot={snapshot} />
           </section>
           <section className="glass-card p-6">
@@ -300,6 +456,19 @@ export function GymDashboard({
           <section className="glass-card overflow-hidden">
             <div className="p-6">
               <SectionHeader title="Members" description="Actieve leden, contracten, waivers en status." />
+              <ManagementToolbar
+                query={memberQuery}
+                onQueryChange={setMemberQuery}
+                filter={memberStatusFilter}
+                onFilterChange={setMemberStatusFilter}
+                filterLabel="Lidstatus"
+                options={[
+                  { value: "active", label: "Actief" },
+                  { value: "trial", label: "Trial" },
+                  { value: "paused", label: "Gepauzeerd" },
+                  { value: "archived", label: "Gearchiveerd" },
+                ]}
+              />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -309,10 +478,11 @@ export function GymDashboard({
                     <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Contract</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Status</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Waiver</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-white/50">Beheer</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {snapshot.members.map((member) => {
+                  {filteredMembers.map((member) => {
                     const plan = planById.get(member.membershipPlanId);
 
                     return (
@@ -335,15 +505,44 @@ export function GymDashboard({
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-white/60">{member.waiverStatus}</td>
+                        <td className="min-w-[320px] px-6 py-4">
+                          <DashboardEntityActions
+                            endpoint="/api/platform/members"
+                            entityLabel="Lid"
+                            updatePayloadBase={{
+                              id: member.id,
+                              expectedVersion: member.version,
+                            }}
+                            archivePayload={{
+                              id: member.id,
+                              expectedVersion: member.version,
+                            }}
+                            deletePayload={{
+                              id: member.id,
+                              expectedVersion: member.version,
+                            }}
+                            fields={[
+                              { name: "fullName", label: "Naam", defaultValue: member.fullName },
+                              { name: "email", label: "E-mail", defaultValue: member.email, type: "email" },
+                              { name: "phone", label: "Telefoon", defaultValue: member.phone },
+                              { name: "phoneCountry", label: "Landcode", defaultValue: member.phoneCountry },
+                              { name: "membershipPlanId", label: "Contract", defaultValue: member.membershipPlanId, type: "select", options: snapshot.membershipPlans.map((membershipPlan) => ({ value: membershipPlan.id, label: membershipPlan.name })) },
+                              { name: "homeLocationId", label: "Vestiging", defaultValue: member.homeLocationId, type: "select", options: snapshot.locations.map((location) => ({ value: location.id, label: location.name })) },
+                              { name: "status", label: "Status", defaultValue: member.status, type: "select", options: [{ value: "active", label: "Actief" }, { value: "trial", label: "Trial" }, { value: "paused", label: "Gepauzeerd" }, { value: "archived", label: "Gearchiveerd" }] },
+                              { name: "waiverStatus", label: "Waiver", defaultValue: member.waiverStatus, type: "select", options: [{ value: "pending", label: "Nog open" }, { value: "complete", label: "Rond" }] },
+                              { name: "tags", label: "Tags", defaultValue: member.tags, type: "list" },
+                            ]}
+                          />
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            {snapshot.members.length === 0 ? (
+            {filteredMembers.length === 0 ? (
               <div className="p-6">
-                <EmptyState>Voeg je eerste lid toe of importeer bestaande klanten.</EmptyState>
+                <EmptyState>Geen leden gevonden. Pas je zoekterm/filter aan of voeg een lid toe.</EmptyState>
               </div>
             ) : null}
           </section>
@@ -358,8 +557,20 @@ export function GymDashboard({
         <div id="contracts-workbench" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <section className="glass-card p-6">
             <SectionHeader title="Contracts" description="Maand, 6 maanden en jaarcontracten." />
+            <ManagementToolbar
+              query={contractQuery}
+              onQueryChange={setContractQuery}
+              filter={contractStatusFilter}
+              onFilterChange={setContractStatusFilter}
+              filterLabel="Contractstatus"
+              options={[
+                { value: "active", label: "Actief" },
+                { value: "paused", label: "Gepauzeerd" },
+                { value: "archived", label: "Gearchiveerd" },
+              ]}
+            />
             <div className="space-y-3">
-              {snapshot.membershipPlans.map((plan) => (
+              {filteredPlans.map((plan) => (
                 <div key={plan.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -368,12 +579,40 @@ export function GymDashboard({
                         {getMembershipBillingCycleLabel(plan.billingCycle)} · {plan.activeMembers} actieve leden
                       </p>
                     </div>
-                    <p className="font-semibold text-orange-300">{formatCurrency(plan.priceMonthly, plan.currency)}</p>
+                    <div className="space-y-2 text-right">
+                      <p className="font-semibold text-orange-300">{formatCurrency(plan.priceMonthly, plan.currency)}</p>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(plan.status)}`}>
+                        {plan.status}
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-3 text-sm text-white/45">{plan.perks.join(" · ")}</p>
+                  <DashboardEntityActions
+                    endpoint="/api/platform/membership-plans"
+                    entityLabel="Contract"
+                    updatePayloadBase={{
+                      id: plan.id,
+                      expectedVersion: plan.version,
+                    }}
+                    archivePayload={{
+                      id: plan.id,
+                      expectedVersion: plan.version,
+                    }}
+                    deletePayload={{
+                      id: plan.id,
+                      expectedVersion: plan.version,
+                    }}
+                    fields={[
+                      { name: "name", label: "Naam", defaultValue: plan.name },
+                      { name: "priceMonthly", label: "Prijs per maand", defaultValue: plan.priceMonthly, type: "number" },
+                      { name: "billingCycle", label: "Contractduur", defaultValue: plan.billingCycle, type: "select", options: [{ value: "monthly", label: "Maand" }, { value: "semiannual", label: "6 maanden" }, { value: "annual", label: "Jaar" }] },
+                      { name: "status", label: "Status", defaultValue: plan.status, type: "select", options: [{ value: "active", label: "Actief" }, { value: "paused", label: "Gepauzeerd" }, { value: "archived", label: "Gearchiveerd" }] },
+                      { name: "perks", label: "Voordelen", defaultValue: plan.perks, type: "list" },
+                    ]}
+                  />
                 </div>
               ))}
-              {snapshot.membershipPlans.length === 0 ? <EmptyState>Maak je eerste contract aan.</EmptyState> : null}
+              {filteredPlans.length === 0 ? <EmptyState>Geen contracten gevonden met deze zoek/filtercombinatie.</EmptyState> : null}
             </div>
           </section>
           <section className="glass-card p-6">
@@ -434,10 +673,113 @@ export function GymDashboard({
         <div id="settings-workbench" className="grid gap-6 xl:grid-cols-[1fr_1fr]">
           <section className="glass-card p-6">
             <SectionHeader title="Settings overview" description="Vestigingen, personeel, platformstatus en imports." />
+            <ManagementToolbar
+              query={settingsQuery}
+              onQueryChange={setSettingsQuery}
+              filter={settingsStatusFilter}
+              onFilterChange={setSettingsStatusFilter}
+              filterLabel="Status"
+              options={[
+                { value: "active", label: "Actief" },
+                { value: "away", label: "Afwezig" },
+                { value: "paused", label: "Gepauzeerd" },
+                { value: "archived", label: "Gearchiveerd" },
+              ]}
+            />
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <MetricCard label="Vestigingen" value={String(snapshot.locations.length)} helper="Locaties met capaciteit en manager" />
                 <MetricCard label="Team" value={String(snapshot.staff.length)} helper="Owner, manager, trainer en frontdesk" />
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-white">Vestigingen beheren</h3>
+                {filteredLocations.map((location) => (
+                  <div key={location.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">{location.name}</p>
+                        <p className="mt-1 text-sm text-white/45">{location.city} · {location.neighborhood} · manager {location.managerName}</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(location.status)}`}>{location.status}</span>
+                    </div>
+                    <DashboardEntityActions
+                      endpoint="/api/platform/locations"
+                      entityLabel="Vestiging"
+                      updatePayloadBase={{ id: location.id, expectedVersion: location.version }}
+                      archivePayload={{ id: location.id, expectedVersion: location.version }}
+                      deletePayload={{ id: location.id, expectedVersion: location.version }}
+                      fields={[
+                        { name: "name", label: "Naam", defaultValue: location.name },
+                        { name: "managerName", label: "Manager", defaultValue: location.managerName },
+                        { name: "city", label: "Stad", defaultValue: location.city },
+                        { name: "neighborhood", label: "Wijk", defaultValue: location.neighborhood },
+                        { name: "capacity", label: "Capaciteit", defaultValue: location.capacity, type: "number" },
+                        { name: "status", label: "Status", defaultValue: location.status, type: "select", options: [{ value: "active", label: "Actief" }, { value: "paused", label: "Gepauzeerd" }, { value: "archived", label: "Gearchiveerd" }] },
+                        { name: "amenities", label: "Faciliteiten", defaultValue: location.amenities, type: "list" },
+                      ]}
+                    />
+                  </div>
+                ))}
+                {filteredLocations.length === 0 ? <EmptyState>Geen vestigingen gevonden.</EmptyState> : null}
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-white">Trainers beheren</h3>
+                {filteredTrainers.map((trainer) => (
+                  <div key={trainer.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">{trainer.fullName}</p>
+                        <p className="mt-1 text-sm text-white/45">{locationById.get(trainer.homeLocationId)?.name ?? "Vestiging"} · {trainer.specialties.join(", ") || "Geen specialisaties"}</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(trainer.status)}`}>{trainer.status}</span>
+                    </div>
+                    <DashboardEntityActions
+                      endpoint="/api/platform/trainers"
+                      entityLabel="Trainer"
+                      updatePayloadBase={{ id: trainer.id, expectedVersion: trainer.version }}
+                      archivePayload={{ id: trainer.id, expectedVersion: trainer.version }}
+                      deletePayload={{ id: trainer.id, expectedVersion: trainer.version }}
+                      fields={[
+                        { name: "fullName", label: "Naam", defaultValue: trainer.fullName },
+                        { name: "homeLocationId", label: "Thuisvestiging", defaultValue: trainer.homeLocationId, type: "select", options: snapshot.locations.map((location) => ({ value: location.id, label: location.name })) },
+                        { name: "status", label: "Status", defaultValue: trainer.status, type: "select", options: [{ value: "active", label: "Actief" }, { value: "away", label: "Afwezig" }, { value: "archived", label: "Gearchiveerd" }] },
+                        { name: "specialties", label: "Specialisaties", defaultValue: trainer.specialties, type: "list" },
+                        { name: "certifications", label: "Certificeringen", defaultValue: trainer.certifications, type: "list" },
+                      ]}
+                    />
+                  </div>
+                ))}
+                {filteredTrainers.length === 0 ? <EmptyState>Geen trainers gevonden.</EmptyState> : null}
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-white">Personeel beheren</h3>
+                {filteredStaff.map((staff) => (
+                  <div key={staff.id} className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">{staff.displayName}</p>
+                        <p className="mt-1 text-sm text-white/45">{staff.email} · {(staff.roleKey ?? staff.roles[0] ?? "frontdesk").toString()}</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(staff.status)}`}>{staff.status}</span>
+                    </div>
+                    {staff.updatedAt ? (
+                      <DashboardEntityActions
+                        endpoint="/api/platform/staff"
+                        entityLabel="Teamlid"
+                        updatePayloadBase={{ userId: staff.id, expectedUpdatedAt: staff.updatedAt }}
+                        archivePayload={{ userId: staff.id, expectedUpdatedAt: staff.updatedAt }}
+                        deletePayload={{ userId: staff.id, expectedUpdatedAt: staff.updatedAt }}
+                        fields={[
+                          { name: "displayName", label: "Naam", defaultValue: staff.displayName },
+                          { name: "email", label: "E-mail", defaultValue: staff.email, type: "email" },
+                          { name: "roleKey", label: "Rol", defaultValue: staff.roleKey ?? "frontdesk", type: "select", options: [{ value: "owner", label: "Owner" }, { value: "manager", label: "Manager" }, { value: "trainer", label: "Trainer" }, { value: "frontdesk", label: "Frontdesk" }] },
+                          { name: "status", label: "Status", defaultValue: staff.status === "archived" ? "archived" : "active", type: "select", options: [{ value: "active", label: "Actief" }, { value: "archived", label: "Gearchiveerd" }] },
+                        ]}
+                      />
+                    ) : null}
+                  </div>
+                ))}
+                {filteredStaff.length === 0 ? <EmptyState>Geen teamleden gevonden.</EmptyState> : null}
               </div>
               <div className="space-y-3">
                 {snapshot.healthReport.checks.map((check) => (
@@ -458,7 +800,7 @@ export function GymDashboard({
             <SectionHeader title="Owner beheer" description="Alles op aparte pagina, geen tabs." />
             <PlatformWorkbench
               snapshot={snapshot}
-              sections={["locations", "trainers", "staff", "imports"]}
+              sections={["locations", "trainers", "staff", "imports", "legal"]}
               showLaunchHeader={false}
             />
           </section>

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   JwtTokenService,
   createAuthActor,
@@ -31,6 +31,10 @@ function createTestTokenForActor(actor: ReturnType<typeof createAuthActor>) {
 }
 
 describe("demo session runtime", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("builds actors with tenant memberships and dashboard role metadata", async () => {
     const actor = buildPlatformActor(account, "northside-athletics");
     const memberships = listActorTenants(actor);
@@ -57,14 +61,19 @@ describe("demo session runtime", () => {
   it("uses development tenant context when NODE_ENV is not set", async () => {
     vi.stubEnv("NODE_ENV", undefined);
 
-    try {
-      const token = await issueSessionForAccount(account, "northside-athletics");
-      const viewer = await resolveViewerFromToken(token);
+    const token = await issueSessionForAccount(account, "northside-athletics");
+    const viewer = await resolveViewerFromToken(token);
 
-      expect(viewer?.tenantContext.environment).toBe("development");
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    expect(viewer?.tenantContext.environment).toBe("development");
+  });
+
+  it("requires a real session secret before issuing production tokens", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("CLAIMTECH_SESSION_SECRET", "replace-me");
+
+    await expect(
+      issueSessionForAccount(account, "northside-athletics"),
+    ).rejects.toThrow("CLAIMTECH_SESSION_SECRET is verplicht in productie.");
   });
 
   it("returns null for missing or invalid tokens", async () => {

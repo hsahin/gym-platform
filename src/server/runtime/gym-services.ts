@@ -78,6 +78,11 @@ import type {
   CreateTrainerInput,
   GymStore,
   RecordAttendanceInput,
+  UpdateClassSessionInput,
+  UpdateLocationInput,
+  UpdateMemberInput,
+  UpdateMembershipPlanInput,
+  UpdateTrainerInput,
 } from "@/server/persistence/gym-contracts";
 import {
   createEmptyGymStoreState,
@@ -86,6 +91,7 @@ import {
 import { MongoGymStore } from "@/server/persistence/mongo-gym-store";
 import {
   createLocalPlatformAccount,
+  deleteLocalPlatformAccount,
   getLocalTenantProfileBySlug,
   getLocalTenantProfile,
   listLocalPlatformAccounts,
@@ -94,12 +100,19 @@ import {
   markLocalTenantRemoteAccessAction,
   readLocalPlatformState,
   updateLocalTenantBillingSettings,
+  updateLocalTenantLegalSettings,
   updateLocalTenantRemoteAccess,
+  updateLocalPlatformAccount,
   updateLocalPlatformData,
 } from "@/server/persistence/local-platform-state";
 import {
   getMembershipRole,
 } from "@/server/runtime/platform-roles";
+import {
+  assertProductionEnvironmentReady,
+  getProductionReadinessChecks,
+  isProductionRuntime,
+} from "@/server/runtime/production-readiness";
 import type {
   BillingActionReceipt,
   ClassBooking,
@@ -358,6 +371,7 @@ async function buildUserDirectory() {
           userId: account.userId,
           email: account.email,
           displayName: account.displayName,
+          status: account.status === "archived" ? "disabled" : "active",
           memberships: [
             {
               tenantId: account.tenantId,
@@ -373,7 +387,15 @@ async function buildUserDirectory() {
 }
 
 async function resolveStore(): Promise<Pick<GymPlatformRuntime, "store" | "storeMode">> {
+  assertProductionEnvironmentReady();
+
   if (!process.env.MONGODB_URI) {
+    if (isProductionRuntime()) {
+      throw new AppError("Productie mag niet zonder MongoDB starten.", {
+        code: "INVALID_INPUT",
+      });
+    }
+
     const localState = await readLocalPlatformState();
 
     return {
@@ -402,6 +424,10 @@ async function resolveStore(): Promise<Pick<GymPlatformRuntime, "store" | "store
       storeMode: "mongo",
     };
   } catch (error) {
+    if (isProductionRuntime()) {
+      throw error;
+    }
+
     console.warn("Falling back to memory store", error);
     const localState = await readLocalPlatformState();
     return {
@@ -650,6 +676,86 @@ async function createRuntime(): Promise<GymPlatformRuntime> {
           summary: "Betalingen zijn nog niet actief; de owner kan dit later koppelen.",
         };
       },
+    })
+    .register({
+      name: "Productie-readiness",
+      run: () => {
+        const checks = getProductionReadinessChecks();
+        const missingRequired = checks.filter(
+          (check) => check.severity === "required" && !check.ready,
+        );
+        const missingRecommended = checks.filter(
+          (check) => check.severity === "recommended" && !check.ready,
+        );
+
+        if (missingRequired.length > 0) {
+          return {
+            status: "degraded",
+            summary: `Nog verplicht: ${missingRequired
+              .map((check) => check.label)
+              .join(", ")}.`,
+          };
+        }
+
+        if (missingRecommended.length > 0) {
+          return {
+            status: "degraded",
+            summary: `Live basis staat, maar versterk nog: ${missingRecommended
+              .map((check) => check.label)
+              .join(", ")}.`,
+          };
+        }
+
+        return {
+          status: "healthy",
+          summary: "Mongo, sessiesleutel, cache, backups en monitoring zijn ingevuld.",
+        };
+      },
+    })
+    .register({
+      name: "Juridisch",
+      run: async (context) => {
+        const tenantContext = context?.tenantContext;
+
+        if (!tenantContext) {
+          return {
+            status: "healthy",
+            summary: "Juridische checks verschijnen zodra je een gym opent.",
+          };
+        }
+
+        const legal = await buildLegalComplianceSummary(tenantContext);
+
+        return {
+          status: legal.statusLabel === "Juridisch klaar" ? "healthy" : "degraded",
+          summary: legal.helpText,
+        };
+      },
+    })
+    .register({
+      name: "Migraties",
+      run: () => ({
+        status: process.env.MIGRATIONS_LOCKED === "true" ? "healthy" : "degraded",
+        summary:
+          process.env.MIGRATIONS_LOCKED === "true"
+            ? "Migraties zijn als release-stap geborgd."
+            : "Leg vast dat database-migraties als release-stap draaien voordat productie live gaat.",
+      }),
+    })
+    .register({
+      name: "Security",
+      run: () => ({
+        status:
+          process.env.SECURITY_HEADERS_ENABLED !== "false" &&
+          process.env.CLAIMTECH_SESSION_SECRET &&
+          process.env.CLAIMTECH_SESSION_SECRET !== "replace-me"
+            ? "healthy"
+            : "degraded",
+        summary:
+          process.env.SECURITY_HEADERS_ENABLED !== "false"
+            ? "Security headers en sessieconfiguratie zijn expliciet geactiveerd."
+            : "Activeer security headers, sterke sessiesleutel en productie-cookiebeleid.",
+      }),
     });
 
   return {
@@ -711,19 +817,26 @@ async function buildStaffSummaries(
   runtime: GymPlatformRuntime,
   tenantContext: TenantContext,
 ): Promise<ReadonlyArray<StaffSummary>> {
-  const users = await runtime.userDirectory.listByTenant(tenantContext.tenantId);
+  const [users, accounts] = await Promise.all([
+    runtime.userDirectory.listByTenant(tenantContext.tenantId),
+    listLocalPlatformAccounts(tenantContext.tenantId),
+  ]);
+  const accountByUserId = new Map(accounts.map((account) => [account.userId, account]));
 
   return users.map((user) => {
     const membership = user.memberships.find(
       (entry) => entry.tenantId === tenantContext.tenantId,
     );
+    const account = accountByUserId.get(user.userId);
 
     return {
       id: user.userId,
       displayName: user.displayName,
       email: user.email,
-      status: user.status,
+      status: account?.status ?? user.status,
       roles: membership?.roleKeys ?? [],
+      roleKey: account?.roleKey,
+      updatedAt: account?.updatedAt,
     };
   });
 }
@@ -820,6 +933,46 @@ async function buildBillingSummary(
   };
 }
 
+async function buildLegalComplianceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["legal"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  const legal = tenantProfile?.legal;
+
+  if (!legal) {
+    return {
+      termsUrl: "",
+      privacyUrl: "",
+      sepaCreditorId: "",
+      sepaMandateText: "",
+      contractPdfTemplateKey: "",
+      waiverStorageKey: "",
+      waiverRetentionMonths: 84,
+      statusLabel: "Niet ingericht",
+      helpText:
+        "Voeg voorwaarden, privacy, SEPA-toestemming, contract-PDF en waiver-opslag toe voordat je live gaat.",
+    };
+  }
+
+  const missing = [
+    legal.termsUrl ? null : "voorwaarden",
+    legal.privacyUrl ? null : "privacy",
+    legal.sepaCreditorId ? null : "SEPA creditor ID",
+    legal.sepaMandateText ? null : "SEPA machtigingstekst",
+    legal.contractPdfTemplateKey ? null : "contract-PDF template",
+    legal.waiverStorageKey ? null : "waiver-opslag",
+  ].filter(Boolean);
+
+  return {
+    ...legal,
+    statusLabel: missing.length === 0 ? "Juridisch klaar" : `${missing.length} check${missing.length === 1 ? "" : "s"}`,
+    helpText:
+      missing.length === 0
+        ? "Voorwaarden, privacy, SEPA-toestemming, contract-PDF en waiver-opslag zijn vastgelegd."
+        : `Nog nodig: ${missing.join(", ")}.`,
+  };
+}
+
 function featureStates(runtime: GymPlatformRuntime, actor: AuthActor, tenantContext: TenantContext) {
   return runtime.featureEvaluator
     .list({ actor, tenantContext })
@@ -895,21 +1048,81 @@ export interface GymPlatformServices {
     tenantContext: TenantContext,
     input: CreateLocationInput,
   ): Promise<GymDashboardSnapshot["locations"][number]>;
+  updateLocation(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: UpdateLocationInput,
+  ): Promise<GymDashboardSnapshot["locations"][number]>;
+  archiveLocation(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymDashboardSnapshot["locations"][number]>;
+  deleteLocation(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createMembershipPlan(
     actor: AuthActor,
     tenantContext: TenantContext,
     input: CreateMembershipPlanInput,
   ): Promise<GymDashboardSnapshot["membershipPlans"][number]>;
+  updateMembershipPlan(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: UpdateMembershipPlanInput,
+  ): Promise<GymDashboardSnapshot["membershipPlans"][number]>;
+  archiveMembershipPlan(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymDashboardSnapshot["membershipPlans"][number]>;
+  deleteMembershipPlan(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createTrainer(
     actor: AuthActor,
     tenantContext: TenantContext,
     input: CreateTrainerInput,
   ): Promise<GymDashboardSnapshot["trainers"][number]>;
+  updateTrainer(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: UpdateTrainerInput,
+  ): Promise<GymDashboardSnapshot["trainers"][number]>;
+  archiveTrainer(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymDashboardSnapshot["trainers"][number]>;
+  deleteTrainer(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createMember(
     actor: AuthActor,
     tenantContext: TenantContext,
     input: CreateMemberInput,
   ): Promise<GymDashboardSnapshot["members"][number]>;
+  updateMember(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: UpdateMemberInput,
+  ): Promise<GymDashboardSnapshot["members"][number]>;
+  archiveMember(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymDashboardSnapshot["members"][number]>;
+  deleteMember(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   importContractsAndMembers(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -940,6 +1153,21 @@ export interface GymPlatformServices {
     tenantContext: TenantContext,
     input: CreateClassSessionInput,
   ): Promise<GymDashboardSnapshot["classSessions"][number]>;
+  updateClassSession(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: UpdateClassSessionInput,
+  ): Promise<GymDashboardSnapshot["classSessions"][number]>;
+  archiveClassSession(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<GymDashboardSnapshot["classSessions"][number]>;
+  deleteClassSession(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<void>;
   createStaffAccount(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -950,6 +1178,23 @@ export interface GymPlatformServices {
       readonly roleKey: "owner" | "manager" | "trainer" | "frontdesk";
     },
   ): Promise<StaffSummary>;
+  updateStaffAccount(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly userId: string;
+      readonly expectedUpdatedAt: string;
+      readonly displayName: string;
+      readonly email: string;
+      readonly roleKey: "owner" | "manager" | "trainer" | "frontdesk";
+      readonly status: "active" | "archived";
+    },
+  ): Promise<StaffSummary>;
+  deleteStaffAccount(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly userId: string; readonly expectedUpdatedAt: string },
+  ): Promise<void>;
   updateRemoteAccessSettings(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -979,6 +1224,11 @@ export interface GymPlatformServices {
       readonly notes?: string;
     },
   ): Promise<GymDashboardSnapshot["payments"]>;
+  updateLegalSettings(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["legal"], "statusLabel" | "helpText" | "lastValidatedAt">,
+  ): Promise<GymDashboardSnapshot["legal"]>;
   requestRemoteAccessUnlock(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -1193,6 +1443,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       ]);
       const remoteAccess = await buildRemoteAccessSummary(tenantContext, locations);
       const payments = await buildBillingSummary(tenantContext);
+      const legal = await buildLegalComplianceSummary(tenantContext);
 
       const activeMemberCount = members.filter((member) => member.status === "active").length;
       const occupancyRate =
@@ -1273,6 +1524,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         },
         remoteAccess,
         payments,
+        legal,
         metrics: [
           {
             label: "Actieve leden",
@@ -1369,6 +1621,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           name: tenant.name,
         })),
         classSessions: [...classSessions]
+          .filter((classSession) => classSession.status === "active")
           .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
           .map((classSession) => ({
             id: classSession.id,
@@ -1416,6 +1669,44 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return location;
     },
+    async updateLocation(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const location = await runtime.store.updateLocation(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "location.updated",
+        category: "locations",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { locationId: location.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return location;
+    },
+    async archiveLocation(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const location = await runtime.store.archiveLocation(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "location.archived",
+        category: "locations",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { locationId: location.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return location;
+    },
+    async deleteLocation(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await runtime.store.deleteLocation(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "location.deleted",
+        category: "locations",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { locationId: input.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+    },
     async createMembershipPlan(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
       const membershipPlan = await runtime.store.createMembershipPlan(
@@ -1432,6 +1723,50 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return membershipPlan;
     },
+    async updateMembershipPlan(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const membershipPlan = await runtime.store.updateMembershipPlan(
+        tenantContext,
+        input,
+      );
+      await runtime.auditLogger.write({
+        action: "membership.updated",
+        category: "memberships",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { membershipPlanId: membershipPlan.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return membershipPlan;
+    },
+    async archiveMembershipPlan(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const membershipPlan = await runtime.store.archiveMembershipPlan(
+        tenantContext,
+        input,
+      );
+      await runtime.auditLogger.write({
+        action: "membership.archived",
+        category: "memberships",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { membershipPlanId: membershipPlan.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return membershipPlan;
+    },
+    async deleteMembershipPlan(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await runtime.store.deleteMembershipPlan(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "membership.deleted",
+        category: "memberships",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { membershipPlanId: input.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+    },
     async createTrainer(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
       const trainer = await runtime.store.createTrainer(tenantContext, input);
@@ -1444,6 +1779,44 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return trainer;
+    },
+    async updateTrainer(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const trainer = await runtime.store.updateTrainer(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "trainer.updated",
+        category: "trainers",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { trainerId: trainer.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return trainer;
+    },
+    async archiveTrainer(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const trainer = await runtime.store.archiveTrainer(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "trainer.archived",
+        category: "trainers",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { trainerId: trainer.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return trainer;
+    },
+    async deleteTrainer(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await runtime.store.deleteTrainer(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "trainer.deleted",
+        category: "trainers",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { trainerId: input.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
     },
     async createMember(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
@@ -1460,6 +1833,47 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return member;
+    },
+    async updateMember(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const member = await runtime.store.updateMember(tenantContext, {
+        ...input,
+        phone: normalizePhoneForStorage(input.phone, input.phoneCountry),
+      });
+      await runtime.auditLogger.write({
+        action: "member.updated",
+        category: "members",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { memberId: member.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return member;
+    },
+    async archiveMember(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const member = await runtime.store.archiveMember(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "member.archived",
+        category: "members",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { memberId: member.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return member;
+    },
+    async deleteMember(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await runtime.store.deleteMember(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "member.deleted",
+        category: "members",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { memberId: input.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
     },
     async importContractsAndMembers(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
@@ -1582,6 +1996,50 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return classSession;
     },
+    async updateClassSession(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const classSession = await runtime.store.updateClassSession(
+        tenantContext,
+        input,
+      );
+      await runtime.auditLogger.write({
+        action: "class.updated",
+        category: "classes",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { classSessionId: classSession.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return classSession;
+    },
+    async archiveClassSession(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const classSession = await runtime.store.archiveClassSession(
+        tenantContext,
+        input,
+      );
+      await runtime.auditLogger.write({
+        action: "class.archived",
+        category: "classes",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { classSessionId: classSession.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return classSession;
+    },
+    async deleteClassSession(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await runtime.store.deleteClassSession(tenantContext, input);
+      await runtime.auditLogger.write({
+        action: "class.deleted",
+        category: "classes",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { classSessionId: input.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+    },
     async createStaffAccount(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
       const nextState = await createLocalPlatformAccount(tenantContext.tenantId, input);
@@ -1620,7 +2078,75 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         email: createdAccount!.email,
         status: createdAccount!.status,
         roles: [getMembershipRole(createdAccount!.roleKey)],
+        roleKey: createdAccount!.roleKey,
+        updatedAt: createdAccount!.updatedAt,
       };
+    },
+    async updateStaffAccount(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      const nextState = await updateLocalPlatformAccount(tenantContext.tenantId, input);
+      const updatedAccount = nextState.accounts.find(
+        (account) => account.userId === input.userId,
+      );
+
+      if (!updatedAccount) {
+        throw new AppError("Teamaccount kon niet worden teruggelezen.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      await runtime.userDirectory.upsert(
+        createPlatformUser({
+          userId: updatedAccount.userId,
+          email: updatedAccount.email,
+          displayName: updatedAccount.displayName,
+          status: updatedAccount.status === "archived" ? "disabled" : "active",
+          memberships: [
+            {
+              tenantId: tenantContext.tenantId,
+              roleKeys: [getMembershipRole(updatedAccount.roleKey)],
+            },
+          ],
+        }),
+      );
+
+      await runtime.auditLogger.write({
+        action: "staff.updated",
+        category: "staff",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          userId: updatedAccount.userId,
+          role: updatedAccount.roleKey,
+          status: updatedAccount.status,
+        },
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return {
+        id: updatedAccount.userId,
+        displayName: updatedAccount.displayName,
+        email: updatedAccount.email,
+        status: updatedAccount.status,
+        roles: [getMembershipRole(updatedAccount.roleKey)],
+        roleKey: updatedAccount.roleKey,
+        updatedAt: updatedAccount.updatedAt,
+      };
+    },
+    async deleteStaffAccount(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      await deleteLocalPlatformAccount(tenantContext.tenantId, input);
+
+      await runtime.auditLogger.write({
+        action: "staff.deleted",
+        category: "staff",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { userId: input.userId },
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
     },
     async updateRemoteAccessSettings(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
@@ -1675,6 +2201,28 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return buildBillingSummary(tenantContext);
+    },
+    async updateLegalSettings(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantLegalSettings(tenantContext.tenantId, input);
+
+      await runtime.auditLogger.write({
+        action: "legal.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          hasTerms: Boolean(input.termsUrl),
+          hasPrivacy: Boolean(input.privacyUrl),
+          hasSepa: Boolean(input.sepaCreditorId && input.sepaMandateText),
+          hasContractPdf: Boolean(input.contractPdfTemplateKey),
+          hasWaiverStorage: Boolean(input.waiverStorageKey),
+        },
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildLegalComplianceSummary(tenantContext);
     },
     async requestRemoteAccessUnlock(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
@@ -1857,6 +2405,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       if (!classSession) {
         throw new AppError("Les kon niet gevonden worden.", {
           code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      if (classSession.status !== "active") {
+        throw new AppError("Deze les is niet beschikbaar voor reserveringen.", {
+          code: "FORBIDDEN",
         });
       }
 

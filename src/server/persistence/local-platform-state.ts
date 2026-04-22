@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppError, createPrefixedIdGenerator } from "@claimtech/core";
 import {
@@ -20,9 +20,14 @@ import {
   type StoredRemoteAccessSettings,
 } from "@/lib/remote-access";
 import type { PlatformRoleKey } from "@/server/runtime/platform-roles";
+import {
+  assertProductionEnvironmentReady,
+  isProductionRuntime,
+} from "@/server/runtime/production-readiness";
 import type {
   BillingPaymentMethod,
   BillingProvider,
+  LegalComplianceSummary,
   RemoteAccessBridgeType,
   RemoteAccessProvider,
 } from "@/server/types";
@@ -46,6 +51,7 @@ export interface LocalTenantProfile {
   readonly id: TenantId;
   readonly name: string;
   readonly billing: StoredBillingSettings;
+  readonly legal: StoredLegalComplianceSettings;
   readonly remoteAccess: StoredRemoteAccessSettings;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -58,7 +64,7 @@ export interface LocalPlatformAccount {
   readonly displayName: string;
   readonly roleKey: PlatformRoleKey;
   readonly passwordHash: string;
-  readonly status: "active";
+  readonly status: "active" | "archived";
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -90,6 +96,15 @@ export interface CreatePlatformAccountInput {
   readonly roleKey: PlatformRoleKey;
 }
 
+export interface UpdatePlatformAccountInput {
+  readonly userId: string;
+  readonly expectedUpdatedAt: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly roleKey: PlatformRoleKey;
+  readonly status: "active" | "archived";
+}
+
 export interface UpdateLocalTenantRemoteAccessInput {
   readonly enabled: boolean;
   readonly provider: RemoteAccessProvider;
@@ -112,6 +127,23 @@ export interface UpdateLocalTenantBillingSettingsInput {
   readonly notes?: string;
 }
 
+export type StoredLegalComplianceSettings = Pick<
+  LegalComplianceSummary,
+  | "termsUrl"
+  | "privacyUrl"
+  | "sepaCreditorId"
+  | "sepaMandateText"
+  | "contractPdfTemplateKey"
+  | "waiverStorageKey"
+  | "waiverRetentionMonths"
+  | "lastValidatedAt"
+>;
+
+export type UpdateLocalTenantLegalSettingsInput = Omit<
+  StoredLegalComplianceSettings,
+  "lastValidatedAt"
+>;
+
 type LegacyLocalPlatformState = {
   readonly version: 1;
   readonly tenant: Omit<LocalTenantProfile, "remoteAccess" | "billing">;
@@ -121,8 +153,9 @@ type LegacyLocalPlatformState = {
   readonly data: MemoryGymStoreState;
 };
 
-type PersistedLocalTenantProfile = Omit<LocalTenantProfile, "remoteAccess" | "billing"> & {
+type PersistedLocalTenantProfile = Omit<LocalTenantProfile, "remoteAccess" | "billing" | "legal"> & {
   readonly billing?: Partial<StoredBillingSettings>;
+  readonly legal?: Partial<StoredLegalComplianceSettings>;
   readonly remoteAccess?: Partial<StoredRemoteAccessSettings>;
 };
 
@@ -142,6 +175,10 @@ function getStateFilePath() {
 }
 
 function shouldUseMongoPlatformState() {
+  if (isProductionRuntime()) {
+    return true;
+  }
+
   if (process.env.PLATFORM_STATE_BACKEND === "file") {
     return false;
   }
@@ -156,6 +193,8 @@ async function resolveMongoStateCollection() {
 
   if (!mongoStateCollectionPromise) {
     mongoStateCollectionPromise = (async () => {
+      assertProductionEnvironmentReady();
+
       if (!process.env.MONGODB_URI) {
         return null;
       }
@@ -220,6 +259,46 @@ function createEmptyState(): LocalPlatformState {
   };
 }
 
+function createDefaultLegalComplianceSettings(): StoredLegalComplianceSettings {
+  return {
+    termsUrl: "",
+    privacyUrl: "",
+    sepaCreditorId: "",
+    sepaMandateText:
+      "Ik machtig de sportschool om terugkerende lidmaatschapsbetalingen via SEPA incasso te innen volgens mijn contract.",
+    contractPdfTemplateKey: "",
+    waiverStorageKey: "",
+    waiverRetentionMonths: 84,
+  };
+}
+
+function normalizeLegalComplianceSettings(
+  input?: Partial<StoredLegalComplianceSettings>,
+): StoredLegalComplianceSettings {
+  const base = createDefaultLegalComplianceSettings();
+  const normalized = {
+    ...base,
+    ...input,
+    waiverRetentionMonths: Math.max(
+      1,
+      Number(input?.waiverRetentionMonths ?? base.waiverRetentionMonths),
+    ),
+  };
+  const isComplete = Boolean(
+    normalized.termsUrl &&
+      normalized.privacyUrl &&
+      normalized.sepaCreditorId &&
+      normalized.sepaMandateText &&
+      normalized.contractPdfTemplateKey &&
+      normalized.waiverStorageKey,
+  );
+
+  return {
+    ...normalized,
+    lastValidatedAt: isComplete ? input?.lastValidatedAt : undefined,
+  };
+}
+
 function toTenantIdFromName(name: string) {
   return toTenantId(slugifyTenantName(name));
 }
@@ -263,6 +342,7 @@ function normalizeTenantProfile(
   return {
     ...tenant,
     billing: normalizeStoredBillingSettings(tenant.billing),
+    legal: normalizeLegalComplianceSettings(tenant.legal),
     remoteAccess: normalizeStoredRemoteAccessSettings(tenant.remoteAccess),
   };
 }
@@ -277,7 +357,7 @@ function normalizeState(
   const tenants = state.tenants.map((tenant) => {
     const normalized = normalizeTenantProfile(tenant);
 
-    if (!tenant.remoteAccess || !tenant.billing) {
+    if (!tenant.remoteAccess || !tenant.billing || !tenant.legal) {
       changed = true;
     }
 
@@ -300,6 +380,7 @@ function migrateLegacyState(parsed: LegacyLocalPlatformState): LocalPlatformStat
       {
         ...parsed.tenant,
         billing: createDefaultBillingSettings(),
+        legal: createDefaultLegalComplianceSettings(),
         remoteAccess: createDefaultRemoteAccessSettings(),
       },
     ],
@@ -342,7 +423,9 @@ async function persistState(state: LocalPlatformState) {
 
   const stateFilePath = getStateFilePath();
   await mkdir(path.dirname(stateFilePath), { recursive: true });
-  await writeFile(stateFilePath, JSON.stringify(state, null, 2), "utf8");
+  const temporaryPath = `${stateFilePath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporaryPath, JSON.stringify(state, null, 2), "utf8");
+  await rename(temporaryPath, stateFilePath);
 }
 
 async function withStateMutation<T>(
@@ -389,6 +472,11 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
 
   try {
     const raw = await readFile(getStateFilePath(), "utf8");
+
+    if (!raw.trim()) {
+      return null;
+    }
+
     const parsed = JSON.parse(raw) as PersistedLocalPlatformState | LegacyLocalPlatformState;
 
     if (parsed.version === 1 && "tenant" in parsed) {
@@ -452,6 +540,7 @@ export async function bootstrapLocalPlatform(input: BootstrapPlatformInput) {
       id: tenantId,
       name: input.tenantName.trim(),
       billing: createDefaultBillingSettings(),
+      legal: createDefaultLegalComplianceSettings(),
       remoteAccess: createDefaultRemoteAccessSettings(),
       createdAt: now,
       updatedAt: now,
@@ -628,6 +717,143 @@ export async function createLocalPlatformAccount(
   });
 }
 
+export async function updateLocalPlatformAccount(
+  tenantId: string,
+  input: UpdatePlatformAccountInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je teamaccounts beheert.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const account = current.accounts.find(
+      (entry) => entry.tenantId === tenantId && entry.userId === input.userId,
+    );
+
+    if (!account) {
+      throw new AppError("Teamaccount niet gevonden binnen deze gym.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { userId: input.userId, tenantId },
+      });
+    }
+
+    if (account.updatedAt !== input.expectedUpdatedAt) {
+      throw new AppError("Teamaccount is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: {
+          userId: input.userId,
+          expectedUpdatedAt: input.expectedUpdatedAt,
+          actualUpdatedAt: account.updatedAt,
+        },
+      });
+    }
+
+    const normalizedEmail = normalizeEmail(input.email);
+
+    if (
+      current.accounts.some(
+        (entry) =>
+          entry.tenantId === tenantId &&
+          entry.userId !== input.userId &&
+          normalizeEmail(entry.email) === normalizedEmail,
+      )
+    ) {
+      throw new AppError("Er bestaat al een account met dit e-mailadres binnen deze gym.", {
+        code: "INVALID_INPUT",
+        details: { email: normalizedEmail, tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((tenant) =>
+        tenant.id === tenantId ? { ...tenant, updatedAt: now } : tenant,
+      ),
+      accounts: current.accounts.map((entry) =>
+        entry.tenantId === tenantId && entry.userId === input.userId
+          ? {
+              ...entry,
+              displayName: input.displayName.trim(),
+              email: normalizedEmail,
+              roleKey: input.roleKey,
+              status: input.status,
+              updatedAt: now,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return toTenantBootstrapResult(nextState, account.tenantId);
+  });
+}
+
+export async function deleteLocalPlatformAccount(
+  tenantId: string,
+  input: { readonly userId: string; readonly expectedUpdatedAt: string },
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je teamaccounts beheert.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const account = current.accounts.find(
+      (entry) => entry.tenantId === tenantId && entry.userId === input.userId,
+    );
+
+    if (!account) {
+      throw new AppError("Teamaccount niet gevonden binnen deze gym.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { userId: input.userId, tenantId },
+      });
+    }
+
+    if (account.updatedAt !== input.expectedUpdatedAt) {
+      throw new AppError("Teamaccount is al gewijzigd; laad eerst opnieuw.", {
+        code: "VERSION_CONFLICT",
+        details: {
+          userId: input.userId,
+          expectedUpdatedAt: input.expectedUpdatedAt,
+          actualUpdatedAt: account.updatedAt,
+        },
+      });
+    }
+
+    if (
+      account.roleKey === "owner" &&
+      current.accounts.filter(
+        (entry) =>
+          entry.tenantId === tenantId &&
+          entry.roleKey === "owner" &&
+          entry.status === "active",
+      ).length <= 1
+    ) {
+      throw new AppError("Je kunt de laatste actieve owner niet verwijderen.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((tenant) =>
+        tenant.id === tenantId ? { ...tenant, updatedAt: now } : tenant,
+      ),
+      accounts: current.accounts.filter(
+        (entry) => !(entry.tenantId === tenantId && entry.userId === input.userId),
+      ),
+    };
+
+    await persistState(nextState);
+    return toTenantBootstrapResult(nextState, account.tenantId);
+  });
+}
+
 export async function updateLocalTenantRemoteAccess(
   tenantId: string,
   input: UpdateLocalTenantRemoteAccessInput,
@@ -726,6 +952,63 @@ export async function updateLocalTenantBillingSettings(
               ...entry,
               updatedAt: now,
               billing: nextBilling,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantLegalSettings(
+  tenantId: string,
+  input: UpdateLocalTenantLegalSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je juridische instellingen opslaat.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor juridische instellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextLegalBase = normalizeLegalComplianceSettings({
+      ...tenant.legal,
+      ...input,
+      lastValidatedAt: tenant.legal.lastValidatedAt,
+    });
+    const nextLegal: StoredLegalComplianceSettings = {
+      ...nextLegalBase,
+      lastValidatedAt:
+        nextLegalBase.termsUrl &&
+        nextLegalBase.privacyUrl &&
+        nextLegalBase.sepaCreditorId &&
+        nextLegalBase.sepaMandateText &&
+        nextLegalBase.contractPdfTemplateKey &&
+        nextLegalBase.waiverStorageKey
+          ? now
+          : undefined,
+    };
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              legal: nextLegal,
             }
           : entry,
       ),

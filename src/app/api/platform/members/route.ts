@@ -14,9 +14,17 @@ const createMemberSchema = z.object({
   phoneCountry: z.string().length(2),
   membershipPlanId: z.string().min(1),
   homeLocationId: z.string().min(1),
-  status: z.enum(["active", "trial", "paused"]),
+  status: z.enum(["active", "trial", "paused", "archived"]),
   tags: z.array(z.string().min(1)).default([]),
   waiverStatus: z.enum(["complete", "pending"]),
+});
+const updateMemberSchema = createMemberSchema.extend({
+  id: z.string().min(1),
+  expectedVersion: z.number().int().positive(),
+});
+const entityMutationSchema = z.object({
+  id: z.string().min(1),
+  expectedVersion: z.number().int().positive(),
 });
 
 export async function GET(request: NextRequest) {
@@ -43,4 +51,46 @@ export async function POST(request: NextRequest) {
     },
     { successStatus: 201 },
   );
+}
+
+export async function PATCH(request: NextRequest) {
+  return runApiHandler(request, async () => {
+    const viewer = await requireViewerFromRequest(request);
+    const services = await getGymPlatformServices();
+    requireMutationSecurity(request);
+    const payload = await request.json();
+
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "operation" in payload &&
+      payload.operation === "archive"
+    ) {
+      return services.archiveMember(
+        viewer.actor,
+        viewer.tenantContext,
+        entityMutationSchema.parse(payload),
+      );
+    }
+
+    const parsed = updateMemberSchema.parse(payload);
+    return services.updateMember(viewer.actor, viewer.tenantContext, {
+      ...parsed,
+      phoneCountry: parsed.phoneCountry as never,
+    });
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  return runApiHandler(request, async () => {
+    const viewer = await requireViewerFromRequest(request);
+    const services = await getGymPlatformServices();
+    requireMutationSecurity(request);
+    await services.deleteMember(
+      viewer.actor,
+      viewer.tenantContext,
+      entityMutationSchema.parse(await request.json()),
+    );
+    return { deleted: true };
+  });
 }

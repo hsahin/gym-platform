@@ -153,7 +153,8 @@ export type PlatformWorkbenchSection =
   | "imports"
   | "staff"
   | "remote-access"
-  | "payments";
+  | "payments"
+  | "legal";
 
 const ALL_PLATFORM_WORKBENCH_SECTIONS: ReadonlyArray<PlatformWorkbenchSection> = [
   "locations",
@@ -165,6 +166,7 @@ const ALL_PLATFORM_WORKBENCH_SECTIONS: ReadonlyArray<PlatformWorkbenchSection> =
   "staff",
   "remote-access",
   "payments",
+  "legal",
 ];
 
 export function PlatformWorkbench({
@@ -295,6 +297,23 @@ export function PlatformWorkbench({
     "Intake bundle",
   );
   const [billingPreviewMemberName, setBillingPreviewMemberName] = useState("");
+  const [legalTermsUrl, setLegalTermsUrl] = useState(snapshot.legal.termsUrl);
+  const [legalPrivacyUrl, setLegalPrivacyUrl] = useState(snapshot.legal.privacyUrl);
+  const [legalSepaCreditorId, setLegalSepaCreditorId] = useState(
+    snapshot.legal.sepaCreditorId,
+  );
+  const [legalSepaMandateText, setLegalSepaMandateText] = useState(
+    snapshot.legal.sepaMandateText,
+  );
+  const [legalContractPdfTemplateKey, setLegalContractPdfTemplateKey] = useState(
+    snapshot.legal.contractPdfTemplateKey,
+  );
+  const [legalWaiverStorageKey, setLegalWaiverStorageKey] = useState(
+    snapshot.legal.waiverStorageKey,
+  );
+  const [legalWaiverRetentionMonths, setLegalWaiverRetentionMonths] = useState(
+    String(snapshot.legal.waiverRetentionMonths),
+  );
   const dashboardExperience = getDashboardExperience({
     locationsCount: snapshot.locations.length,
     membershipPlansCount: snapshot.membershipPlans.length,
@@ -394,6 +413,16 @@ export function PlatformWorkbench({
     setBillingNotes(snapshot.payments.notes ?? "");
     setBillingPreviewMethod(snapshot.payments.paymentMethods[0] ?? "one_time");
   }, [snapshot.payments]);
+
+  useEffect(() => {
+    setLegalTermsUrl(snapshot.legal.termsUrl);
+    setLegalPrivacyUrl(snapshot.legal.privacyUrl);
+    setLegalSepaCreditorId(snapshot.legal.sepaCreditorId);
+    setLegalSepaMandateText(snapshot.legal.sepaMandateText);
+    setLegalContractPdfTemplateKey(snapshot.legal.contractPdfTemplateKey);
+    setLegalWaiverStorageKey(snapshot.legal.waiverStorageKey);
+    setLegalWaiverRetentionMonths(String(snapshot.legal.waiverRetentionMonths));
+  }, [snapshot.legal]);
 
   useEffect(() => {
     if (!highlightStepKey) {
@@ -1830,6 +1859,118 @@ export function PlatformWorkbench({
               </div>
             </form>
           )}
+        </FormCard>
+
+        <FormCard
+          visible={shouldShowSection("legal")}
+          sectionId="platform-step-legal"
+          eyebrow="Live readiness"
+          title="Juridische flows afronden"
+          description="Leg voorwaarden, privacy, SEPA-toestemming, contract-PDF template en waiver-opslag vast voordat leden echt gaan betalen of tekenen."
+          countLabel={snapshot.legal.statusLabel}
+          statusLabel={snapshot.legal.statusLabel}
+          statusTone={snapshot.legal.statusLabel === "Juridisch klaar" ? "complete" : "current"}
+        >
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              preventNativeSubmit(event);
+              runAction(async () => {
+                const legal = await submitJson<GymDashboardSnapshot["legal"]>(
+                  "/api/platform/legal",
+                  {
+                    termsUrl: legalTermsUrl,
+                    privacyUrl: legalPrivacyUrl,
+                    sepaCreditorId: legalSepaCreditorId,
+                    sepaMandateText: legalSepaMandateText,
+                    contractPdfTemplateKey: legalContractPdfTemplateKey,
+                    waiverStorageKey: legalWaiverStorageKey,
+                    waiverRetentionMonths: Number(legalWaiverRetentionMonths),
+                  },
+                );
+
+                toast.success(`${legal.statusLabel}: juridische instellingen opgeslagen.`);
+              });
+            }}
+          >
+            <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 text-sm leading-6 text-slate-600">
+              <p className="font-medium text-slate-900">Juridische status</p>
+              <p className="mt-2">{snapshot.legal.helpText}</p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="text-sm font-medium text-slate-800">
+                Algemene voorwaarden URL
+                <input
+                  className={fieldClassName()}
+                  value={legalTermsUrl}
+                  onChange={(event) => setLegalTermsUrl(event.target.value)}
+                  placeholder="https://jouwgym.nl/voorwaarden"
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Privacyverklaring URL
+                <input
+                  className={fieldClassName()}
+                  value={legalPrivacyUrl}
+                  onChange={(event) => setLegalPrivacyUrl(event.target.value)}
+                  placeholder="https://jouwgym.nl/privacy"
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                SEPA creditor ID
+                <input
+                  className={fieldClassName()}
+                  value={legalSepaCreditorId}
+                  onChange={(event) => setLegalSepaCreditorId(event.target.value)}
+                  placeholder="NL00ZZZ..."
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Contract-PDF template key
+                <input
+                  className={fieldClassName()}
+                  value={legalContractPdfTemplateKey}
+                  onChange={(event) => setLegalContractPdfTemplateKey(event.target.value)}
+                  placeholder="contracts/templates/membership-v1.pdf"
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Waiver opslagpad
+                <input
+                  className={fieldClassName()}
+                  value={legalWaiverStorageKey}
+                  onChange={(event) => setLegalWaiverStorageKey(event.target.value)}
+                  placeholder="waivers/signed/"
+                />
+              </label>
+              <label className="text-sm font-medium text-slate-800">
+                Waiver bewaartermijn maanden
+                <input
+                  className={fieldClassName()}
+                  type="number"
+                  min={1}
+                  value={legalWaiverRetentionMonths}
+                  onChange={(event) => setLegalWaiverRetentionMonths(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <label className="block text-sm font-medium text-slate-800">
+              SEPA machtigingstekst
+              <textarea
+                className={textareaClassName()}
+                value={legalSepaMandateText}
+                onChange={(event) => setLegalSepaMandateText(event.target.value)}
+              />
+            </label>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Opslaan..." : "Juridische instellingen opslaan"}
+              </Button>
+            </div>
+          </form>
         </FormCard>
       </div>
     </section>

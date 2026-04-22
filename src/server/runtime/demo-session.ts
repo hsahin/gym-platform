@@ -8,6 +8,7 @@ import {
 } from "@claimtech/auth";
 import { createTenantContext, type TenantContext } from "@claimtech/tenant";
 import type { LocalPlatformAccount } from "@/server/persistence/local-platform-state";
+import { isProductionRuntime } from "@/server/runtime/production-readiness";
 import {
   PLATFORM_ROLE_OPTIONS,
   getMembershipRole,
@@ -21,6 +22,14 @@ const PRODUCT_NAME = "gym-platform";
 const AUDIENCE = "gym-platform-web";
 
 function getTokenService() {
+  if (
+    isProductionRuntime() &&
+    (!process.env.CLAIMTECH_SESSION_SECRET ||
+      process.env.CLAIMTECH_SESSION_SECRET === "replace-me")
+  ) {
+    throw new Error("CLAIMTECH_SESSION_SECRET is verplicht in productie.");
+  }
+
   return new JwtTokenService({
     secret:
       process.env.CLAIMTECH_SESSION_SECRET ?? "claimtech-gym-platform-local-secret",

@@ -170,6 +170,127 @@ describe("gym platform services", () => {
     expect(snapshot.waivers[0]?.memberId).toBe(member.id);
   });
 
+  it("lets owners edit, archive and safely delete managed gym records", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const removableLocation = await services.createLocation(ownerActor, tenantContext, {
+      name: "Temporary Studio",
+      city: "Amsterdam",
+      neighborhood: "West",
+      capacity: 40,
+      managerName: "Temp Manager",
+      amenities: [],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Noa van Dijk",
+      email: "noa@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: ["morning"],
+      waiverStatus: "pending",
+    });
+    const classSession = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Morning Strength",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-04-20T08:00:00.000Z",
+      durationMinutes: 60,
+      capacity: 14,
+      level: "mixed",
+      focus: "Compound lifts",
+    });
+
+    const updatedLocation = await services.updateLocation(ownerActor, tenantContext, {
+      ...location,
+      expectedVersion: location.version,
+      name: "Northside Flagship",
+      status: "active",
+    });
+    const currentPlan = (
+      await services.getDashboardSnapshot(ownerActor, tenantContext)
+    ).membershipPlans.find((entry) => entry.id === plan.id)!;
+    const updatedPlan = await services.updateMembershipPlan(ownerActor, tenantContext, {
+      ...currentPlan,
+      expectedVersion: currentPlan.version,
+      priceMonthly: 129,
+      status: "active",
+    });
+    const currentTrainer = (
+      await services.getDashboardSnapshot(ownerActor, tenantContext)
+    ).trainers.find((entry) => entry.id === trainer.id)!;
+    const updatedTrainer = await services.updateTrainer(ownerActor, tenantContext, {
+      ...currentTrainer,
+      expectedVersion: currentTrainer.version,
+      fullName: "Jay Hassan-Lewis",
+      status: "active",
+    });
+    const updatedMember = await services.updateMember(ownerActor, tenantContext, {
+      ...member,
+      expectedVersion: member.version,
+      status: "paused",
+    });
+    const archivedClass = await services.archiveClassSession(ownerActor, tenantContext, {
+      id: classSession.id,
+      expectedVersion: classSession.version,
+    });
+    await services.deleteLocation(ownerActor, tenantContext, {
+      id: removableLocation.id,
+      expectedVersion: removableLocation.version,
+    });
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(updatedLocation.name).toBe("Northside Flagship");
+    expect(updatedPlan.priceMonthly).toBe(129);
+    expect(updatedTrainer.fullName).toBe("Jay Hassan-Lewis");
+    expect(updatedMember.status).toBe("paused");
+    expect(archivedClass.status).toBe("archived");
+    expect(snapshot.locations.map((entry) => entry.id)).not.toContain(removableLocation.id);
+    expect(snapshot.membershipPlans[0]?.activeMembers).toBe(0);
+  });
+
+  it("stores legal live-readiness settings per gym", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const legal = await services.updateLegalSettings(ownerActor, tenantContext, {
+      termsUrl: "https://northside.test/voorwaarden",
+      privacyUrl: "https://northside.test/privacy",
+      sepaCreditorId: "NL00ZZZ123456780000",
+      sepaMandateText:
+        "Ik machtig Northside Athletics om mijn lidmaatschap via SEPA incasso te innen.",
+      contractPdfTemplateKey: "contracts/templates/northside-v1.pdf",
+      waiverStorageKey: "waivers/northside/signed/",
+      waiverRetentionMonths: 84,
+    });
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(legal.statusLabel).toBe("Juridisch klaar");
+    expect(snapshot.legal.sepaCreditorId).toBe("NL00ZZZ123456780000");
+    expect(snapshot.healthReport.checks.some((check) => check.name === "Juridisch")).toBe(true);
+  });
+
   it("supports a six-month contract and sets the next renewal accordingly", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
