@@ -5,10 +5,13 @@ import {
   listActorTenants,
   toSessionClaims,
 } from "@claimtech/auth";
+import { toTenantId } from "@claimtech/tenant";
 import {
   DEMO_ROLE_OPTIONS,
+  buildActorForAccounts,
   buildPlatformActor,
   issueSessionForAccount,
+  issueSessionForAuthenticatedAccount,
   resolveViewerFromToken,
 } from "@/server/runtime/demo-session";
 
@@ -56,6 +59,85 @@ describe("demo session runtime", () => {
       roleLabel: "Eigenaar",
     });
     expect(viewer?.tenantContext.tenantId).toBe("northside-athletics");
+  });
+
+  it("issues one session for multi-club member accounts", async () => {
+    const token = await issueSessionForAuthenticatedAccount({
+      account: {
+        userId: "member_nina_northside",
+        tenantId: toTenantId("northside-athletics"),
+        email: "nina@northside.test",
+        displayName: "Nina de Boer",
+        roleKey: "member",
+        passwordHash: "irrelevant",
+        status: "active",
+        createdAt: "2026-04-24T00:00:00.000Z",
+        updatedAt: "2026-04-24T00:00:00.000Z",
+        linkedMemberId: "member_nina_northside",
+      },
+      tenant: {
+        id: toTenantId("northside-athletics"),
+        name: "Northside Athletics",
+        billing: {} as never,
+        legal: {} as never,
+        remoteAccess: {} as never,
+        createdAt: "2026-04-24T00:00:00.000Z",
+        updatedAt: "2026-04-24T00:00:00.000Z",
+      },
+      accounts: [
+        {
+          userId: "member_nina_northside",
+          tenantId: toTenantId("northside-athletics"),
+          email: "nina@northside.test",
+          displayName: "Nina de Boer",
+          roleKey: "member",
+          passwordHash: "irrelevant",
+          status: "active",
+          createdAt: "2026-04-24T00:00:00.000Z",
+          updatedAt: "2026-04-24T00:00:00.000Z",
+          linkedMemberId: "member_nina_northside",
+        },
+        {
+          userId: "member_nina_atlas",
+          tenantId: toTenantId("atlas-forge-club"),
+          email: "nina@northside.test",
+          displayName: "Nina de Boer",
+          roleKey: "member",
+          passwordHash: "irrelevant",
+          status: "active",
+          createdAt: "2026-04-24T00:00:00.000Z",
+          updatedAt: "2026-04-24T00:00:00.000Z",
+          linkedMemberId: "member_nina_atlas",
+        },
+      ],
+      tenants: [
+        {
+          id: toTenantId("northside-athletics"),
+          name: "Northside Athletics",
+          billing: {} as never,
+          legal: {} as never,
+          remoteAccess: {} as never,
+          createdAt: "2026-04-24T00:00:00.000Z",
+          updatedAt: "2026-04-24T00:00:00.000Z",
+        },
+        {
+          id: toTenantId("atlas-forge-club"),
+          name: "Atlas Forge Club",
+          billing: {} as never,
+          legal: {} as never,
+          remoteAccess: {} as never,
+          createdAt: "2026-04-24T00:00:00.000Z",
+          updatedAt: "2026-04-24T00:00:00.000Z",
+        },
+      ],
+    });
+    const viewer = await resolveViewerFromToken(token);
+
+    expect(viewer).toMatchObject({
+      roleKey: "member",
+      roleLabel: "Lid",
+    });
+    expect(listActorTenants(viewer!.actor)).toHaveLength(2);
   });
 
   it("uses development tenant context when NODE_ENV is not set", async () => {
@@ -113,5 +195,27 @@ describe("demo session runtime", () => {
     );
 
     await expect(resolveViewerFromToken(token)).resolves.toBeNull();
+  });
+
+  it("builds a combined actor for linked member accounts", async () => {
+    const actor = buildActorForAccounts([
+      {
+        userId: "member_nina_northside",
+        tenantId: toTenantId("northside-athletics"),
+        email: "nina@northside.test",
+        displayName: "Nina de Boer",
+        roleKey: "member",
+      },
+      {
+        userId: "member_nina_atlas",
+        tenantId: toTenantId("atlas-forge-club"),
+        email: "nina@northside.test",
+        displayName: "Nina de Boer",
+        roleKey: "member",
+      },
+    ]);
+
+    expect(actor.subjectId).toBe("member:nina@northside.test");
+    expect(listActorTenants(actor)).toHaveLength(2);
   });
 });

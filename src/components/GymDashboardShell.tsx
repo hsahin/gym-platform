@@ -21,6 +21,10 @@ export async function GymDashboardShell({
     redirect("/login");
   }
 
+  if (viewer.roleKey === "member") {
+    redirect("/reserve");
+  }
+
   const services = await getGymPlatformServices();
   const snapshot = await services.getDashboardSnapshot(
     viewer.actor,

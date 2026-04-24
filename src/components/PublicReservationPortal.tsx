@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Button, Card, Chip, Input, Label, TextArea } from "@heroui/react";
+import { Button, Card, Chip, TextArea } from "@heroui/react";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
-import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
 import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
-import type { PublicReservationSnapshot } from "@/server/types";
+import type { MemberReservationSnapshot } from "@/server/types";
 
-type BookingStep = "gym" | "classes" | "confirm" | "done";
+type BookingStep = "club" | "classes" | "confirm" | "done";
 
 function formatSessionMoment(startsAt: string) {
   return new Intl.DateTimeFormat("nl-NL", {
@@ -23,18 +22,18 @@ function formatSessionMoment(startsAt: string) {
   }).format(new Date(startsAt));
 }
 
+function formatClubCount(count: number) {
+  return `${count} club${count === 1 ? "" : "s"}`;
+}
+
 export function PublicReservationPortal({
   snapshot,
 }: {
-  snapshot: PublicReservationSnapshot;
+  snapshot: MemberReservationSnapshot;
 }) {
   const [bookingStep, setBookingStep] = useState<BookingStep>(
-    snapshot.tenantSlug ? "classes" : "gym",
+    snapshot.tenantSlug ? "classes" : "club",
   );
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [phoneCountry, setPhoneCountry] = useState("NL");
   const [notes, setNotes] = useState("");
   const [selectedClassSessionId, setSelectedClassSessionId] = useState(
     snapshot.classSessions[0]?.id ?? "",
@@ -48,9 +47,10 @@ export function PublicReservationPortal({
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setBookingStep(snapshot.tenantSlug ? "classes" : "gym");
+    setBookingStep(snapshot.tenantSlug ? "classes" : "club");
     setSelectedClassSessionId(snapshot.classSessions[0]?.id ?? "");
     setLastResult(null);
+    setNotes("");
   }, [snapshot.classSessions, snapshot.tenantSlug]);
 
   const selectedClass = useMemo(
@@ -95,10 +95,6 @@ export function PublicReservationPortal({
           body: JSON.stringify({
             tenantSlug: snapshot.tenantSlug ?? undefined,
             classSessionId: selectedClassSessionId,
-            fullName,
-            email,
-            phone,
-            phoneCountry,
             notes: notes || undefined,
           }),
         });
@@ -153,79 +149,101 @@ export function PublicReservationPortal({
     <div className="section-stack py-6 md:py-8">
       <header className="app-header">
         <div className="app-header__brand-copy">
-          <p className="text-sm font-semibold">GymOS Reservations</p>
+          <p className="text-sm font-semibold">Club reservations</p>
           <p className="text-muted text-sm">
-            {snapshot.tenantSlug ? snapshot.tenantName : "Kies eerst je gym"}
+            {snapshot.tenantSlug
+              ? snapshot.tenantName
+              : snapshot.hasEligibleMembership
+                ? "Kies een club"
+                : "Alleen voor bestaande leden"}
           </p>
         </div>
 
         <div className="app-header__actions">
-          {snapshot.tenantSlug ? (
+          {snapshot.hasEligibleMembership ? (
             <Chip size="sm" variant="soft">
-              {snapshot.classSessions.length} lessen live
+              {formatClubCount(snapshot.availableClubs.length)}
             </Chip>
           ) : null}
           <nav className="app-header__nav text-sm">
             <Link href="/" className="text-muted transition hover:text-foreground">
               Home
             </Link>
-            <Link href="/login" className="text-muted transition hover:text-foreground">
-              Team login
+            <Link href="/dashboard" className="text-muted transition hover:text-foreground">
+              Dashboard
             </Link>
           </nav>
           <ThemeModeSwitch />
         </div>
       </header>
 
-      {snapshot.tenantSlug ? (
-        <Segment selectedKey={bookingStep === "done" ? "confirm" : bookingStep}>
+      {!snapshot.hasEligibleMembership ? (
+        <Card className="rounded-[28px] border-border/80">
+          <Card.Header className="space-y-3">
+            <Card.Title>Geen actief lidmaatschap gevonden</Card.Title>
+            <Card.Description>
+              Dit account kan alleen reserveren bij clubs waar hetzelfde e-mailadres
+              al als actief of trial lid is gekoppeld.
+            </Card.Description>
+          </Card.Header>
+          <Card.Content className="section-stack">
+            <div className="flex flex-wrap gap-2">
+              <Chip size="sm" variant="soft">
+                {snapshot.memberDisplayName}
+              </Chip>
+              {snapshot.memberEmail ? (
+                <Chip size="sm" variant="tertiary">
+                  {snapshot.memberEmail}
+                </Chip>
+              ) : null}
+            </div>
+            <p className="text-muted text-sm leading-6">
+              Laat je club je memberprofiel koppelen aan dit e-mailadres of log in
+              met het account dat al op je lidmaatschap staat.
+            </p>
+          </Card.Content>
+        </Card>
+      ) : null}
+
+      {snapshot.hasEligibleMembership && snapshot.tenantSlug ? (
+        <Segment selectedKey={bookingStep === "done" ? "confirm" : bookingStep} size="sm">
           <Segment.Item id="classes">Lessen</Segment.Item>
-          <Segment.Item id="confirm">Gegevens</Segment.Item>
+          <Segment.Item id="confirm">Bevestigen</Segment.Item>
         </Segment>
       ) : null}
 
-      {bookingStep === "gym" ? (
+      {snapshot.hasEligibleMembership && bookingStep === "club" ? (
         <section className="section-stack">
           <div className="max-w-2xl space-y-3">
-            <h1 className="text-4xl font-semibold leading-tight">Kies je sportschool</h1>
+            <h1 className="text-4xl font-semibold leading-tight">Kies je club</h1>
             <p className="text-muted text-base leading-7">
-              Elke gym heeft een eigen roster, capaciteit en bevestigingsflow.
+              Je ziet alleen clubs waar dit account al als lid bekend is.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {snapshot.availableGyms.length > 0 ? (
-              snapshot.availableGyms.map((gym) => (
-                <Link key={gym.id} href={`/reserve?gym=${gym.slug}`}>
-                  <Card className="h-full rounded-[28px] border-border/80 transition hover:border-accent/30">
-                    <Card.Header>
-                      <Card.Title>{gym.name}</Card.Title>
-                      <Card.Description>
-                        Open direct het live rooster van deze gym.
-                      </Card.Description>
-                    </Card.Header>
-                    <Card.Content>
-                      <Chip size="sm" variant="tertiary">
-                        Eigen reserveringsflow
-                      </Chip>
-                    </Card.Content>
-                  </Card>
-                </Link>
-              ))
-            ) : (
-              <Card className="rounded-[28px] border-border/80 md:col-span-2 xl:col-span-3">
-                <Card.Content>
-                  <p className="text-muted text-sm">
-                    Er is nog geen gym aangemaakt. Meld eerst een gym owner aan.
-                  </p>
-                </Card.Content>
-              </Card>
-            )}
+            {snapshot.availableClubs.map((club) => (
+              <Link key={club.id} href={`/reserve?gym=${club.slug}`}>
+                <Card className="h-full rounded-[28px] border-border/80 transition hover:border-accent/30">
+                  <Card.Header>
+                    <Card.Title>{club.name}</Card.Title>
+                    <Card.Description>
+                      Open direct het rooster van deze club.
+                    </Card.Description>
+                  </Card.Header>
+                  <Card.Content>
+                    <Chip size="sm" variant="tertiary">
+                      Alleen voor leden
+                    </Chip>
+                  </Card.Content>
+                </Card>
+              </Link>
+            ))}
           </div>
         </section>
       ) : null}
 
-      {bookingStep === "classes" ? (
+      {snapshot.hasEligibleMembership && bookingStep === "classes" ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="section-stack">
             <div className="grid gap-4 sm:grid-cols-3">
@@ -243,67 +261,87 @@ export function PublicReservationPortal({
               ))}
             </div>
 
-            <div className="grid gap-4">
-              {snapshot.classSessions.map((classSession) => {
-                const isSelected = classSession.id === selectedClassSessionId;
-                const spotsLeft = Math.max(
-                  classSession.capacity - classSession.bookedCount,
-                  0,
-                );
+            {snapshot.classSessions.length > 0 ? (
+              <div className="grid gap-4">
+                {snapshot.classSessions.map((classSession) => {
+                  const isSelected = classSession.id === selectedClassSessionId;
+                  const spotsLeft = Math.max(
+                    classSession.capacity - classSession.bookedCount,
+                    0,
+                  );
 
-                return (
-                  <button
-                    key={classSession.id}
-                    type="button"
-                    className="text-left"
-                    onClick={() => setSelectedClassSessionId(classSession.id)}
-                  >
-                    <Card
-                      className={`rounded-[28px] border-border/80 transition ${
-                        isSelected ? "ring-2 ring-accent/20" : ""
-                      }`}
+                  return (
+                    <button
+                      key={classSession.id}
+                      type="button"
+                      className="text-left"
+                      onClick={() => setSelectedClassSessionId(classSession.id)}
                     >
-                      <Card.Header className="items-start justify-between gap-4">
-                        <div className="space-y-2">
-                          <Card.Title>{classSession.title}</Card.Title>
-                          <Card.Description>
-                            {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
-                          </Card.Description>
-                        </div>
-                        <Chip
-                          color={spotsLeft > 0 ? "success" : "warning"}
-                          size="sm"
-                          variant="soft"
-                        >
-                          {spotsLeft > 0 ? `${spotsLeft} plekken vrij` : "Wachtlijst"}
-                        </Chip>
-                      </Card.Header>
-                      <Card.Content className="flex flex-wrap gap-2">
-                        <Chip size="sm" variant="tertiary">
-                          {classSession.trainerName}
-                        </Chip>
-                        <Chip size="sm" variant="tertiary">
-                          {classSession.focus}
-                        </Chip>
-                        <Chip size="sm" variant="tertiary">
-                          {classSession.level}
-                        </Chip>
-                      </Card.Content>
-                    </Card>
-                  </button>
-                );
-              })}
-            </div>
+                      <Card
+                        className={`rounded-[28px] border-border/80 transition ${
+                          isSelected ? "ring-2 ring-accent/20" : ""
+                        }`}
+                      >
+                        <Card.Header className="items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <Card.Title>{classSession.title}</Card.Title>
+                            <Card.Description>
+                              {formatSessionMoment(classSession.startsAt)} ·{" "}
+                              {classSession.locationName}
+                            </Card.Description>
+                          </div>
+                          <Chip
+                            color={spotsLeft > 0 ? "success" : "warning"}
+                            size="sm"
+                            variant="soft"
+                          >
+                            {spotsLeft > 0 ? `${spotsLeft} plekken vrij` : "Wachtlijst"}
+                          </Chip>
+                        </Card.Header>
+                        <Card.Content className="flex flex-wrap gap-2">
+                          <Chip size="sm" variant="tertiary">
+                            {classSession.trainerName}
+                          </Chip>
+                          <Chip size="sm" variant="tertiary">
+                            {classSession.focus}
+                          </Chip>
+                          <Chip size="sm" variant="tertiary">
+                            {classSession.level}
+                          </Chip>
+                        </Card.Content>
+                      </Card>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card className="rounded-[28px] border-border/80">
+                <Card.Content>
+                  <p className="text-muted text-sm">
+                    Voor deze club staan nog geen actieve lessen live.
+                  </p>
+                </Card.Content>
+              </Card>
+            )}
           </div>
 
           <Card className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
-              <Card.Title>Geselecteerde les</Card.Title>
+              <Card.Title>Jouw reservering</Card.Title>
               <Card.Description>
-                Controleer de les en ga door naar je gegevens.
+                Je boekt als bestaand lid van {snapshot.tenantName}.
               </Card.Description>
             </Card.Header>
             <Card.Content className="section-stack">
+              <div className="flex flex-wrap gap-2">
+                <Chip size="sm" variant="soft">
+                  {snapshot.memberDisplayName}
+                </Chip>
+                <Chip size="sm" variant="tertiary">
+                  {snapshot.memberEmail}
+                </Chip>
+              </div>
+
               {selectedClass ? (
                 <>
                   <div className="space-y-2">
@@ -338,50 +376,36 @@ export function PublicReservationPortal({
         </section>
       ) : null}
 
-      {bookingStep === "confirm" ? (
+      {snapshot.hasEligibleMembership && bookingStep === "confirm" ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
-              <Card.Title>Je gegevens</Card.Title>
+              <Card.Title>Bevestig je plek</Card.Title>
               <Card.Description>
-                Alleen de gegevens die nodig zijn voor je reservering.
+                Je membergegevens komen uit je bestaande clubprofiel.
               </Card.Description>
             </Card.Header>
             <Card.Content>
               <form className="section-stack" onSubmit={handleSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="field-stack">
-                    <Label>Naam</Label>
-                    <Input
-                      fullWidth
-                      autoComplete="name"
-                      placeholder="Voor- en achternaam"
-                      value={fullName}
-                      onChange={(event) => setFullName(event.target.value)}
-                    />
+                    <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
+                      Lid
+                    </p>
+                    <p className="text-sm font-medium">{snapshot.memberDisplayName}</p>
                   </div>
                   <div className="field-stack">
-                    <Label>E-mail</Label>
-                    <Input
-                      fullWidth
-                      autoComplete="email"
-                      placeholder="naam@voorbeeld.nl"
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                    />
+                    <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
+                      Account
+                    </p>
+                    <p className="text-sm font-medium">{snapshot.memberEmail}</p>
                   </div>
                 </div>
 
-                <HeroPhoneNumberField
-                  country={phoneCountry}
-                  onCountryChange={setPhoneCountry}
-                  phone={phone}
-                  onPhoneChange={setPhone}
-                />
-
                 <div className="field-stack">
-                  <Label>Notities</Label>
+                  <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
+                    Notities
+                  </p>
                   <TextArea
                     fullWidth
                     rows={4}
@@ -395,7 +419,7 @@ export function PublicReservationPortal({
                   <Button variant="secondary" onPress={() => setBookingStep("classes")}>
                     Terug
                   </Button>
-                  <Button isDisabled={isPending} type="submit">
+                  <Button isDisabled={isPending || !selectedClassSessionId} type="submit">
                     {isPending ? "Verwerken..." : "Reserveer"}
                   </Button>
                 </div>
@@ -428,7 +452,9 @@ export function PublicReservationPortal({
                     </Chip>
                   </div>
                 </>
-              ) : null}
+              ) : (
+                <p className="text-muted text-sm">Kies eerst een les.</p>
+              )}
             </Card.Content>
           </Card>
         </section>
@@ -458,8 +484,11 @@ export function PublicReservationPortal({
             <Button onPress={() => setBookingStep("classes")}>
               Nog een les kiezen
             </Button>
-            <Link href="/" className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium">
-              Naar homepage
+            <Link
+              href="/dashboard"
+              className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
+            >
+              Naar dashboard
             </Link>
           </Card.Content>
         </Card>

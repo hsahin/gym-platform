@@ -10,12 +10,14 @@ import {
   getLocalTenantProfile,
   getLocalTenantProfileBySlug,
   hasLocalPlatformSetup,
+  listLocalMemberPortalAccountsByEmail,
   listLocalPlatformAccounts,
   listLocalTenants,
   markLocalTenantBillingAction,
   markLocalTenantRemoteAccessAction,
   readLocalPlatformState,
   slugifyTenantName,
+  upsertLocalMemberPortalAccount,
   updateLocalTenantBillingSettings,
   updateLocalPlatformData,
   updateLocalTenantRemoteAccess,
@@ -129,6 +131,47 @@ describe("platform state", () => {
     await expect(
       authenticateLocalAccount("owner@northside.test", "strong-pass-123"),
     ).resolves.toBeNull();
+  });
+
+  it("allows one member login to span multiple clubs when the same credentials are linked", async () => {
+    const firstTenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+    const secondTenant = await bootstrapLocalPlatform({
+      tenantName: "Atlas Forge Club",
+      ownerName: "Mustafa Ali",
+      ownerEmail: "owner@atlasforge.test",
+      password: "AtlasPass123!",
+    });
+
+    await upsertLocalMemberPortalAccount(firstTenant.tenant.id, {
+      memberId: "member_nina_northside",
+      displayName: "Nina de Boer",
+      email: "nina@northside.test",
+      password: "member-pass-123",
+    });
+    await upsertLocalMemberPortalAccount(secondTenant.tenant.id, {
+      memberId: "member_nina_atlas",
+      displayName: "Nina de Boer",
+      email: "nina@northside.test",
+      password: "member-pass-123",
+    });
+
+    const authenticated = await authenticateLocalAccount(
+      "nina@northside.test",
+      "member-pass-123",
+    );
+
+    expect(authenticated?.account.roleKey).toBe("member");
+    expect(authenticated?.accounts).toHaveLength(2);
+    expect(authenticated?.tenants.map((tenant) => tenant.id)).toEqual([
+      firstTenant.tenant.id,
+      secondTenant.tenant.id,
+    ]);
+    expect(await listLocalMemberPortalAccountsByEmail("nina@northside.test")).toHaveLength(2);
   });
 
   it("keeps team accounts scoped to their own gym", async () => {
@@ -391,7 +434,7 @@ describe("platform state", () => {
     await writeFile(
       stateFile,
       JSON.stringify({
-        version: 2,
+        version: 3,
         tenants: [
           {
             id: "legacy-gym",
@@ -443,7 +486,7 @@ describe("platform state", () => {
     const migrated = await readLocalPlatformState();
 
     expect(migrated).toMatchObject({
-      version: 2,
+      version: 3,
       tenants: [expect.objectContaining({ id: "single-gym" })],
       accounts: [expect.objectContaining({ tenantId: "single-gym" })],
     });

@@ -16,7 +16,7 @@ export default async function Home() {
   const viewer = await resolveViewerFromToken(token);
 
   if (viewer) {
-    redirect("/dashboard");
+    redirect(viewer.roleKey === "member" ? "/reserve" : "/dashboard");
   }
 
   try {

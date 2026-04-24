@@ -91,14 +91,18 @@ import {
 import { MongoGymStore } from "@/server/persistence/mongo-gym-store";
 import {
   createLocalPlatformAccount,
+  deleteLocalMemberPortalAccountByMemberId,
   deleteLocalPlatformAccount,
   getLocalTenantProfileBySlug,
   getLocalTenantProfile,
+  listLocalMemberPortalAccountsByEmail,
   listLocalPlatformAccounts,
   listLocalTenants,
   markLocalTenantBillingAction,
   markLocalTenantRemoteAccessAction,
   readLocalPlatformState,
+  syncLocalMemberPortalAccount,
+  upsertLocalMemberPortalAccount,
   updateLocalTenantBillingSettings,
   updateLocalTenantLegalSettings,
   updateLocalTenantRemoteAccess,
@@ -119,6 +123,8 @@ import type {
   ClassBooking,
   FeatureState,
   GymDashboardSnapshot,
+  GymMember,
+  MemberReservationSnapshot,
   PublicReservationSnapshot,
   RemoteAccessActionReceipt,
   RuntimeState,
@@ -179,6 +185,11 @@ const roleDefinitions = [
     key: "gym.frontdesk",
     scope: "tenant" as const,
     grants: ["dashboard.read", "members.read", "classes.read", "classes.book", "waivers.read"],
+  },
+  {
+    key: "gym.member",
+    scope: "tenant" as const,
+    grants: ["classes.read", "classes.book"],
   },
 ] as const;
 
@@ -367,7 +378,9 @@ function assertAccess(
 
 async function buildUserDirectory() {
   const directory = new InMemoryUserDirectory();
-  const accounts = await listLocalPlatformAccounts();
+  const accounts = (await listLocalPlatformAccounts()).filter(
+    (account) => account.roleKey !== "member",
+  );
 
   if (accounts.length === 0) {
     return directory;
@@ -826,7 +839,11 @@ async function buildStaffSummaries(
     runtime.userDirectory.listByTenant(tenantContext.tenantId),
     listLocalPlatformAccounts(tenantContext.tenantId),
   ]);
-  const accountByUserId = new Map(accounts.map((account) => [account.userId, account]));
+  const accountByUserId = new Map(
+    accounts
+      .filter((account) => account.roleKey !== "member")
+      .map((account) => [account.userId, account]),
+  );
 
   return users.map((user) => {
     const membership = user.memberships.find(
@@ -843,7 +860,7 @@ async function buildStaffSummaries(
       roleKey: account?.roleKey,
       updatedAt: account?.updatedAt,
     };
-  });
+  }).filter((staff) => staff.roleKey !== "member");
 }
 
 async function buildRemoteAccessSummary(
@@ -1026,6 +1043,11 @@ function createPublicBookingActor(
   });
 }
 
+type ReservableTenantAccess = {
+  readonly tenant: Awaited<ReturnType<typeof listLocalTenants>>[number];
+  readonly member: GymMember;
+};
+
 export interface GymPlatformServices {
   createRequestTenantContext(actor: AuthActor, tenantId?: string): TenantContext;
   getDashboardSnapshot(
@@ -1035,6 +1057,12 @@ export interface GymPlatformServices {
   getPublicReservationSnapshot(input?: {
     readonly tenantSlug?: string;
   }): Promise<PublicReservationSnapshot>;
+  getMemberReservationSnapshot(
+    actor: AuthActor,
+    input?: {
+      readonly tenantSlug?: string;
+    },
+  ): Promise<MemberReservationSnapshot>;
   listMembers(actor: AuthActor, tenantContext: TenantContext): Promise<GymDashboardSnapshot["members"]>;
   listLocations(
     actor: AuthActor,
@@ -1111,7 +1139,9 @@ export interface GymPlatformServices {
   createMember(
     actor: AuthActor,
     tenantContext: TenantContext,
-    input: CreateMemberInput,
+    input: CreateMemberInput & {
+      readonly portalPassword?: string;
+    },
   ): Promise<GymDashboardSnapshot["members"][number]>;
   updateMember(
     actor: AuthActor,
@@ -1128,6 +1158,18 @@ export interface GymPlatformServices {
     tenantContext: TenantContext,
     input: { readonly id: string; readonly expectedVersion: number },
   ): Promise<void>;
+  setMemberPortalPassword(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId: string;
+      readonly password: string;
+    },
+  ): Promise<{
+    readonly memberId: string;
+    readonly email: string;
+    readonly status: "active";
+  }>;
   importContractsAndMembers(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -1273,6 +1315,19 @@ export interface GymPlatformServices {
     messagePreview: string;
     messageReceipt: MessageReceipt;
   }>;
+  createMemberReservation(
+    actor: AuthActor,
+    input: {
+      readonly tenantSlug?: string;
+      readonly classSessionId: string;
+      readonly notes?: string;
+    },
+  ): Promise<{
+    booking: ClassBooking;
+    alreadyExisted: boolean;
+    messagePreview: string;
+    messageReceipt: MessageReceipt;
+  }>;
   cancelBooking(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -1297,7 +1352,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     actor: AuthActor,
     tenantContext: TenantContext,
     input: CreateBookingInput,
-    member: Awaited<ReturnType<GymStore["getMember"]>> extends infer T ? T : never,
+    member: Pick<GymMember, "id" | "fullName" | "phone" | "phoneCountry">,
     classSession: Awaited<ReturnType<GymStore["getClassSession"]>> extends infer T ? T : never,
   ) {
     const rateLimitResult = runtime.rateLimiter.consume({
@@ -1396,6 +1451,168 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     };
   }
 
+  async function listMemberPortalAccessMemberIds(tenantId: string) {
+    const accounts = await listLocalPlatformAccounts(tenantId);
+    return accounts
+      .filter(
+        (account) =>
+          account.roleKey === "member" &&
+          account.status === "active" &&
+          Boolean(account.linkedMemberId),
+      )
+      .map((account) => account.linkedMemberId!)
+      .sort();
+  }
+
+  function isReservableMemberStatus(status: GymMember["status"]) {
+    return status === "active" || status === "trial";
+  }
+
+  async function listReservableTenantAccess(actor: AuthActor) {
+    if (!actor.email) {
+      return [] satisfies ReadonlyArray<ReservableTenantAccess>;
+    }
+
+    const [accounts, tenants] = await Promise.all([
+      listLocalMemberPortalAccountsByEmail(actor.email),
+      listLocalTenants(),
+    ]);
+
+    if (accounts.length === 0) {
+      return [] satisfies ReadonlyArray<ReservableTenantAccess>;
+    }
+
+    const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant] as const));
+    const memberships = await Promise.all(
+      accounts.map(async (account) => {
+        const tenant = tenantById.get(account.tenantId);
+
+        if (!tenant || !account.linkedMemberId) {
+          return null;
+        }
+
+        const tenantContext = createPublicTenantContext(tenant.id);
+        const matchingMember = await runtime.store.getMember(
+          tenantContext,
+          account.linkedMemberId,
+        );
+
+        if (!matchingMember || !isReservableMemberStatus(matchingMember.status)) {
+          return null;
+        }
+
+        return {
+          tenant,
+          member: matchingMember,
+        };
+      }),
+    );
+
+    return memberships
+      .filter(
+        (membership): membership is NonNullable<(typeof memberships)[number]> =>
+          membership !== null,
+      )
+      .sort((left, right) => left.tenant.name.localeCompare(right.tenant.name));
+  }
+
+  async function resolveReservableTenantSelection(
+    actor: AuthActor,
+    tenantSlug?: string,
+  ) {
+    const memberships = await listReservableTenantAccess(actor);
+    const requestedTenant = tenantSlug
+      ? await getLocalTenantProfileBySlug(tenantSlug)
+      : null;
+    const selectedMembership = requestedTenant
+      ? memberships.find((membership) => membership.tenant.id === requestedTenant.id) ?? null
+      : memberships.length === 1
+        ? memberships[0] ?? null
+        : null;
+
+    return {
+      memberships,
+      selectedMembership,
+    };
+  }
+
+  async function buildMemberReservationSnapshot(
+    actor: AuthActor,
+    input?: { readonly tenantSlug?: string },
+  ) {
+    const { memberships, selectedMembership } = await resolveReservableTenantSelection(
+      actor,
+      input?.tenantSlug,
+    );
+    const baseMember = selectedMembership?.member ?? memberships[0]?.member ?? null;
+
+    if (!selectedMembership) {
+      return toClientPlain({
+        tenantName: memberships.length > 1 ? "Kies je club" : "Ledenreserveringen",
+        tenantSlug: null,
+        availableClubs: memberships.map((membership) => ({
+          id: membership.tenant.id,
+          slug: membership.tenant.id,
+          name: membership.tenant.name,
+        })),
+        classSessions: [],
+        memberDisplayName:
+          baseMember?.fullName || actor.displayName || actor.email || "Account",
+        memberEmail: baseMember?.email || actor.email || "",
+        hasEligibleMembership: memberships.length > 0,
+      } satisfies MemberReservationSnapshot);
+    }
+
+    const tenantContext = createPublicTenantContext(selectedMembership.tenant.id);
+    const [locations, trainers, classSessions] = await Promise.all([
+      runtime.store.listLocations(tenantContext),
+      runtime.store.listTrainers(tenantContext),
+      runtime.store.listClassSessions(tenantContext),
+    ]);
+
+    const locationById = new Map(
+      locations.map((location) => [location.id, location] as const),
+    );
+    const trainerById = new Map(
+      trainers.map((trainer) => [trainer.id, trainer] as const),
+    );
+
+    return toClientPlain({
+      tenantName: selectedMembership.tenant.name,
+      tenantSlug: selectedMembership.tenant.id,
+      availableClubs: memberships.map((membership) => ({
+        id: membership.tenant.id,
+        slug: membership.tenant.id,
+        name: membership.tenant.name,
+      })),
+      classSessions: [...classSessions]
+        .filter((classSession) => classSession.status === "active")
+        .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
+        .map((classSession) => ({
+          id: classSession.id,
+          title: classSession.title,
+          startsAt: classSession.startsAt,
+          durationMinutes: classSession.durationMinutes,
+          locationName:
+            locationById.get(classSession.locationId)?.name ?? "Onbekende locatie",
+          trainerName:
+            trainerById.get(classSession.trainerId)?.fullName ?? "Onbekende trainer",
+          capacity: classSession.capacity,
+          bookedCount: classSession.bookedCount,
+          waitlistCount: classSession.waitlistCount,
+          level: classSession.level,
+          focus: classSession.focus,
+        })),
+      memberDisplayName:
+        selectedMembership.member.fullName ||
+        actor.displayName ||
+        actor.email ||
+        "Lid",
+      memberEmail: selectedMembership.member.email || actor.email || "",
+      hasEligibleMembership: true,
+    } satisfies MemberReservationSnapshot);
+  }
+
   return {
     createRequestTenantContext(actor, tenantId) {
       const membership = listActorTenants(actor)[0];
@@ -1425,6 +1642,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         locations,
         membershipPlans,
         members,
+        memberPortalAccessMemberIds,
         trainers,
         classSessions,
         bookings,
@@ -1437,6 +1655,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         runtime.store.listLocations(tenantContext),
         runtime.store.listMembershipPlans(tenantContext),
         runtime.store.listMembers(tenantContext),
+        listMemberPortalAccessMemberIds(tenantContext.tenantId),
         runtime.store.listTrainers(tenantContext),
         runtime.store.listClassSessions(tenantContext),
         runtime.store.listBookings(tenantContext),
@@ -1560,6 +1779,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         locations,
         membershipPlans,
         members,
+        memberPortalAccessMemberIds,
         trainers,
         classSessions,
         bookings,
@@ -1646,6 +1866,9 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             focus: classSession.focus,
           })),
       });
+    },
+    async getMemberReservationSnapshot(actor, input) {
+      return buildMemberReservationSnapshot(actor, input);
     },
     async listMembers(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["members.read"]);
@@ -1827,16 +2050,30 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     },
     async createMember(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const { portalPassword, ...memberInput } = input;
       const member = await runtime.store.createMember(tenantContext, {
-        ...input,
-        phone: normalizePhoneForStorage(input.phone, input.phoneCountry),
+        ...memberInput,
+        phone: normalizePhoneForStorage(memberInput.phone, memberInput.phoneCountry),
       });
+
+      if (portalPassword?.trim()) {
+        await upsertLocalMemberPortalAccount(tenantContext.tenantId, {
+          memberId: member.id,
+          displayName: member.fullName,
+          email: member.email,
+          password: portalPassword.trim(),
+        });
+      }
+
       await runtime.auditLogger.write({
         action: "member.created",
         category: "members",
         actorId: actor.subjectId,
         tenantId: tenantContext.tenantId,
-        metadata: { memberId: member.id },
+        metadata: {
+          memberId: member.id,
+          portalAccessEnabled: Boolean(portalPassword?.trim()),
+        },
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return member;
@@ -1846,6 +2083,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       const member = await runtime.store.updateMember(tenantContext, {
         ...input,
         phone: normalizePhoneForStorage(input.phone, input.phoneCountry),
+      });
+      await syncLocalMemberPortalAccount(tenantContext.tenantId, {
+        memberId: member.id,
+        displayName: member.fullName,
+        email: member.email,
+        status: isReservableMemberStatus(member.status) ? "active" : "archived",
       });
       await runtime.auditLogger.write({
         action: "member.updated",
@@ -1860,6 +2103,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async archiveMember(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
       const member = await runtime.store.archiveMember(tenantContext, input);
+      await syncLocalMemberPortalAccount(tenantContext.tenantId, {
+        memberId: member.id,
+        displayName: member.fullName,
+        email: member.email,
+        status: "archived",
+      });
       await runtime.auditLogger.write({
         action: "member.archived",
         category: "members",
@@ -1873,6 +2122,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async deleteMember(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
       await runtime.store.deleteMember(tenantContext, input);
+      await deleteLocalMemberPortalAccountByMemberId(tenantContext.tenantId, input.id);
       await runtime.auditLogger.write({
         action: "member.deleted",
         category: "members",
@@ -1881,6 +2131,51 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         metadata: { memberId: input.id },
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+    },
+    async setMemberPortalPassword(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const member = await runtime.store.getMember(tenantContext, input.memberId);
+
+      if (!member) {
+        throw new AppError("Lid kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      if (!isReservableMemberStatus(member.status)) {
+        throw new AppError(
+          "Portaltoegang is alleen beschikbaar voor actieve of trial leden.",
+          {
+            code: "FORBIDDEN",
+          },
+        );
+      }
+
+      const account = await upsertLocalMemberPortalAccount(tenantContext.tenantId, {
+        memberId: member.id,
+        displayName: member.fullName,
+        email: member.email,
+        password: input.password.trim(),
+      });
+
+      await runtime.auditLogger.write({
+        action: "member.portal_access_updated",
+        category: "members",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          memberId: member.id,
+          accountId: account.userId,
+        },
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return {
+        memberId: member.id,
+        email: account.email,
+        status: "active" as const,
+      };
     },
     async importContractsAndMembers(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
@@ -2364,6 +2659,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         input.classSessionId,
       );
 
+      if (!member || !classSession) {
+        throw new AppError("Lid of les kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
       const bookingResult = await createBookingFlow(
         actor,
         tenantContext,
@@ -2498,6 +2799,71 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           source: "member_app",
         },
         member,
+        classSession,
+      );
+    },
+    async createMemberReservation(actor, input) {
+      const { memberships, selectedMembership } = await resolveReservableTenantSelection(
+        actor,
+        input.tenantSlug,
+      );
+
+      if (!selectedMembership) {
+        throw new AppError(
+          memberships.length > 1
+            ? "Kies eerst bij welke club je wilt reserveren."
+            : "Je kunt alleen reserveren bij clubs waar je al een actief lidmaatschap hebt.",
+          {
+            code: "FORBIDDEN",
+          },
+        );
+      }
+
+      const tenantContext = createPublicTenantContext(selectedMembership.tenant.id);
+      const classSession = await runtime.store.getClassSession(
+        tenantContext,
+        input.classSessionId,
+      );
+
+      if (!classSession) {
+        throw new AppError("Les kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      if (classSession.status !== "active") {
+        throw new AppError("Deze les is niet beschikbaar voor reserveringen.", {
+          code: "FORBIDDEN",
+        });
+      }
+
+      if (!isReservableMemberStatus(selectedMembership.member.status)) {
+        throw new AppError(
+          "Je lidmaatschap is niet actief genoeg om online te reserveren.",
+          {
+            code: "FORBIDDEN",
+          },
+        );
+      }
+
+      const bookingActor = createPublicBookingActor(
+        selectedMembership.tenant.id,
+        selectedMembership.member,
+      );
+
+      return createBookingFlow(
+        bookingActor,
+        tenantContext,
+        {
+          classSessionId: input.classSessionId,
+          memberId: selectedMembership.member.id,
+          idempotencyKey: `member-app:${selectedMembership.member.id}:${input.classSessionId}`,
+          phone: selectedMembership.member.phone,
+          phoneCountry: selectedMembership.member.phoneCountry,
+          notes: input.notes,
+          source: "member_app",
+        },
+        selectedMembership.member,
         classSession,
       );
     },

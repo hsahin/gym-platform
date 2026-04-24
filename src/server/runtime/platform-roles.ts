@@ -1,4 +1,5 @@
 export type PlatformRoleKey = "owner" | "manager" | "trainer" | "frontdesk";
+export type AccountRoleKey = PlatformRoleKey | "member";
 
 type BadgeVariant = "success" | "info" | "warning" | "secondary";
 
@@ -71,19 +72,28 @@ const roleToMembershipRole: Record<PlatformRoleKey, string> = {
   frontdesk: "gym.frontdesk",
 };
 
+const accountRoleToMembershipRole: Record<AccountRoleKey, string> = {
+  ...roleToMembershipRole,
+  member: "gym.member",
+};
+
 const membershipRoleToRoleKey = new Map(
-  Object.entries(roleToMembershipRole).map(([roleKey, membershipRole]) => [
+  Object.entries(accountRoleToMembershipRole).map(([roleKey, membershipRole]) => [
     membershipRole,
-    roleKey as PlatformRoleKey,
+    roleKey as AccountRoleKey,
   ]),
 );
 
-export function getRoleLabel(roleKey: PlatformRoleKey) {
+export function getRoleLabel(roleKey: AccountRoleKey) {
+  if (roleKey === "member") {
+    return "Lid";
+  }
+
   return PLATFORM_ROLE_OPTIONS.find((role) => role.key === roleKey)?.label ?? roleKey;
 }
 
-export function getMembershipRole(roleKey: PlatformRoleKey) {
-  return roleToMembershipRole[roleKey];
+export function getMembershipRole(roleKey: AccountRoleKey) {
+  return accountRoleToMembershipRole[roleKey];
 }
 
 export function getRoleKeyFromMembershipRole(membershipRole: string) {

@@ -251,6 +251,20 @@ export interface PublicReservationSnapshot {
   readonly classSessions: ReadonlyArray<PublicReservationClassSummary>;
 }
 
+export interface MemberReservationSnapshot {
+  readonly tenantName: string;
+  readonly tenantSlug: string | null;
+  readonly availableClubs: ReadonlyArray<{
+    readonly id: string;
+    readonly slug: string;
+    readonly name: string;
+  }>;
+  readonly classSessions: ReadonlyArray<PublicReservationClassSummary>;
+  readonly memberDisplayName: string;
+  readonly memberEmail: string;
+  readonly hasEligibleMembership: boolean;
+}
+
 export interface GymDashboardSnapshot {
   readonly tenantName: string;
   readonly actorName: string;
@@ -265,6 +279,7 @@ export interface GymDashboardSnapshot {
   readonly locations: ReadonlyArray<GymLocation>;
   readonly membershipPlans: ReadonlyArray<MembershipPlan>;
   readonly members: ReadonlyArray<GymMember>;
+  readonly memberPortalAccessMemberIds: ReadonlyArray<string>;
   readonly trainers: ReadonlyArray<GymTrainer>;
   readonly classSessions: ReadonlyArray<ClassSession>;
   readonly bookings: ReadonlyArray<ClassBooking>;

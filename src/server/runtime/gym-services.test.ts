@@ -1,8 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createAuthActor } from "@claimtech/auth";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  authenticateLocalAccount,
   bootstrapLocalPlatform,
   createLocalPlatformAccount,
 } from "@/server/persistence/platform-state";
@@ -29,6 +31,20 @@ async function bootstrapOwnerPlatform() {
     services,
     tenantContext,
   };
+}
+
+function createMemberViewer(email: string, tenantId: string, displayName = "Member Viewer") {
+  return createAuthActor({
+    subjectId: `member-viewer:${email}`,
+    email,
+    displayName,
+    tenantMemberships: [
+      {
+        tenantId,
+        roles: ["gym.member"],
+      },
+    ],
+  });
 }
 
 beforeEach(async () => {
@@ -108,6 +124,139 @@ describe("gym platform services", () => {
     expect(firstTenantContext.tenantId).toBe(firstTenant.tenant.id);
   });
 
+  it("shows only clubs where the signed-in member already exists", async () => {
+    const firstTenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+    const secondTenant = await bootstrapLocalPlatform({
+      tenantName: "Atlas Forge Club",
+      ownerName: "Mustafa Ali",
+      ownerEmail: "owner@atlasforge.test",
+      password: "AtlasPass123!",
+    });
+
+    const firstOwner = buildPlatformActor(firstTenant.accounts[0]!, firstTenant.tenant.id);
+    const secondOwner = buildPlatformActor(secondTenant.accounts[0]!, secondTenant.tenant.id);
+    const services = await createGymPlatformServices();
+    const firstTenantContext = services.createRequestTenantContext(
+      firstOwner,
+      firstTenant.tenant.id,
+    );
+    const secondTenantContext = services.createRequestTenantContext(
+      secondOwner,
+      secondTenant.tenant.id,
+    );
+
+    const firstLocation = await services.createLocation(firstOwner, firstTenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 120,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+    const secondLocation = await services.createLocation(secondOwner, secondTenantContext, {
+      name: "Atlas Forge Oost",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 120,
+      managerName: "Nadia Vermeer",
+      amenities: [],
+    });
+    const firstPlan = await services.createMembershipPlan(firstOwner, firstTenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const secondPlan = await services.createMembershipPlan(secondOwner, secondTenantContext, {
+      name: "Hyrox",
+      priceMonthly: 129,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const firstTrainer = await services.createTrainer(firstOwner, firstTenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: firstLocation.id,
+      specialties: [],
+      certifications: [],
+    });
+    const secondTrainer = await services.createTrainer(secondOwner, secondTenantContext, {
+      fullName: "Romy de Wit",
+      homeLocationId: secondLocation.id,
+      specialties: [],
+      certifications: [],
+    });
+
+    await services.createMember(firstOwner, firstTenantContext, {
+      fullName: "Nina de Boer",
+      email: "nina@northside.test",
+      phone: "0611112222",
+      phoneCountry: "NL",
+      membershipPlanId: firstPlan.id,
+      homeLocationId: firstLocation.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+      portalPassword: "member-pass-123",
+    });
+    await services.createMember(secondOwner, secondTenantContext, {
+      fullName: "Nina de Boer",
+      email: "nina@northside.test",
+      phone: "0611112222",
+      phoneCountry: "NL",
+      membershipPlanId: secondPlan.id,
+      homeLocationId: secondLocation.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+      portalPassword: "member-pass-123",
+    });
+    await services.createClassSession(secondOwner, secondTenantContext, {
+      title: "Forge HIIT",
+      locationId: secondLocation.id,
+      trainerId: secondTrainer.id,
+      startsAt: "2026-04-22T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 16,
+      level: "mixed",
+      focus: "engine",
+    });
+    await services.createClassSession(firstOwner, firstTenantContext, {
+      title: "Northside Lift",
+      locationId: firstLocation.id,
+      trainerId: firstTrainer.id,
+      startsAt: "2026-04-21T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 14,
+      level: "mixed",
+      focus: "strength",
+    });
+
+    const memberActor = createMemberViewer(
+      "nina@northside.test",
+      firstTenant.tenant.id,
+      "Nina de Boer",
+    );
+    const baseSnapshot = await services.getMemberReservationSnapshot(memberActor);
+    const secondSnapshot = await services.getMemberReservationSnapshot(memberActor, {
+      tenantSlug: secondTenant.tenant.id,
+    });
+
+    expect(baseSnapshot.hasEligibleMembership).toBe(true);
+    expect(baseSnapshot.tenantSlug).toBeNull();
+    expect(baseSnapshot.availableClubs).toHaveLength(2);
+    expect(baseSnapshot.availableClubs.map((club) => club.name)).toEqual([
+      "Atlas Forge Club",
+      "Northside Athletics",
+    ]);
+    expect(secondSnapshot.tenantName).toBe("Atlas Forge Club");
+    expect(secondSnapshot.classSessions[0]?.title).toBe("Forge HIIT");
+  });
+
   it("starts leeg en kan daarna kerngegevens opbouwen", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
@@ -166,6 +315,55 @@ describe("gym platform services", () => {
     expect(snapshot.members).toHaveLength(1);
     expect(snapshot.classSessions).toHaveLength(1);
     expect(snapshot.waivers[0]?.memberId).toBe(member.id);
+  });
+
+  it("can enable member portal access and authenticate the linked member account", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const membershipPlan = await services.createMembershipPlan(
+      ownerActor,
+      tenantContext,
+      {
+        name: "Unlimited",
+        priceMonthly: 119,
+        billingCycle: "monthly",
+        perks: ["Open gym"],
+      },
+    );
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Noa van Dijk",
+      email: "noa@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: ["morning"],
+      waiverStatus: "pending",
+    });
+
+    await services.setMemberPortalPassword(ownerActor, tenantContext, {
+      memberId: member.id,
+      password: "member-pass-123",
+    });
+
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const authenticated = await authenticateLocalAccount(
+      "noa@northside.test",
+      "member-pass-123",
+    );
+
+    expect(snapshot.memberPortalAccessMemberIds).toContain(member.id);
+    expect(authenticated?.account.roleKey).toBe("member");
+    expect(authenticated?.account.linkedMemberId).toBe(member.id);
   });
 
   it("lets owners edit, archive and safely delete managed gym records", async () => {
@@ -464,7 +662,7 @@ describe("gym platform services", () => {
     expect(second.booking.id).toBe(first.booking.id);
   });
 
-  it("allows a member to reserve through the public reservation flow", async () => {
+  it("allows a member to reserve through the member reservation flow", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
     const location = await services.createLocation(ownerActor, tenantContext, {
@@ -501,6 +699,7 @@ describe("gym platform services", () => {
       status: "active",
       tags: [],
       waiverStatus: "complete",
+      portalPassword: "member-pass-123",
     });
     const classSession = await services.createClassSession(ownerActor, tenantContext, {
       title: "Sunday Mobility",
@@ -512,12 +711,11 @@ describe("gym platform services", () => {
       level: "beginner",
       focus: "Mobility",
     });
+    const memberActor = createMemberViewer(member.email, tenantContext.tenantId, member.fullName);
 
-    const result = await services.createPublicReservation({
+    const result = await services.createMemberReservation(memberActor, {
+      tenantSlug: tenantContext.tenantId,
       classSessionId: classSession.id,
-      email: member.email,
-      phone: member.phone,
-      phoneCountry: member.phoneCountry,
       notes: "Ik ben er 10 minuten eerder.",
     });
 
@@ -526,7 +724,7 @@ describe("gym platform services", () => {
     expect(result.booking.status).toBe("confirmed");
   });
 
-  it("turns a new public reserver into a trial member before booking", async () => {
+  it("blocks reservations for accounts without a membership in that club", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
     const location = await services.createLocation(ownerActor, tenantContext, {
@@ -537,16 +735,6 @@ describe("gym platform services", () => {
       managerName: "Saar de Jong",
       amenities: [],
     });
-    const membershipPlan = await services.createMembershipPlan(
-      ownerActor,
-      tenantContext,
-      {
-        name: "Trial",
-        priceMonthly: 0,
-        billingCycle: "monthly",
-        perks: ["Eerste proefles"],
-      },
-    );
     const trainer = await services.createTrainer(ownerActor, tenantContext, {
       fullName: "Jay Hassan",
       homeLocationId: location.id,
@@ -563,30 +751,21 @@ describe("gym platform services", () => {
       level: "beginner",
       focus: "Mobility",
     });
+    const outsiderActor = createMemberViewer(
+      "outsider@example.nl",
+      tenantContext.tenantId,
+      "Outsider",
+    );
 
-    const result = await services.createPublicReservation({
-      classSessionId: classSession.id,
-      fullName: "Noor Bakker",
-      email: "noor@example.nl",
-      phone: "0612345678",
-      phoneCountry: "NL",
-    });
-    const members = await services.listMembers(ownerActor, tenantContext);
-    const createdMember = members.find((member) => member.email === "noor@example.nl");
-
-    expect(createdMember).toMatchObject({
-      fullName: "Noor Bakker",
-      membershipPlanId: membershipPlan.id,
-      homeLocationId: location.id,
-      status: "trial",
-      waiverStatus: "pending",
-    });
-    expect(result.booking.memberId).toBe(createdMember?.id);
-    expect(result.booking.memberName).toBe("Noor Bakker");
-    expect(result.booking.status).toBe("confirmed");
+    await expect(
+      services.createMemberReservation(outsiderActor, {
+        tenantSlug: tenantContext.tenantId,
+        classSessionId: classSession.id,
+      }),
+    ).rejects.toThrow("Je kunt alleen reserveren bij clubs waar je al een actief lidmaatschap hebt.");
   });
 
-  it("describes an existing checked-in reservation correctly in the public flow", async () => {
+  it("describes an existing checked-in reservation correctly in the member flow", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
     const location = await services.createLocation(ownerActor, tenantContext, {
@@ -623,6 +802,7 @@ describe("gym platform services", () => {
       status: "active",
       tags: [],
       waiverStatus: "complete",
+      portalPassword: "member-pass-123",
     });
     const classSession = await services.createClassSession(ownerActor, tenantContext, {
       title: "Sunday Mobility",
@@ -647,12 +827,11 @@ describe("gym platform services", () => {
       expectedVersion: booking.booking.version,
       channel: "frontdesk",
     });
+    const memberActor = createMemberViewer(member.email, tenantContext.tenantId, member.fullName);
 
-    const result = await services.createPublicReservation({
+    const result = await services.createMemberReservation(memberActor, {
+      tenantSlug: tenantContext.tenantId,
       classSessionId: classSession.id,
-      email: member.email,
-      phone: member.phone,
-      phoneCountry: member.phoneCountry,
     });
 
     expect(result.alreadyExisted).toBe(true);

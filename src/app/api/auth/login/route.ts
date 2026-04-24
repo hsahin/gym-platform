@@ -4,7 +4,7 @@ import { authenticateLocalAccount } from "@/server/persistence/platform-state";
 import { createClientRedirectResponse } from "@/server/http/client-redirect";
 import {
   SESSION_COOKIE_NAME,
-  issueSessionForAccount,
+  issueSessionForAuthenticatedAccount,
 } from "@/server/runtime/demo-session";
 
 const loginSchema = z.object({
@@ -36,11 +36,12 @@ export async function POST(request: Request) {
       return createLoginRedirect(request, "Onjuiste inloggegevens.");
     }
 
-    const token = await issueSessionForAccount(
-      authenticated.account,
-      authenticated.tenant.id,
+    const token = await issueSessionForAuthenticatedAccount(authenticated);
+    const response = createClientRedirectResponse(
+      authenticated.accounts.every((account) => account.roleKey === "member")
+        ? "/reserve"
+        : "/dashboard",
     );
-    const response = createClientRedirectResponse("/");
 
     response.cookies.set(SESSION_COOKIE_NAME, token, {
       httpOnly: true,

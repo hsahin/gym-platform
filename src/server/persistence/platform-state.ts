@@ -19,7 +19,10 @@ import {
   normalizeStoredRemoteAccessSettings,
   type StoredRemoteAccessSettings,
 } from "@/lib/remote-access";
-import type { PlatformRoleKey } from "@/server/runtime/platform-roles";
+import type {
+  AccountRoleKey,
+  PlatformRoleKey,
+} from "@/server/runtime/platform-roles";
 import {
   assertProductionEnvironmentReady,
 } from "@/server/runtime/production-readiness";
@@ -35,8 +38,9 @@ import {
   type MemoryGymStoreState,
 } from "@/server/persistence/memory-gym-store";
 
-const stateVersion = 2;
+const stateVersion = 3;
 const accountIdGenerator = createPrefixedIdGenerator({ prefix: "staff" });
+const memberAccountIdGenerator = createPrefixedIdGenerator({ prefix: "member" });
 const mongoPlatformStateCollection = "platform_state";
 const mongoPlatformStateDocumentId = "gym-platform-state";
 const productName = "gym-platform";
@@ -61,7 +65,8 @@ export interface LocalPlatformAccount {
   readonly tenantId: TenantId;
   readonly email: string;
   readonly displayName: string;
-  readonly roleKey: PlatformRoleKey;
+  readonly roleKey: AccountRoleKey;
+  readonly linkedMemberId?: string;
   readonly passwordHash: string;
   readonly status: "active" | "archived";
   readonly createdAt: string;
@@ -79,6 +84,13 @@ export interface LocalTenantBootstrapResult {
   readonly tenant: LocalTenantProfile;
   readonly accounts: ReadonlyArray<LocalPlatformAccount>;
   readonly data: MemoryGymStoreState;
+}
+
+export interface AuthenticatedLocalAccount {
+  readonly account: LocalPlatformAccount;
+  readonly tenant: LocalTenantProfile;
+  readonly accounts: ReadonlyArray<LocalPlatformAccount>;
+  readonly tenants: ReadonlyArray<LocalTenantProfile>;
 }
 
 export interface BootstrapPlatformInput {
@@ -102,6 +114,13 @@ export interface UpdatePlatformAccountInput {
   readonly email: string;
   readonly roleKey: PlatformRoleKey;
   readonly status: "active" | "archived";
+}
+
+export interface UpsertMemberPortalAccountInput {
+  readonly memberId: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly password: string;
 }
 
 export interface UpdateLocalTenantRemoteAccessInput {
@@ -147,9 +166,13 @@ type LegacyLocalPlatformState = {
   readonly version: 1;
   readonly tenant: Omit<LocalTenantProfile, "remoteAccess" | "billing">;
   readonly accounts: ReadonlyArray<
-    Omit<LocalPlatformAccount, "tenantId">
+    Omit<LocalPlatformAccount, "tenantId" | "linkedMemberId">
   >;
   readonly data: MemoryGymStoreState;
+};
+
+type LegacyVersion2LocalPlatformState = Omit<PersistedLocalPlatformState, "version"> & {
+  readonly version: number;
 };
 
 type PersistedLocalTenantProfile = Omit<LocalTenantProfile, "remoteAccess" | "billing" | "legal"> & {
@@ -215,6 +238,31 @@ async function resolveMongoStateCollection() {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function isMemberAccount(account: Pick<LocalPlatformAccount, "roleKey">) {
+  return account.roleKey === "member";
+}
+
+function assertUniqueTenantEmail(
+  accounts: ReadonlyArray<LocalPlatformAccount>,
+  tenantId: TenantId,
+  normalizedEmail: string,
+  excludeUserId?: string,
+) {
+  const conflict = accounts.some(
+    (account) =>
+      account.tenantId === tenantId &&
+      account.userId !== excludeUserId &&
+      normalizeEmail(account.email) === normalizedEmail,
+  );
+
+  if (conflict) {
+    throw new AppError("Er bestaat al een account met dit e-mailadres binnen deze gym.", {
+      code: "INVALID_INPUT",
+      details: { email: normalizedEmail, tenantId },
+    });
+  }
 }
 
 export function slugifyTenantName(input: string) {
@@ -343,6 +391,16 @@ function normalizeTenantProfile(
   };
 }
 
+function normalizeAccount(
+  account: LocalPlatformAccount,
+): LocalPlatformAccount {
+  return {
+    ...account,
+    email: normalizeEmail(account.email),
+    linkedMemberId: account.linkedMemberId?.trim() || undefined,
+  };
+}
+
 function normalizeState(
   state: PersistedLocalPlatformState,
 ): {
@@ -359,11 +417,24 @@ function normalizeState(
 
     return normalized;
   });
+  const accounts = state.accounts.map((account) => {
+    const normalized = normalizeAccount(account);
+
+    if (
+      normalized.email !== account.email ||
+      normalized.linkedMemberId !== account.linkedMemberId
+    ) {
+      changed = true;
+    }
+
+    return normalized;
+  });
 
   return {
     state: {
       ...state,
       tenants,
+      accounts,
     },
     changed,
   };
@@ -383,8 +454,23 @@ function migrateLegacyState(parsed: LegacyLocalPlatformState): LocalPlatformStat
     accounts: parsed.accounts.map((account) => ({
       ...account,
       tenantId: parsed.tenant.id,
+      linkedMemberId: undefined,
     })),
     data: parsed.data,
+  };
+}
+
+function migrateVersion2State(
+  parsed: LegacyVersion2LocalPlatformState,
+): LocalPlatformState {
+  const normalized = normalizeState({
+    ...parsed,
+    version: stateVersion,
+  });
+
+  return {
+    ...normalized.state,
+    version: stateVersion,
   };
 }
 
@@ -459,6 +545,12 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
       return null;
     }
 
+    if (document.version === 2 && "tenants" in document) {
+      const migrated = migrateVersion2State(document);
+      await persistState(migrated);
+      return migrated;
+    }
+
     if (document.version !== stateVersion || !("tenants" in document)) {
       throw new AppError("De platformstate in de database heeft een onverwachte versie.", {
         code: "INVALID_INPUT",
@@ -491,10 +583,19 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
       return null;
     }
 
-    const parsed = JSON.parse(raw) as PersistedLocalPlatformState | LegacyLocalPlatformState;
+    const parsed = JSON.parse(raw) as
+      | PersistedLocalPlatformState
+      | LegacyVersion2LocalPlatformState
+      | LegacyLocalPlatformState;
 
     if (parsed.version === 1 && "tenant" in parsed) {
       const migrated = migrateLegacyState(parsed);
+      await persistState(migrated);
+      return migrated;
+    }
+
+    if (parsed.version === 2 && "tenants" in parsed) {
+      const migrated = migrateVersion2State(parsed);
       await persistState(migrated);
       return migrated;
     }
@@ -587,7 +688,7 @@ export async function authenticateLocalAccount(
   email: string,
   password: string,
   tenantSlug?: string,
-) {
+): Promise<AuthenticatedLocalAccount | null> {
   const state = await readLocalPlatformState();
 
   if (!state) {
@@ -596,7 +697,8 @@ export async function authenticateLocalAccount(
 
   const normalizedEmail = normalizeEmail(email);
   const candidateAccounts = state.accounts.filter(
-    (entry) => normalizeEmail(entry.email) === normalizedEmail,
+    (entry) =>
+      entry.status === "active" && normalizeEmail(entry.email) === normalizedEmail,
   );
 
   if (candidateAccounts.length === 0) {
@@ -613,20 +715,34 @@ export async function authenticateLocalAccount(
     verifyPassword(password, entry.passwordHash),
   );
 
-  if (matchingAccounts.length !== 1) {
+  if (matchingAccounts.length === 0) {
+    return null;
+  }
+
+  const matchingTenants = matchingAccounts
+    .map((account) => state.tenants.find((entry) => entry.id === account.tenantId) ?? null)
+    .filter((tenant): tenant is LocalTenantProfile => tenant !== null);
+
+  if (matchingTenants.length !== matchingAccounts.length) {
+    return null;
+  }
+
+  if (matchingAccounts.length > 1 && !matchingAccounts.every(isMemberAccount)) {
     return null;
   }
 
   const [account] = matchingAccounts;
-  const tenant = state.tenants.find((entry) => entry.id === account.tenantId);
+  const [tenant] = matchingTenants;
 
-  if (!tenant) {
+  if (!account || !tenant) {
     return null;
   }
 
   return {
     account,
     tenant,
+    accounts: matchingAccounts,
+    tenants: matchingTenants,
   };
 }
 
@@ -642,6 +758,23 @@ export async function listLocalPlatformAccounts(tenantId?: string) {
   }
 
   return state.accounts.filter((account) => account.tenantId === tenantId);
+}
+
+export async function listLocalMemberPortalAccountsByEmail(email: string) {
+  const state = await readLocalPlatformState();
+
+  if (!state) {
+    return [];
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  return state.accounts.filter(
+    (account) =>
+      isMemberAccount(account) &&
+      account.status === "active" &&
+      account.linkedMemberId &&
+      normalizeEmail(account.email) === normalizedEmail,
+  );
 }
 
 export async function getLocalTenantProfile(tenantId?: string) {
@@ -689,18 +822,7 @@ export async function createLocalPlatformAccount(
     }
 
     const normalizedEmail = normalizeEmail(input.email);
-
-    if (
-      current.accounts.some(
-        (account) =>
-          account.tenantId === tenantId && normalizeEmail(account.email) === normalizedEmail,
-      )
-    ) {
-      throw new AppError("Er bestaat al een account met dit e-mailadres binnen deze gym.", {
-        code: "INVALID_INPUT",
-        details: { email: normalizedEmail, tenantId },
-      });
-    }
+    assertUniqueTenantEmail(current.accounts, tenant.id, normalizedEmail);
 
     const now = new Date().toISOString();
     const nextState: LocalPlatformState = {
@@ -731,6 +853,192 @@ export async function createLocalPlatformAccount(
 
     await persistState(nextState);
     return toTenantBootstrapResult(nextState, tenant.id);
+  });
+}
+
+export async function upsertLocalMemberPortalAccount(
+  tenantId: string,
+  input: UpsertMemberPortalAccountInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je ledenaccounts beheert.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor dit ledenaccount.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const existingAccount = current.accounts.find(
+      (account) =>
+        account.tenantId === tenant.id &&
+        isMemberAccount(account) &&
+        account.linkedMemberId === input.memberId,
+    );
+    const normalizedEmail = normalizeEmail(input.email);
+    const passwordHash = hashPassword(input.password);
+    assertUniqueTenantEmail(
+      current.accounts,
+      tenant.id,
+      normalizedEmail,
+      existingAccount?.userId,
+    );
+
+    const now = new Date().toISOString();
+    const nextAccount: LocalPlatformAccount = existingAccount
+      ? {
+          ...existingAccount,
+          displayName: input.displayName.trim(),
+          email: normalizedEmail,
+          passwordHash,
+          status: "active",
+          updatedAt: now,
+        }
+      : {
+          userId: memberAccountIdGenerator.next(),
+          tenantId: tenant.id,
+          email: normalizedEmail,
+          displayName: input.displayName.trim(),
+          roleKey: "member",
+          linkedMemberId: input.memberId,
+          passwordHash,
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        };
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenant.id ? { ...entry, updatedAt: now } : entry,
+      ),
+      accounts: (
+        existingAccount
+          ? current.accounts.map((account) =>
+              account.userId === existingAccount.userId ? nextAccount : account,
+            )
+          : [...current.accounts, nextAccount]
+      ).map((account) =>
+        isMemberAccount(account) && normalizeEmail(account.email) === normalizedEmail
+          ? {
+              ...account,
+              passwordHash,
+              updatedAt: now,
+            }
+          : account,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextAccount;
+  });
+}
+
+export async function syncLocalMemberPortalAccount(
+  tenantId: string,
+  input: {
+    readonly memberId: string;
+    readonly displayName: string;
+    readonly email: string;
+    readonly status: "active" | "archived";
+  },
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je ledenaccounts beheert.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const existingAccount = current.accounts.find(
+      (account) =>
+        account.tenantId === tenantId &&
+        isMemberAccount(account) &&
+        account.linkedMemberId === input.memberId,
+    );
+
+    if (!existingAccount) {
+      return null;
+    }
+
+    const normalizedEmail = normalizeEmail(input.email);
+    assertUniqueTenantEmail(
+      current.accounts,
+      existingAccount.tenantId,
+      normalizedEmail,
+      existingAccount.userId,
+    );
+
+    const now = new Date().toISOString();
+    const nextAccount: LocalPlatformAccount = {
+      ...existingAccount,
+      displayName: input.displayName.trim(),
+      email: normalizedEmail,
+      status: input.status,
+      updatedAt: now,
+    };
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === existingAccount.tenantId ? { ...entry, updatedAt: now } : entry,
+      ),
+      accounts: current.accounts.map((account) =>
+        account.userId === existingAccount.userId ? nextAccount : account,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextAccount;
+  });
+}
+
+export async function deleteLocalMemberPortalAccountByMemberId(
+  tenantId: string,
+  memberId: string,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je ledenaccounts beheert.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const matchingAccounts = current.accounts.filter(
+      (account) =>
+        account.tenantId === tenantId &&
+        isMemberAccount(account) &&
+        account.linkedMemberId === memberId,
+    );
+
+    if (matchingAccounts.length === 0) {
+      return 0;
+    }
+
+    const now = new Date().toISOString();
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId ? { ...entry, updatedAt: now } : entry,
+      ),
+      accounts: current.accounts.filter(
+        (account) =>
+          !(
+            account.tenantId === tenantId &&
+            isMemberAccount(account) &&
+            account.linkedMemberId === memberId
+          ),
+      ),
+    };
+
+    await persistState(nextState);
+    return matchingAccounts.length;
   });
 }
 
@@ -768,20 +1076,7 @@ export async function updateLocalPlatformAccount(
     }
 
     const normalizedEmail = normalizeEmail(input.email);
-
-    if (
-      current.accounts.some(
-        (entry) =>
-          entry.tenantId === tenantId &&
-          entry.userId !== input.userId &&
-          normalizeEmail(entry.email) === normalizedEmail,
-      )
-    ) {
-      throw new AppError("Er bestaat al een account met dit e-mailadres binnen deze gym.", {
-        code: "INVALID_INPUT",
-        details: { email: normalizedEmail, tenantId },
-      });
-    }
+    assertUniqueTenantEmail(current.accounts, account.tenantId, normalizedEmail, input.userId);
 
     const now = new Date().toISOString();
     const nextState: LocalPlatformState = {

@@ -7,7 +7,7 @@ import {
 import { requireViewerFromRequest } from "@/server/http/claimtech-request";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
-const createMemberSchema = z.object({
+const memberSchema = z.object({
   fullName: z.string().min(2),
   email: z.string().email(),
   phone: z.string().min(3),
@@ -18,7 +18,10 @@ const createMemberSchema = z.object({
   tags: z.array(z.string().min(1)).default([]),
   waiverStatus: z.enum(["complete", "pending"]),
 });
-const updateMemberSchema = createMemberSchema.extend({
+const createMemberSchema = memberSchema.extend({
+  portalPassword: z.string().min(8).optional(),
+});
+const updateMemberSchema = memberSchema.extend({
   id: z.string().min(1),
   expectedVersion: z.number().int().positive(),
 });

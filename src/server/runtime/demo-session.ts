@@ -7,14 +7,17 @@ import {
   type AuthActor,
 } from "@claimtech/auth";
 import { createTenantContext, type TenantContext } from "@claimtech/tenant";
-import type { LocalPlatformAccount } from "@/server/persistence/platform-state";
+import type {
+  AuthenticatedLocalAccount,
+  LocalPlatformAccount,
+} from "@/server/persistence/platform-state";
 import { isProductionRuntime } from "@/server/runtime/production-readiness";
 import {
   PLATFORM_ROLE_OPTIONS,
   getMembershipRole,
   getRoleKeyFromMembershipRole,
   getRoleLabel,
-  type PlatformRoleKey,
+  type AccountRoleKey,
 } from "@/server/runtime/platform-roles";
 
 export const SESSION_COOKIE_NAME = "claimtech-gym-session";
@@ -56,6 +59,33 @@ export function buildPlatformActor(
   });
 }
 
+export function buildActorForAccounts(
+  accounts: ReadonlyArray<
+    Pick<LocalPlatformAccount, "userId" | "tenantId" | "email" | "displayName" | "roleKey">
+  >,
+) {
+  const primaryAccount = accounts[0];
+
+  if (!primaryAccount) {
+    throw new Error("Er is minstens één account nodig om een sessie te maken.");
+  }
+
+  const subjectId =
+    accounts.length > 1 && accounts.every((account) => account.roleKey === "member")
+      ? `member:${primaryAccount.email}`
+      : primaryAccount.userId;
+
+  return createAuthActor({
+    subjectId,
+    email: primaryAccount.email,
+    displayName: primaryAccount.displayName,
+    tenantMemberships: accounts.map((account) => ({
+      tenantId: account.tenantId,
+      roles: [getMembershipRole(account.roleKey)],
+    })),
+  });
+}
+
 export async function issueSessionForAccount(
   account: Pick<LocalPlatformAccount, "userId" | "email" | "displayName" | "roleKey">,
   tenantId: string,
@@ -65,7 +95,15 @@ export async function issueSessionForAccount(
   return tokenService.sign(claims);
 }
 
-function resolveRoleKey(actor: AuthActor): PlatformRoleKey {
+export async function issueSessionForAuthenticatedAccount(
+  authenticated: AuthenticatedLocalAccount,
+) {
+  const tokenService = getTokenService();
+  const claims = toSessionClaims(buildActorForAccounts(authenticated.accounts));
+  return tokenService.sign(claims);
+}
+
+function resolveRoleKey(actor: AuthActor): AccountRoleKey {
   const membership = listActorTenants(actor)[0];
   const membershipRole = membership?.roles.find((role) =>
     Boolean(getRoleKeyFromMembershipRole(role)),
@@ -96,7 +134,7 @@ function createViewerTenantContext(actor: AuthActor, tenantContext?: TenantConte
 
 export interface ViewerSession {
   readonly actor: AuthActor;
-  readonly roleKey: PlatformRoleKey;
+  readonly roleKey: AccountRoleKey;
   readonly roleLabel: string;
   readonly tenantContext: TenantContext;
 }
@@ -128,6 +166,6 @@ export async function resolveViewerFromToken(token?: string | null) {
   }
 }
 
-export type DemoRoleKey = PlatformRoleKey;
+export type DemoRoleKey = AccountRoleKey;
 export const DEMO_ROLE_OPTIONS = PLATFORM_ROLE_OPTIONS;
 export const resolveDemoViewerFromToken = resolveViewerFromToken;

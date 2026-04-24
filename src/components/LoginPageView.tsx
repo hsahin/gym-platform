@@ -60,7 +60,7 @@ export function LoginPageView({
           <Card.Header className="space-y-4">
             <div className="flex flex-wrap gap-2">
               <Chip size="sm" variant="soft">
-                {mode === "login" ? "Team login" : "Nieuwe gym"}
+                {mode === "login" ? "Account login" : "Nieuwe gym"}
               </Chip>
               {roleLabel ? (
                 <Chip size="sm" variant="tertiary">
@@ -71,12 +71,12 @@ export function LoginPageView({
             <div className="space-y-3">
               <Card.Title className="text-2xl md:text-3xl">
                 {mode === "login"
-                  ? "Log in op je workspace."
+                  ? "Log in op je account."
                   : "Maak je eerste gym workspace aan."}
               </Card.Title>
               <Card.Description className="max-w-xl text-base">
                 {mode === "login"
-                  ? "Use the workspace, credentials, and role that match the account you want to manage."
+                  ? "Owners, teamleden en clubleden gebruiken hier hetzelfde account-entrypoint."
                   : "This creates the owner account and the tenant shell. The rest of the setup happens inside the dashboard."}
               </Card.Description>
             </div>

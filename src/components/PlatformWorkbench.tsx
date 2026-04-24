@@ -277,6 +277,11 @@ export function PlatformWorkbench({
   const [memberWaiverStatus, setMemberWaiverStatus] = useState<
     "complete" | "pending"
   >("pending");
+  const [memberPortalPassword, setMemberPortalPassword] = useState("");
+  const [existingMemberPortalMemberId, setExistingMemberPortalMemberId] = useState(
+    snapshot.members[0]?.id ?? "",
+  );
+  const [existingMemberPortalPassword, setExistingMemberPortalPassword] = useState("");
 
   const [classTitle, setClassTitle] = useState("");
   const [classLocationId, setClassLocationId] = useState(
@@ -415,6 +420,19 @@ export function PlatformWorkbench({
     snapshot.locations,
     trainerLocationId,
   ]);
+
+  useEffect(() => {
+    const eligibleMembers = snapshot.members.filter(
+      (member) => member.status === "active" || member.status === "trial",
+    );
+
+    if (
+      eligibleMembers.length > 0 &&
+      !eligibleMembers.some((member) => member.id === existingMemberPortalMemberId)
+    ) {
+      setExistingMemberPortalMemberId(eligibleMembers[0]!.id);
+    }
+  }, [existingMemberPortalMemberId, snapshot.members]);
 
   useEffect(() => {
     if (
@@ -1057,7 +1075,23 @@ export function PlatformWorkbench({
                   <TextArea fullWidth rows={4} placeholder="morning, hyrox, trial" value={memberTags} onChange={(event) => setMemberTags(event.target.value)} />
                 </Field>
 
-                <div className="flex justify-end">
+                <Field label="Portal wachtwoord (optioneel)">
+                  <Input
+                    fullWidth
+                    autoComplete="new-password"
+                    minLength={8}
+                    placeholder="Minimaal 8 tekens"
+                    type="password"
+                    value={memberPortalPassword}
+                    onChange={(event) => setMemberPortalPassword(event.target.value)}
+                  />
+                </Field>
+
+                <div className="flex justify-between gap-3">
+                  <div className="text-muted text-sm leading-6">
+                    Vul een wachtwoord in als dit lid direct moet kunnen inloggen op de
+                    reserveringsflow.
+                  </div>
                   <Button
                     isDisabled={isPending}
                     onPress={() =>
@@ -1072,6 +1106,7 @@ export function PlatformWorkbench({
                           status: memberStatus,
                           tags: parseList(memberTags),
                           waiverStatus: memberWaiverStatus,
+                          portalPassword: memberPortalPassword || undefined,
                         });
                         toast.success("Lid toegevoegd.");
                         setMemberName("");
@@ -1080,12 +1115,74 @@ export function PlatformWorkbench({
                         setMemberTags("");
                         setMemberStatus("active");
                         setMemberWaiverStatus("pending");
+                        setMemberPortalPassword("");
                       })
                     }
                   >
                     {isPending ? "Opslaan..." : "Lid toevoegen"}
                   </Button>
                 </div>
+
+                {snapshot.members.some(
+                  (member) => member.status === "active" || member.status === "trial",
+                ) ? (
+                  <div className="section-stack rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">Portaltoegang voor bestaand lid</p>
+                      <p className="text-muted text-sm">
+                        Stel een nieuw wachtwoord in of activeer toegang voor een bestaand lid.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <SelectField
+                        label="Lid"
+                        options={snapshot.members
+                          .filter((member) => member.status === "active" || member.status === "trial")
+                          .map((member) => ({
+                            value: member.id,
+                            label: `${member.fullName}${snapshot.memberPortalAccessMemberIds.includes(member.id) ? " · portal actief" : ""}`,
+                          }))}
+                        value={existingMemberPortalMemberId}
+                        onChange={setExistingMemberPortalMemberId}
+                      />
+                      <Field label="Nieuw wachtwoord">
+                        <Input
+                          fullWidth
+                          autoComplete="new-password"
+                          minLength={8}
+                          placeholder="Minimaal 8 tekens"
+                          type="password"
+                          value={existingMemberPortalPassword}
+                          onChange={(event) => setExistingMemberPortalPassword(event.target.value)}
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        isDisabled={
+                          isPending ||
+                          !existingMemberPortalMemberId ||
+                          existingMemberPortalPassword.trim().length < 8
+                        }
+                        variant="secondary"
+                        onPress={() =>
+                          runAction(async () => {
+                            await submitJson("/api/platform/member-portal-access", {
+                              memberId: existingMemberPortalMemberId,
+                              password: existingMemberPortalPassword,
+                            });
+                            toast.success("Portalwachtwoord opgeslagen.");
+                            setExistingMemberPortalPassword("");
+                          })
+                        }
+                      >
+                        {isPending ? "Opslaan..." : "Portal toegang opslaan"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
           </SectionCard>

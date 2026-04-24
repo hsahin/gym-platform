@@ -1,5 +1,11 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { PublicReservationPortal } from "@/components/PublicReservationPortal";
 import { RuntimeConfigurationState } from "@/components/RuntimeConfigurationState";
+import {
+  SESSION_COOKIE_NAME,
+  resolveViewerFromToken,
+} from "@/server/runtime/demo-session";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +15,18 @@ export default async function ReservePage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const viewer = await resolveViewerFromToken(token);
+
+  if (!viewer) {
+    redirect("/login");
+  }
+
+  if (viewer.roleKey !== "member") {
+    redirect("/dashboard");
+  }
+
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const gym =
     typeof resolvedSearchParams?.gym === "string"
@@ -19,7 +37,7 @@ export default async function ReservePage({
 
   try {
     const services = await getGymPlatformServices();
-    const snapshot = await services.getPublicReservationSnapshot({
+    const snapshot = await services.getMemberReservationSnapshot(viewer.actor, {
       tenantSlug: gym,
     });
 

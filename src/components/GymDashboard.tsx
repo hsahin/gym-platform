@@ -470,6 +470,11 @@ export function GymDashboard({
                         <Chip size="sm" variant="tertiary">
                           {member.waiverStatus}
                         </Chip>
+                        {snapshot.memberPortalAccessMemberIds.includes(member.id) ? (
+                          <Chip size="sm" variant="soft">
+                            portal
+                          </Chip>
+                        ) : null}
                       </div>
                     </ListView.Item>
                   );
