@@ -1,4 +1,4 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@claimtech/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
 import type { GymLocation } from "@/server/types";
 
 export function LocationView({ location }: { location: GymLocation }) {

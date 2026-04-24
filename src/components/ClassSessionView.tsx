@@ -1,4 +1,4 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@claimtech/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
 import type { ClassSession } from "@/server/types";
 
 function formatSlot(startsAt: string) {

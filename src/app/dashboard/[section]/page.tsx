@@ -4,14 +4,17 @@ import {
   resolveDashboardRouteKey,
 } from "@/lib/dashboard-pages";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardSectionPage({
   params,
 }: {
-  params: {
+  params: Promise<{
     section: string;
-  };
+  }>;
 }) {
-  const currentPage = resolveDashboardRouteKey(params.section);
+  const { section } = await params;
+  const currentPage = resolveDashboardRouteKey(section);
 
   if (!currentPage || currentPage === "overview") {
     notFound();

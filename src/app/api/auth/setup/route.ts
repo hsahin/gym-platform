@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { bootstrapLocalPlatform } from "@/server/persistence/local-platform-state";
+import { bootstrapLocalPlatform } from "@/server/persistence/platform-state";
 import { createClientRedirectResponse } from "@/server/http/client-redirect";
 import {
   SESSION_COOKIE_NAME,

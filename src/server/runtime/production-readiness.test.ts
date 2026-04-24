@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  assertLiveInfrastructureConfiguration,
   assertProductionEnvironmentReady,
+  getLiveInfrastructureConfigurationIssues,
   getProductionReadinessChecks,
   isProductionRuntime,
 } from "@/server/runtime/production-readiness";
@@ -32,6 +34,7 @@ describe("production readiness", () => {
     vi.stubEnv("NODE_ENV", "production");
     delete process.env.MONGODB_URI;
     delete process.env.MONGODB_DB_NAME;
+    delete process.env.REDIS_URL;
     vi.stubEnv("CLAIMTECH_SESSION_SECRET", "replace-me");
 
     expect(() => assertProductionEnvironmentReady()).toThrow(
@@ -40,6 +43,7 @@ describe("production readiness", () => {
 
     vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017");
     vi.stubEnv("MONGODB_DB_NAME", "gym-platform");
+    vi.stubEnv("REDIS_URL", "redis://localhost:6379");
     vi.stubEnv("CLAIMTECH_SESSION_SECRET", "super-secret-production-value");
 
     expect(() => assertProductionEnvironmentReady()).not.toThrow();
@@ -49,10 +53,15 @@ describe("production readiness", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017");
     vi.stubEnv("MONGODB_DB_NAME", "gym-platform");
+    vi.stubEnv("REDIS_URL", "redis://localhost:6379");
     vi.stubEnv("CLAIMTECH_SESSION_SECRET", "super-secret-production-value");
 
     const checks = getProductionReadinessChecks();
 
+    expect(checks.find((check) => check.key === "cache")).toMatchObject({
+      ready: true,
+      severity: "required",
+    });
     expect(checks.find((check) => check.key === "backups")).toMatchObject({
       ready: false,
       severity: "recommended",
@@ -61,5 +70,63 @@ describe("production readiness", () => {
       ready: false,
       severity: "recommended",
     });
+  });
+
+  it("fails fast on incomplete live messaging configuration", () => {
+    vi.stubEnv("ENABLE_REAL_MESSAGES", "true");
+    vi.stubEnv("WAHA_BASE_URL", "https://waha.example");
+
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen: Live berichten.",
+    );
+
+    expect(getLiveInfrastructureConfigurationIssues()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "messaging",
+          missingEnv: ["WAHA_API_KEY"],
+        }),
+      ]),
+    );
+  });
+
+  it("fails fast on incomplete live uploads configuration", () => {
+    vi.stubEnv("ENABLE_REAL_UPLOADS", "true");
+    vi.stubEnv("SPACES_BUCKET", "gym-files");
+
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen: Cloudopslag.",
+    );
+
+    expect(getLiveInfrastructureConfigurationIssues()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "storage",
+          missingEnv: expect.arrayContaining([
+            "SPACES_ENDPOINT",
+            "SPACES_REGION",
+            "SPACES_ACCESS_KEY_ID",
+            "SPACES_SECRET_ACCESS_KEY",
+          ]),
+        }),
+      ]),
+    );
+  });
+
+  it("fails fast when runtime datastores are not configured", () => {
+    vi.stubEnv("NODE_ENV", "development");
+
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen: MongoDB en Redis.",
+    );
+
+    expect(getLiveInfrastructureConfigurationIssues()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "runtime-datastores",
+          missingEnv: expect.arrayContaining(["MONGODB_URI", "REDIS_URL"]),
+        }),
+      ]),
+    );
   });
 });

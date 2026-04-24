@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticateLocalAccount } from "@/server/persistence/local-platform-state";
+import { authenticateLocalAccount } from "@/server/persistence/platform-state";
 import { createClientRedirectResponse } from "@/server/http/client-redirect";
 import {
   SESSION_COOKIE_NAME,
@@ -8,7 +8,6 @@ import {
 } from "@/server/runtime/demo-session";
 
 const loginSchema = z.object({
-  tenantSlug: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
 });
@@ -27,16 +26,11 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const payload = loginSchema.parse({
-      tenantSlug: formData.get("tenantSlug"),
       email: formData.get("email"),
       password: formData.get("password"),
     });
 
-    const authenticated = await authenticateLocalAccount(
-      payload.email,
-      payload.password,
-      payload.tenantSlug,
-    );
+    const authenticated = await authenticateLocalAccount(payload.email, payload.password);
 
     if (!authenticated) {
       return createLoginRedirect(request, "Onjuiste inloggegevens.");

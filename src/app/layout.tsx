@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Toaster } from "@claimtech/ui";
+import { ThemeAwareToaster } from "@/components/theme/ThemeAwareToaster";
+import { ThemeModeProvider } from "@/components/theme/ThemeModeProvider";
+import { getThemeInitializationScript } from "@/lib/theme-mode";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -26,12 +28,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="nl">
+    <html lang="nl" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: getThemeInitializationScript() }}
+          id="theme-init"
+        />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >
-        {children}
-        <Toaster richColors position="top-right" />
+        <ThemeModeProvider>
+          {children}
+          <ThemeAwareToaster />
+        </ThemeModeProvider>
       </body>
     </html>
   );

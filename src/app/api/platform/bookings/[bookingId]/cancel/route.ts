@@ -14,9 +14,9 @@ const cancelBookingSchema = z.object({
 export async function PATCH(
   request: NextRequest,
   context: {
-    params: {
+    params: Promise<{
       bookingId: string;
-    };
+    }>;
   },
 ) {
   return runApiHandler(request, async () => {
@@ -24,9 +24,10 @@ export async function PATCH(
     const services = await getGymPlatformServices();
     requireMutationSecurity(request);
     const payload = cancelBookingSchema.parse(await request.json());
+    const { bookingId } = await context.params;
 
     return services.cancelBooking(viewer.actor, viewer.tenantContext, {
-      bookingId: context.params.bookingId,
+      bookingId,
       expectedVersion: payload.expectedVersion,
     });
   });

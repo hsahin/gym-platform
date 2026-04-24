@@ -1,5 +1,5 @@
 import { formatPhoneForDisplay } from "@claimtech/i18n";
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@claimtech/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
 import { getMembershipBillingCycleLabel } from "@/lib/memberships";
 import type { GymMember, MembershipPlan } from "@/server/types";
 

@@ -22,7 +22,6 @@ import {
 import type { PlatformRoleKey } from "@/server/runtime/platform-roles";
 import {
   assertProductionEnvironmentReady,
-  isProductionRuntime,
 } from "@/server/runtime/production-readiness";
 import type {
   BillingPaymentMethod,
@@ -174,20 +173,12 @@ function getStateFilePath() {
   );
 }
 
-function shouldUseMongoPlatformState() {
-  if (isProductionRuntime()) {
-    return true;
-  }
-
-  if (process.env.PLATFORM_STATE_BACKEND === "file") {
-    return false;
-  }
-
-  return process.env.PLATFORM_STATE_BACKEND === "mongo" || Boolean(process.env.MONGODB_URI);
+function shouldUseTestFileFallback() {
+  return process.env.NODE_ENV === "test" && !process.env.MONGODB_URI;
 }
 
 async function resolveMongoStateCollection() {
-  if (!shouldUseMongoPlatformState()) {
+  if (shouldUseTestFileFallback()) {
     return null;
   }
 
@@ -196,7 +187,12 @@ async function resolveMongoStateCollection() {
       assertProductionEnvironmentReady();
 
       if (!process.env.MONGODB_URI) {
-        return null;
+        throw new AppError(
+          "MONGODB_URI is verplicht. De app gebruikt geen lokale platformstate meer.",
+          {
+            code: "INVALID_INPUT",
+          },
+        );
       }
 
       const client = createMongoClient({
@@ -323,7 +319,7 @@ function toTenantBootstrapResult(
   const tenant = state.tenants.find((entry) => entry.id === tenantId);
 
   if (!tenant) {
-    throw new AppError("Tenant niet gevonden in de lokale platformstate.", {
+    throw new AppError("Tenant niet gevonden in de platformstate.", {
       code: "RESOURCE_NOT_FOUND",
       details: { tenantId },
     });
@@ -421,6 +417,15 @@ async function persistState(state: LocalPlatformState) {
     return;
   }
 
+  if (!shouldUseTestFileFallback()) {
+    throw new AppError(
+      "Platformstate kan niet lokaal worden opgeslagen. Configureer MongoDB voor runtime data.",
+      {
+        code: "INVALID_INPUT",
+      },
+    );
+  }
+
   const stateFilePath = getStateFilePath();
   await mkdir(path.dirname(stateFilePath), { recursive: true });
   const temporaryPath = `${stateFilePath}.${process.pid}.${Date.now()}.tmp`;
@@ -470,6 +475,15 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
     return normalized.state;
   }
 
+  if (!shouldUseTestFileFallback()) {
+    throw new AppError(
+      "Platformstate kan niet lokaal worden gelezen. Configureer MONGODB_URI voor deze app.",
+      {
+        code: "INVALID_INPUT",
+      },
+    );
+  }
+
   try {
     const raw = await readFile(getStateFilePath(), "utf8");
 
@@ -486,7 +500,7 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
     }
 
     if (parsed.version !== stateVersion || !("tenants" in parsed)) {
-      throw new AppError("De lokale platformstate heeft een onverwachte versie.", {
+      throw new AppError("De platformstate heeft een onverwachte versie.", {
         code: "INVALID_INPUT",
         details: { expectedVersion: stateVersion, actualVersion: parsed.version },
       });
@@ -589,18 +603,21 @@ export async function authenticateLocalAccount(
     return null;
   }
 
-  const account = tenantSlug
-    ? candidateAccounts.find(
+  const scopedAccounts = tenantSlug
+    ? candidateAccounts.filter(
         (entry) => toTenantSlug(entry.tenantId) === toTenantSlug(tenantSlug),
       )
-    : candidateAccounts.length === 1
-      ? candidateAccounts[0]
-      : null;
+    : candidateAccounts;
 
-  if (!account || !verifyPassword(password, account.passwordHash)) {
+  const matchingAccounts = scopedAccounts.filter((entry) =>
+    verifyPassword(password, entry.passwordHash),
+  );
+
+  if (matchingAccounts.length !== 1) {
     return null;
   }
 
+  const [account] = matchingAccounts;
   const tenant = state.tenants.find((entry) => entry.id === account.tenantId);
 
   if (!tenant) {

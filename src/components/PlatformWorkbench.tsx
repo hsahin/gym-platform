@@ -4,22 +4,37 @@ import {
   useEffect,
   useState,
   useTransition,
-  type FormEvent,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  Label,
+  Switch,
+  TextArea,
+} from "@heroui/react";
+import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
+import { NativeSelect } from "@heroui-pro/react/native-select";
 import { toast } from "sonner";
-import { Badge, Button, PhoneNumberField } from "@claimtech/ui";
-import { getDashboardExperience } from "@/lib/dashboard-experience";
+import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
+import {
+  buildWeeklyRecurringLocalStarts,
+  CLASS_WEEKDAY_OPTIONS,
+  getWeekdayKeyForLocalDateTime,
+  type ClassWeekdayKey,
+} from "@/lib/class-recurrence";
+import {
+  BILLING_PAYMENT_METHOD_OPTIONS,
+  BILLING_PROVIDER_OPTIONS,
+} from "@/lib/billing";
 import {
   CONTRACT_IMPORT_REQUIRED_CSV_HEADER,
   MEMBERSHIP_BILLING_CYCLE_OPTIONS,
 } from "@/lib/memberships";
 import { getPlatformWorkbenchExperience } from "@/lib/platform-workbench-experience";
-import {
-  BILLING_PAYMENT_METHOD_OPTIONS,
-  BILLING_PROVIDER_OPTIONS,
-} from "@/lib/billing";
 import {
   REMOTE_ACCESS_BRIDGE_OPTIONS,
   REMOTE_ACCESS_PROVIDER_OPTIONS,
@@ -27,14 +42,6 @@ import {
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import { PLATFORM_ROLE_OPTIONS } from "@/server/runtime/platform-roles";
 import type { GymDashboardSnapshot } from "@/server/types";
-
-function fieldClassName() {
-  return "brand-input mt-2 h-11 w-full rounded-2xl px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-200";
-}
-
-function textareaClassName() {
-  return "brand-textarea mt-2 min-h-24 w-full rounded-2xl px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-200";
-}
 
 function parseList(input: string) {
   return input
@@ -80,68 +87,112 @@ async function submitJson<TResponse>(
   return result.data as TResponse;
 }
 
-function FormCard({
-  visible = true,
-  sectionId,
-  eyebrow,
+function statusToneToChip(tone: "complete" | "current" | "upcoming" | "locked") {
+  switch (tone) {
+    case "complete":
+      return { color: "success" as const, variant: "soft" as const };
+    case "current":
+      return { color: "accent" as const, variant: "soft" as const };
+    case "locked":
+      return { color: "default" as const, variant: "tertiary" as const };
+    default:
+      return { color: "warning" as const, variant: "tertiary" as const };
+  }
+}
+
+function Field({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="field-stack">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  readonly label: string;
+  readonly name?: string;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  readonly options: ReadonlyArray<{ value: string; label: string }>;
+  readonly disabled?: boolean;
+}) {
+  return (
+    <Field label={label}>
+      <NativeSelect fullWidth>
+        <NativeSelect.Trigger
+          disabled={disabled}
+          name={name}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => (
+            <NativeSelect.Option key={option.value} value={option.value}>
+              {option.label}
+            </NativeSelect.Option>
+          ))}
+          <NativeSelect.Indicator />
+        </NativeSelect.Trigger>
+      </NativeSelect>
+    </Field>
+  );
+}
+
+function SectionCard({
   title,
   description,
   countLabel,
   statusLabel,
   statusTone,
-  disabled,
   highlighted,
+  disabled,
   children,
 }: {
-  visible?: boolean;
-  sectionId?: string;
-  eyebrow?: string;
-  title: string;
-  description: string;
-  countLabel: string;
-  statusLabel: string;
-  statusTone: "complete" | "current" | "upcoming" | "locked";
-  disabled?: boolean;
-  highlighted?: boolean;
-  children: ReactNode;
+  readonly title: string;
+  readonly description: string;
+  readonly countLabel: string;
+  readonly statusLabel: string;
+  readonly statusTone: "complete" | "current" | "upcoming" | "locked";
+  readonly highlighted?: boolean;
+  readonly disabled?: boolean;
+  readonly children: ReactNode;
 }) {
-  if (!visible) {
-    return null;
-  }
+  const chip = statusToneToChip(statusTone);
 
   return (
-    <div
-      id={sectionId}
-      data-platform-step-key={sectionId?.replace("platform-step-", "")}
-      tabIndex={-1}
-      className={`editorial-panel relative overflow-hidden transition ${highlighted ? "ring-2 ring-teal-300 ring-offset-2" : ""}`}
+    <Card
+      className={`rounded-[28px] border-border/80 ${
+        highlighted ? "ring-2 ring-accent/20" : ""
+      } ${disabled ? "opacity-70" : ""}`}
     >
-      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-white/0 via-white/45 to-white/0" />
-      <div className="relative space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="eyebrow">{eyebrow ?? "Beheerformulier"}</p>
-            <h4 className="text-lg font-semibold text-slate-950">{title}</h4>
-            <p className="max-w-xl text-sm leading-6 text-slate-600">{description}</p>
-          </div>
-          <div className="space-y-2 text-right">
-            <span className="status-pill" data-tone={statusTone}>
-              {statusLabel}
-            </span>
-            <p className="text-sm font-medium text-slate-500">{countLabel}</p>
-          </div>
+      <Card.Header className="items-start justify-between gap-4">
+        <div className="space-y-2">
+          <Card.Title>{title}</Card.Title>
+          <Card.Description>{description}</Card.Description>
         </div>
-        <div className="subtle-divider" />
-      </div>
-      <div className={disabled ? "pointer-events-none mt-4 opacity-60" : "mt-4"}>
-        {children}
-      </div>
-    </div>
+        <div className="flex flex-col items-end gap-2">
+          <Chip color={chip.color} size="sm" variant={chip.variant}>
+            {statusLabel}
+          </Chip>
+          <span className="text-muted text-sm">{countLabel}</span>
+        </div>
+      </Card.Header>
+      <Card.Content className="section-stack">{children}</Card.Content>
+    </Card>
   );
-}
-
-function preventNativeSubmit(event: FormEvent<HTMLFormElement>) {
-  event.preventDefault();
 }
 
 export type PlatformWorkbenchSection =
@@ -195,16 +246,12 @@ export function PlatformWorkbench({
   const [planPrice, setPlanPrice] = useState("99");
   const [planBillingCycle, setPlanBillingCycle] = useState<
     "monthly" | "semiannual" | "annual"
-  >(
-    "monthly",
-  );
+  >("monthly");
   const [planPerks, setPlanPerks] = useState("");
   const [importLocationId, setImportLocationId] = useState(
     snapshot.locations[0]?.id ?? "",
   );
-  const [importCsv, setImportCsv] = useState(
-    CONTRACT_IMPORT_REQUIRED_CSV_HEADER,
-  );
+  const [importCsv, setImportCsv] = useState(CONTRACT_IMPORT_REQUIRED_CSV_HEADER);
 
   const [trainerName, setTrainerName] = useState("");
   const [trainerLocationId, setTrainerLocationId] = useState(
@@ -227,9 +274,9 @@ export function PlatformWorkbench({
     "active",
   );
   const [memberTags, setMemberTags] = useState("");
-  const [memberWaiverStatus, setMemberWaiverStatus] = useState<"complete" | "pending">(
-    "pending",
-  );
+  const [memberWaiverStatus, setMemberWaiverStatus] = useState<
+    "complete" | "pending"
+  >("pending");
 
   const [classTitle, setClassTitle] = useState("");
   const [classLocationId, setClassLocationId] = useState(
@@ -245,6 +292,11 @@ export function PlatformWorkbench({
     "mixed",
   );
   const [classFocus, setClassFocus] = useState("");
+  const [classRepeatsWeekly, setClassRepeatsWeekly] = useState(false);
+  const [classRecurringWeekdays, setClassRecurringWeekdays] = useState<
+    ReadonlyArray<ClassWeekdayKey>
+  >([]);
+  const [classRecurringUntil, setClassRecurringUntil] = useState("");
 
   const [staffName, setStaffName] = useState("");
   const [staffEmail, setStaffEmail] = useState("");
@@ -252,6 +304,7 @@ export function PlatformWorkbench({
   const [staffRoleKey, setStaffRoleKey] = useState<
     "owner" | "manager" | "trainer" | "frontdesk"
   >("manager");
+
   const [remoteAccessEnabled, setRemoteAccessEnabled] = useState(
     snapshot.remoteAccess.enabled,
   );
@@ -273,6 +326,7 @@ export function PlatformWorkbench({
   const [remoteAccessNotes, setRemoteAccessNotes] = useState(
     snapshot.remoteAccess.notes ?? "",
   );
+
   const [billingEnabled, setBillingEnabled] = useState(snapshot.payments.enabled);
   const [billingProvider, setBillingProvider] = useState(snapshot.payments.provider);
   const [billingProfileLabel, setBillingProfileLabel] = useState(
@@ -297,6 +351,7 @@ export function PlatformWorkbench({
     "Intake bundle",
   );
   const [billingPreviewMemberName, setBillingPreviewMemberName] = useState("");
+
   const [legalTermsUrl, setLegalTermsUrl] = useState(snapshot.legal.termsUrl);
   const [legalPrivacyUrl, setLegalPrivacyUrl] = useState(snapshot.legal.privacyUrl);
   const [legalSepaCreditorId, setLegalSepaCreditorId] = useState(
@@ -314,17 +369,7 @@ export function PlatformWorkbench({
   const [legalWaiverRetentionMonths, setLegalWaiverRetentionMonths] = useState(
     String(snapshot.legal.waiverRetentionMonths),
   );
-  const dashboardExperience = getDashboardExperience({
-    locationsCount: snapshot.locations.length,
-    membershipPlansCount: snapshot.membershipPlans.length,
-    trainersCount: snapshot.trainers.length,
-    membersCount: snapshot.members.length,
-    classSessionsCount: snapshot.classSessions.length,
-    bookingsCount: snapshot.bookings.length,
-    healthAttentionCount: snapshot.healthReport.checks.filter(
-      (check) => check.status !== "healthy",
-    ).length,
-  });
+
   const workbenchExperience = getPlatformWorkbenchExperience({
     locationsCount: snapshot.locations.length,
     membershipPlansCount: snapshot.membershipPlans.length,
@@ -334,9 +379,6 @@ export function PlatformWorkbench({
     staffCount: snapshot.staff.length,
     canManageStaff: snapshot.uiCapabilities.canManageStaff,
   });
-  const stepByKey = new Map(
-    workbenchExperience.steps.map((step) => [step.key, step] as const),
-  );
 
   useEffect(() => {
     if (
@@ -393,6 +435,27 @@ export function PlatformWorkbench({
   }, [classTrainerId, snapshot.trainers]);
 
   useEffect(() => {
+    if (!classRepeatsWeekly || !classStartsAt) {
+      return;
+    }
+
+    const anchorWeekday = getWeekdayKeyForLocalDateTime(classStartsAt);
+
+    if (anchorWeekday && classRecurringWeekdays.length === 0) {
+      setClassRecurringWeekdays([anchorWeekday]);
+    }
+
+    if (!classRecurringUntil) {
+      setClassRecurringUntil(classStartsAt.slice(0, 10));
+    }
+  }, [
+    classRecurringUntil,
+    classRecurringWeekdays,
+    classRepeatsWeekly,
+    classStartsAt,
+  ]);
+
+  useEffect(() => {
     setRemoteAccessEnabled(snapshot.remoteAccess.enabled);
     setRemoteAccessProvider(snapshot.remoteAccess.provider);
     setRemoteAccessBridgeType(snapshot.remoteAccess.bridgeType);
@@ -424,36 +487,13 @@ export function PlatformWorkbench({
     setLegalWaiverRetentionMonths(String(snapshot.legal.waiverRetentionMonths));
   }, [snapshot.legal]);
 
-  useEffect(() => {
-    if (!highlightStepKey) {
-      return;
-    }
-
-    const target = document.querySelector<HTMLElement>(
-      `[data-platform-step-key="${highlightStepKey}"]`,
-    );
-
-    if (!target) {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-      target.focus({ preventScroll: true });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [highlightStepKey]);
-
   function runAction(action: () => Promise<void>) {
     startTransition(async () => {
       try {
         await action();
         router.refresh();
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Opslaan is mislukt.",
-        );
+        toast.error(error instanceof Error ? error.message : "Opslaan is mislukt.");
       }
     });
   }
@@ -462,24 +502,14 @@ export function PlatformWorkbench({
     return visibleSections.has(section);
   }
 
-  function formTitle(launchTitle: string, pageTitle: string) {
-    return showLaunchHeader ? launchTitle : pageTitle;
-  }
-
-  function formEyebrow(step: number) {
-    return showLaunchHeader ? `Stap ${step}` : "Beheerformulier";
-  }
-
   function toggleBillingMethod(
     paymentMethod: (typeof snapshot.payments.paymentMethods)[number],
-    checked: boolean,
   ) {
     setBillingPaymentMethods((current) => {
-      const nextMethods = checked
-        ? current.includes(paymentMethod)
-          ? current
-          : [...current, paymentMethod]
-        : current.filter((entry) => entry !== paymentMethod);
+      const exists = current.includes(paymentMethod);
+      const nextMethods = exists
+        ? current.filter((entry) => entry !== paymentMethod)
+        : [...current, paymentMethod];
 
       if (!nextMethods.includes(billingPreviewMethod)) {
         setBillingPreviewMethod(nextMethods[0] ?? "one_time");
@@ -489,1489 +519,1130 @@ export function PlatformWorkbench({
     });
   }
 
-  const remoteAccessCountLabel = snapshot.remoteAccess.deviceLabel
-    ? snapshot.remoteAccess.deviceLabel
-    : "Geen slot gekoppeld";
-  const remoteAccessStatusTone: "complete" | "current" | "upcoming" | "locked" =
-    !snapshot.uiCapabilities.canManageRemoteAccess
-      ? "locked"
-      : snapshot.remoteAccess.connectionStatus === "configured" &&
-          snapshot.remoteAccess.enabled
-        ? "complete"
-        : snapshot.remoteAccess.connectionStatus === "attention"
-          ? "current"
-          : "upcoming";
-  const paymentsCountLabel =
-    snapshot.payments.connectionStatus !== "not_configured" &&
-    snapshot.payments.paymentMethods.length > 0
-      ? formatCountLabel(
-          snapshot.payments.paymentMethods.length,
-          "betaalflow klaar",
-          "betaalflows klaar",
-        )
-      : "Nog niet gekoppeld";
-  const paymentsStatusTone: "complete" | "current" | "upcoming" | "locked" =
-    !snapshot.uiCapabilities.canManagePayments
-      ? "locked"
-      : snapshot.payments.connectionStatus === "configured" &&
-          snapshot.payments.enabled
-        ? "complete"
-        : snapshot.payments.connectionStatus === "attention"
-          ? "current"
-          : "upcoming";
-  const formGridClassName =
-    visibleSections.size === 1 ? "grid gap-4" : "grid gap-4 xl:grid-cols-2";
+  function isHighlighted(...keys: string[]) {
+    return !!highlightStepKey && keys.includes(highlightStepKey);
+  }
+
+  const recurringClassStarts = classRepeatsWeekly
+    ? buildWeeklyRecurringLocalStarts({
+        anchorLocalStart: classStartsAt,
+        weekdays: classRecurringWeekdays,
+        untilDate: classRecurringUntil,
+      })
+    : [];
+  const classCreateCount = classRepeatsWeekly
+    ? recurringClassStarts.length
+    : classStartsAt
+      ? 1
+      : 0;
+
+  const nextStep = workbenchExperience.steps.find(
+    (step) => step.statusTone === "current" || step.statusTone === "upcoming",
+  );
+  const launchStats = [
+    { label: "Vestigingen", value: snapshot.locations.length },
+    { label: "Memberships", value: snapshot.membershipPlans.length },
+    { label: "Trainers", value: snapshot.trainers.length },
+    { label: "Leden", value: snapshot.members.length },
+    { label: "Lessen", value: snapshot.classSessions.length },
+  ];
 
   if (!snapshot.uiCapabilities.canManagePlatform) {
     return (
-      <div className="rounded-[28px] border border-slate-200/80 bg-white/80 p-5 text-sm leading-6 text-slate-600">
-        Alleen accounts met beheerrechten kunnen locaties, memberships, teamleden
-        en lessen toevoegen.
-      </div>
+      <Card className="rounded-[28px] border-border/80">
+        <Card.Content>
+          <p className="text-muted text-sm">
+            Alleen accounts met beheerrechten kunnen locaties, memberships,
+            teamleden, betalingen en lessen toevoegen.
+          </p>
+        </Card.Content>
+      </Card>
     );
   }
 
   return (
-    <section className="relative space-y-5 overflow-hidden rounded-[32px] border border-slate-200/80 bg-slate-950/[0.03] p-5 md:p-6">
-      <div className="pointer-events-none absolute left-[-8rem] top-[-8rem] h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(242,140,82,0.2),transparent_68%)] blur-2xl" />
-      <div className="pointer-events-none absolute bottom-[-10rem] right-[-8rem] h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(15,118,110,0.16),transparent_68%)] blur-2xl" />
-
+    <section className="section-stack">
       {showLaunchHeader ? (
         <>
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="editorial-panel space-y-4">
-              <div className="space-y-2">
-                <p className="eyebrow">Inrichten</p>
-                <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
-                  Bouw je eigen live dataset op
-                </h3>
-                <p className="max-w-3xl text-sm leading-6 text-slate-600">
-                  Deze omgeving start leeg. Voeg eerst je basisgegevens toe, daarna
-                  werken boekingen, check-ins en rapportage met je eigen data.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="soft-card">
-                  <p className="text-sm font-medium text-slate-500">Vestigingen</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">
-                    {snapshot.locations.length}
-                  </p>
-                </div>
-                <div className="soft-card">
-                  <p className="text-sm font-medium text-slate-500">Memberships</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">
-                    {snapshot.membershipPlans.length}
-                  </p>
-                </div>
-                <div className="soft-card">
-                  <p className="text-sm font-medium text-slate-500">Trainers</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">
-                    {snapshot.trainers.length}
-                  </p>
-                </div>
-                <div className="soft-card">
-                  <p className="text-sm font-medium text-slate-500">Leden</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">
-                    {snapshot.members.length}
-                  </p>
-                </div>
-                <div className="soft-card">
-                  <p className="text-sm font-medium text-slate-500">Lessen</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">
-                    {snapshot.classSessions.length}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="command-deck">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
+          <Card className="rounded-[32px] border-border/80">
+            <Card.Header className="space-y-3">
+              <Chip size="sm" variant="soft">
                 Launch board
-              </p>
-              <p className="mt-3 text-3xl font-semibold tracking-tight text-white">
-                {dashboardExperience.progressValue}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-white/70">
-                {dashboardExperience.progressHelper}
-              </p>
-
-              <div className="subtle-divider mt-5 pt-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-white/50">
-                  Volgende stap
-                </p>
-                <p className="mt-2 text-xl font-semibold text-white">
-                  {dashboardExperience.nextStep.label}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-white/65">
-                  {dashboardExperience.nextStep.helper}
-                </p>
+              </Chip>
+              <Card.Title>Build the live dataset before you scale the team.</Card.Title>
+              <Card.Description>
+                Locations, memberships, trainers, classes, members, and staff all write
+                directly into the operational workspace.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className="section-stack">
+              <div className="grid gap-4 md:grid-cols-5">
+                {launchStats.map((stat) => (
+                  <Card
+                    key={stat.label}
+                    className="rounded-2xl border-border/70 bg-surface-secondary"
+                  >
+                    <Card.Content className="metric-stack">
+                      <p className="text-muted text-sm">{stat.label}</p>
+                      <p className="text-3xl font-semibold tabular-nums">{stat.value}</p>
+                    </Card.Content>
+                  </Card>
+                ))}
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Badge variant="secondary">
-                  {formatCountLabel(snapshot.locations.length, "vestiging", "vestigingen")}
-                </Badge>
-                <Badge variant="secondary">
-                  {formatCountLabel(snapshot.membershipPlans.length, "membership", "memberships")}
-                </Badge>
-                <Badge variant="secondary">
-                  {formatCountLabel(snapshot.trainers.length, "trainer", "trainers")}
-                </Badge>
-                <Badge variant="secondary">
-                  {formatCountLabel(snapshot.members.length, "lid", "leden")}
-                </Badge>
-                <Badge variant="secondary">
-                  {formatCountLabel(snapshot.classSessions.length, "les", "lessen")}
-                </Badge>
-              </div>
-            </div>
-          </div>
+              {nextStep ? (
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Content className="space-y-2">
+                    <p className="text-muted text-sm">Volgende focus</p>
+                    <p className="text-xl font-semibold">{nextStep.title}</p>
+                    <p className="text-muted text-sm leading-6">{nextStep.helper}</p>
+                  </Card.Content>
+                </Card>
+              ) : null}
+            </Card.Content>
+          </Card>
 
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            {workbenchExperience.steps.map((step) => (
-              <article
-                key={step.key}
-                className="workbench-step-card"
-                data-tone={step.statusTone}
-              >
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="space-y-3">
-                    <p className="eyebrow">Stap {step.order}</p>
-                    <div>
-                      <p className="text-lg font-semibold text-slate-950">{step.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{step.helper}</p>
+          <div className="grid gap-4 xl:grid-cols-3">
+            {workbenchExperience.steps.map((step) => {
+              const chip = statusToneToChip(step.statusTone);
+
+              return (
+                <Card key={step.key} className="rounded-[28px] border-border/80">
+                  <Card.Header className="items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <Card.Description>Stap {step.order}</Card.Description>
+                      <Card.Title>{step.title}</Card.Title>
                     </div>
-                  </div>
-                  <span className="status-pill" data-tone={step.statusTone}>
-                    {step.statusLabel}
-                  </span>
-                </div>
-                <div className="relative mt-5 flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-slate-500">Live status</p>
-                  <p className="text-base font-semibold text-slate-950">{step.countLabel}</p>
-                </div>
-              </article>
-            ))}
+                    <Chip color={chip.color} size="sm" variant={chip.variant}>
+                      {step.statusLabel}
+                    </Chip>
+                  </Card.Header>
+                  <Card.Content className="space-y-2">
+                    <p className="text-muted text-sm">{step.helper}</p>
+                    <p className="text-sm font-medium">{step.countLabel}</p>
+                  </Card.Content>
+                </Card>
+              );
+            })}
           </div>
         </>
       ) : null}
 
-      <div className={formGridClassName}>
-        <FormCard
-          visible={shouldShowSection("locations")}
-          sectionId="platform-step-locations"
-          highlighted={highlightStepKey === "locations"}
-          eyebrow={formEyebrow(1)}
-          title={formTitle("1. Voeg een vestiging toe", "Vestiging toevoegen")}
-          description="Maak een echte locatie aan met manager, capaciteit, stad, wijk en faciliteiten. Deze vestiging wordt daarna direct beschikbaar voor trainers, leden en lessen."
-          countLabel={stepByKey.get("locations")?.countLabel ?? "0 vestigingen"}
-          statusLabel={stepByKey.get("locations")?.statusLabel ?? "Nu"}
-          statusTone={stepByKey.get("locations")?.statusTone ?? "current"}
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-sm font-medium text-slate-800">
-              Naam
-              <input
-                className={fieldClassName()}
-                value={locationName}
-                onChange={(event) => setLocationName(event.target.value)}
-                placeholder="Downtown Club"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-800">
-              Manager
-              <input
-                className={fieldClassName()}
-                value={locationManagerName}
-                onChange={(event) => setLocationManagerName(event.target.value)}
-                placeholder="Naam manager"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-800">
-              Stad
-              <input
-                className={fieldClassName()}
-                value={locationCity}
-                onChange={(event) => setLocationCity(event.target.value)}
-                placeholder="Amsterdam"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-800">
-              Wijk
-              <input
-                className={fieldClassName()}
-                value={locationNeighborhood}
-                onChange={(event) => setLocationNeighborhood(event.target.value)}
-                placeholder="Oost"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-800">
-              Capaciteit
-              <input
-                className={fieldClassName()}
-                type="number"
-                min={1}
-                value={locationCapacity}
-                onChange={(event) => setLocationCapacity(event.target.value)}
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-800">
-              Faciliteiten
-              <textarea
-                className={textareaClassName()}
-                value={locationAmenities}
-                onChange={(event) => setLocationAmenities(event.target.value)}
-                placeholder="Bijvoorbeeld: sauna, open gym, PT studio"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 flex justify-end">
-            <Button
-              type="button"
-              disabled={isPending}
-              onClick={() =>
-                runAction(async () => {
-                  await submitJson("/api/platform/locations", {
-                    name: locationName,
-                    city: locationCity,
-                    neighborhood: locationNeighborhood,
-                    capacity: Number(locationCapacity),
-                    managerName: locationManagerName,
-                    amenities: parseList(locationAmenities),
-                  });
-
-                  toast.success("Vestiging toegevoegd.");
-                  setLocationName("");
-                  setLocationCity("");
-                  setLocationNeighborhood("");
-                  setLocationCapacity("120");
-                  setLocationManagerName("");
-                  setLocationAmenities("");
-                })
-              }
-            >
-              {isPending ? "Opslaan..." : "Vestiging toevoegen"}
-            </Button>
-          </div>
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("contracts")}
-          sectionId="platform-step-memberships"
-          highlighted={highlightStepKey === "memberships"}
-          eyebrow={formEyebrow(2)}
-          title={formTitle("2. Maak een membership", "Contract toevoegen")}
-          description="Leg een verkoopbaar contract vast: maand, 6 maanden of jaar, inclusief prijs en voordelen voor leden."
-          countLabel={stepByKey.get("memberships")?.countLabel ?? "0 memberships"}
-          statusLabel={stepByKey.get("memberships")?.statusLabel ?? "Daarna"}
-          statusTone={stepByKey.get("memberships")?.statusTone ?? "upcoming"}
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-sm font-medium text-slate-800">
-              Naam
-              <input
-                className={fieldClassName()}
-                value={planName}
-                onChange={(event) => setPlanName(event.target.value)}
-                placeholder="Unlimited"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-800">
-              Prijs per maand
-              <input
-                className={fieldClassName()}
-                type="number"
-                min={1}
-                step="0.01"
-                value={planPrice}
-                onChange={(event) => setPlanPrice(event.target.value)}
-              />
-            </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Contractduur
-                  <select
-                    className={fieldClassName()}
-                    value={planBillingCycle}
-                    onChange={(event) =>
-                      setPlanBillingCycle(
-                        event.target.value as "monthly" | "semiannual" | "annual",
-                      )
-                    }
-                  >
-                    {MEMBERSHIP_BILLING_CYCLE_OPTIONS.map((billingCycle) => (
-                      <option key={billingCycle.key} value={billingCycle.key}>
-                        {billingCycle.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-            <label className="text-sm font-medium text-slate-800">
-              Perks
-              <textarea
-                className={textareaClassName()}
-                value={planPerks}
-                onChange={(event) => setPlanPerks(event.target.value)}
-                placeholder="Bijvoorbeeld: open gym, onbeperkte lessen, priority booking"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 flex justify-end">
-            <Button
-              type="button"
-              disabled={isPending}
-              onClick={() =>
-                runAction(async () => {
-                  await submitJson("/api/platform/membership-plans", {
-                    name: planName,
-                    priceMonthly: Number(planPrice),
-                    billingCycle: planBillingCycle,
-                    perks: parseList(planPerks),
-                  });
-
-                  toast.success("Membership toegevoegd.");
-                  setPlanName("");
-                  setPlanPrice("99");
-                  setPlanBillingCycle("monthly");
-                  setPlanPerks("");
-                })
-              }
-            >
-              {isPending ? "Opslaan..." : "Membership toevoegen"}
-            </Button>
-          </div>
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("trainers")}
-          sectionId="platform-step-trainers"
-          highlighted={highlightStepKey === "trainers"}
-          eyebrow={formEyebrow(3)}
-          title={formTitle("3. Voeg een trainer toe", "Trainer toevoegen")}
-          description="Voeg een coach toe met thuisvestiging, specialisaties en certificeringen zodat lessen meteen geloofwaardig worden."
-          countLabel={stepByKey.get("trainers")?.countLabel ?? "0 trainers"}
-          statusLabel={stepByKey.get("trainers")?.statusLabel ?? "Daarna"}
-          statusTone={stepByKey.get("trainers")?.statusTone ?? "upcoming"}
-          disabled={snapshot.locations.length === 0}
-        >
-          {snapshot.locations.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Voeg eerst minstens één vestiging toe.
-            </p>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  Naam
-                  <input
-                    className={fieldClassName()}
-                    value={trainerName}
-                    onChange={(event) => setTrainerName(event.target.value)}
-                    placeholder="Naam trainer"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Thuisvestiging
-                  <select
-                    className={fieldClassName()}
-                    value={trainerLocationId}
-                    onChange={(event) => setTrainerLocationId(event.target.value)}
-                  >
-                    {snapshot.locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Specialisaties
-                  <textarea
-                    className={textareaClassName()}
-                    value={trainerSpecialties}
-                    onChange={(event) => setTrainerSpecialties(event.target.value)}
-                    placeholder="Bijvoorbeeld: Hyrox, yoga, strength"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Certificeringen
-                  <textarea
-                    className={textareaClassName()}
-                    value={trainerCertifications}
-                    onChange={(event) => setTrainerCertifications(event.target.value)}
-                    placeholder="Bijvoorbeeld: NASM-CPT, CF-L2"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <Button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() =>
-                    runAction(async () => {
-                      await submitJson("/api/platform/trainers", {
-                        fullName: trainerName,
-                        homeLocationId: trainerLocationId,
-                        specialties: parseList(trainerSpecialties),
-                        certifications: parseList(trainerCertifications),
-                      });
-
-                      toast.success("Trainer toegevoegd.");
-                      setTrainerName("");
-                      setTrainerSpecialties("");
-                      setTrainerCertifications("");
-                    })
-                  }
-                >
-                  {isPending ? "Opslaan..." : "Trainer toevoegen"}
-                </Button>
-              </div>
-            </>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("classes")}
-          sectionId="platform-step-classes"
-          highlighted={highlightStepKey === "classes"}
-          eyebrow={formEyebrow(4)}
-          title={formTitle("4. Plan je eerste les", "Les plannen")}
-          description="Plan een les met datum, tijd, trainer, vestiging, niveau, focus en capaciteit. Deze les verschijnt direct in de publieke reserveringsflow."
-          countLabel={stepByKey.get("classes")?.countLabel ?? "0 lessen"}
-          statusLabel={stepByKey.get("classes")?.statusLabel ?? "Nu"}
-          statusTone={stepByKey.get("classes")?.statusTone ?? "upcoming"}
-          disabled={snapshot.locations.length === 0 || snapshot.trainers.length === 0}
-        >
-          {snapshot.locations.length === 0 || snapshot.trainers.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Voeg eerst minstens één vestiging en één trainer toe.
-            </p>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  Titel
-                  <input
-                    className={fieldClassName()}
-                    value={classTitle}
-                    onChange={(event) => setClassTitle(event.target.value)}
-                    placeholder="Morning Strength"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Start
-                  <input
-                    className={fieldClassName()}
-                    type="datetime-local"
-                    value={classStartsAt}
-                    onChange={(event) => setClassStartsAt(event.target.value)}
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Vestiging
-                  <select
-                    className={fieldClassName()}
-                    value={classLocationId}
-                    onChange={(event) => setClassLocationId(event.target.value)}
-                  >
-                    {snapshot.locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Trainer
-                  <select
-                    className={fieldClassName()}
-                    value={classTrainerId}
-                    onChange={(event) => setClassTrainerId(event.target.value)}
-                  >
-                    {snapshot.trainers.map((trainer) => (
-                      <option key={trainer.id} value={trainer.id}>
-                        {trainer.fullName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Duur (minuten)
-                  <input
-                    className={fieldClassName()}
-                    type="number"
-                    min={15}
-                    value={classDuration}
-                    onChange={(event) => setClassDuration(event.target.value)}
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Capaciteit
-                  <input
-                    className={fieldClassName()}
-                    type="number"
-                    min={1}
-                    value={classCapacity}
-                    onChange={(event) => setClassCapacity(event.target.value)}
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Niveau
-                  <select
-                    className={fieldClassName()}
-                    value={classLevel}
-                    onChange={(event) =>
-                      setClassLevel(
-                        event.target.value as "beginner" | "mixed" | "advanced",
-                      )
-                    }
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="mixed">Mixed</option>
-                    <option value="advanced">Advanced</option>
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Focus
-                  <textarea
-                    className={textareaClassName()}
-                    value={classFocus}
-                    onChange={(event) => setClassFocus(event.target.value)}
-                    placeholder="Bijvoorbeeld: techniek, engine, mobility"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <Button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() =>
-                    runAction(async () => {
-                      await submitJson("/api/platform/classes", {
-                        title: classTitle,
-                        locationId: classLocationId,
-                        trainerId: classTrainerId,
-                        startsAt: new Date(classStartsAt).toISOString(),
-                        durationMinutes: Number(classDuration),
-                        capacity: Number(classCapacity),
-                        level: classLevel,
-                        focus: classFocus,
-                      });
-
-                      toast.success("Les toegevoegd.");
-                      setClassTitle("");
-                      setClassStartsAt("");
-                      setClassDuration("60");
-                      setClassCapacity("12");
-                      setClassLevel("mixed");
-                      setClassFocus("");
-                    })
-                  }
-                >
-                  {isPending ? "Opslaan..." : "Les toevoegen"}
-                </Button>
-              </div>
-            </>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("members")}
-          sectionId="platform-step-members"
-          highlighted={highlightStepKey === "members"}
-          eyebrow={formEyebrow(5)}
-          title={formTitle("5. Voeg later je eerste lid toe", "Lid toevoegen")}
-          description="Maak een lid aan met contactgegevens, contract, thuisvestiging, status, waiver en tags. Nieuwe publieke reserveringen kunnen ook automatisch trial-leden aanmaken."
-          countLabel={stepByKey.get("members")?.countLabel ?? "0 leden"}
-          statusLabel={stepByKey.get("members")?.statusLabel ?? "Later"}
-          statusTone={stepByKey.get("members")?.statusTone ?? "upcoming"}
-          disabled={snapshot.locations.length === 0 || snapshot.membershipPlans.length === 0}
-        >
-          {snapshot.locations.length === 0 || snapshot.membershipPlans.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Voeg eerst minstens één vestiging en één membership toe.
-            </p>
-          ) : (
-            <>
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600">
-                Je kunt deze stap ook later doen. Veel gyms zetten eerst hun aanbod
-                live en voegen daarna leden handmatig toe of importeren ze vlak voor
-                de eerste echte reserveringen.
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  Naam
-                  <input
-                    className={fieldClassName()}
-                    value={memberName}
-                    onChange={(event) => setMemberName(event.target.value)}
-                    placeholder="Naam lid"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  E-mail
-                  <input
-                    className={fieldClassName()}
-                    type="email"
-                    value={memberEmail}
-                    onChange={(event) => setMemberEmail(event.target.value)}
-                    placeholder="lid@voorbeeld.nl"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Membership
-                  <select
-                    className={fieldClassName()}
-                    value={memberPlanId}
-                    onChange={(event) => setMemberPlanId(event.target.value)}
-                  >
-                    {snapshot.membershipPlans.map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Vestiging
-                  <select
-                    className={fieldClassName()}
-                    value={memberLocationId}
-                    onChange={(event) => setMemberLocationId(event.target.value)}
-                  >
-                    {snapshot.locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Status
-                  <select
-                    className={fieldClassName()}
-                    value={memberStatus}
-                    onChange={(event) =>
-                      setMemberStatus(
-                        event.target.value as "active" | "trial" | "paused",
-                      )
-                    }
-                  >
-                    <option value="active">Actief</option>
-                    <option value="trial">Trial</option>
-                    <option value="paused">Gepauzeerd</option>
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Waiver
-                  <select
-                    className={fieldClassName()}
-                    value={memberWaiverStatus}
-                    onChange={(event) =>
-                      setMemberWaiverStatus(
-                        event.target.value as "complete" | "pending",
-                      )
-                    }
-                  >
-                    <option value="pending">Nog open</option>
-                    <option value="complete">Al rond</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="mt-4">
-                <PhoneNumberField
-                  country={memberPhoneCountry as never}
-                  onCountryChange={(value) => setMemberPhoneCountry(value)}
-                  phone={memberPhone}
-                  onPhoneChange={setMemberPhone}
-                  language="nl"
-                  countryLabel="Landcode"
-                  phoneLabel="Mobiel nummer"
-                />
-              </div>
-
-              <label className="mt-4 block text-sm font-medium text-slate-800">
-                Tags
-                <textarea
-                  className={textareaClassName()}
-                  value={memberTags}
-                  onChange={(event) => setMemberTags(event.target.value)}
-                  placeholder="Bijvoorbeeld: morning, hyrox, trial"
-                />
-              </label>
-
-              <div className="mt-4 flex justify-end">
-                <Button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() =>
-                    runAction(async () => {
-                      await submitJson("/api/platform/members", {
-                        fullName: memberName,
-                        email: memberEmail,
-                        phone: memberPhone,
-                        phoneCountry: memberPhoneCountry,
-                        membershipPlanId: memberPlanId,
-                        homeLocationId: memberLocationId,
-                        status: memberStatus,
-                        tags: parseList(memberTags),
-                        waiverStatus: memberWaiverStatus,
-                      });
-
-                      toast.success("Lid toegevoegd.");
-                      setMemberName("");
-                      setMemberEmail("");
-                      setMemberPhone("");
-                      setMemberTags("");
-                      setMemberStatus("active");
-                      setMemberWaiverStatus("pending");
-                    })
-                  }
-                >
-                  {isPending ? "Opslaan..." : "Lid toevoegen"}
-                </Button>
-              </div>
-            </>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("imports")}
-          sectionId="platform-step-imports"
-          highlighted={highlightStepKey === "imports"}
-          eyebrow={formEyebrow(6)}
-          title={formTitle("6. Importeer bestaande contracten en klanten", "Contracten en klanten importeren")}
-          description="Plak je bestaande klantenlijst of contractexport. Het platform maakt ontbrekende contracttypes en leden automatisch aan."
-          countLabel={formatCountLabel(snapshot.members.length, "lid live", "leden live")}
-          statusLabel={snapshot.locations.length > 0 ? "Import klaar" : "Eerst vestiging"}
-          statusTone={snapshot.locations.length > 0 ? "current" : "locked"}
-          disabled={snapshot.locations.length === 0}
-        >
-          {snapshot.locations.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Voeg eerst minstens één vestiging toe zodat geïmporteerde klanten meteen de juiste thuislocatie krijgen.
-            </p>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                preventNativeSubmit(event);
-                runAction(async () => {
-                  const result = await submitJson<{
-                    createdMembershipPlans: number;
-                    importedMembers: number;
-                    skippedMembers: number;
-                    skippedEmails: ReadonlyArray<string>;
-                  }>("/api/platform/import/contracts", {
-                    defaultLocationId: importLocationId,
-                    csv: importCsv,
-                    phoneCountry: "NL",
-                  });
-
-                  toast.success(
-                    `${result.importedMembers} klanten geïmporteerd, ${result.createdMembershipPlans} contracten aangemaakt${result.skippedMembers > 0 ? `, ${result.skippedMembers} dubbelen overgeslagen` : ""}.`,
-                  );
-                });
-              }}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600">
-                <p className="max-w-2xl">
-                  Gebruik een CSV met header. Verplicht: naam, email, telefoon,
-                  contract, contractduur en prijs. Optioneel: vestiging, status,
-                  waiver en tags.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setImportCsv(CONTRACT_IMPORT_REQUIRED_CSV_HEADER)}
-                >
-                  Genereer CSV-template
-                </Button>
-              </div>
-
-              <label className="text-sm font-medium text-slate-800">
-                Standaard vestiging
-                <select
-                  className={fieldClassName()}
-                  value={importLocationId}
-                  onChange={(event) => setImportLocationId(event.target.value)}
-                >
-                  {snapshot.locations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-sm font-medium text-slate-800">
-                Contracten en klantenlijst
-                <textarea
-                  className={textareaClassName()}
-                  value={importCsv}
-                  onChange={(event) => setImportCsv(event.target.value)}
-                  placeholder={CONTRACT_IMPORT_REQUIRED_CSV_HEADER}
-                />
-              </label>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Importeren..." : "Contracten en klanten importeren"}
-                </Button>
-              </div>
-            </form>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("staff")}
-          sectionId="platform-step-staff"
-          highlighted={highlightStepKey === "staff"}
-          eyebrow={formEyebrow(7)}
-          title={formTitle("7. Nodig een teamlid uit", "Teamlid uitnodigen")}
-          description="Maak een echt account aan voor owner, manager, trainer of frontdesk met tijdelijk wachtwoord en juiste rol."
-          countLabel={stepByKey.get("staff")?.countLabel ?? "0 accounts live"}
-          statusLabel={stepByKey.get("staff")?.statusLabel ?? "Owner-only"}
-          statusTone={stepByKey.get("staff")?.statusTone ?? "locked"}
-          disabled={!snapshot.uiCapabilities.canManageStaff}
-        >
-          {!snapshot.uiCapabilities.canManageStaff ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Alleen de eigenaar kan teamaccounts aanmaken of rechten aanpassen.
-            </p>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                preventNativeSubmit(event);
-                runAction(async () => {
-                  await submitJson("/api/platform/staff", {
-                    displayName: staffName,
-                    email: staffEmail,
-                    password: staffPassword,
-                    roleKey: staffRoleKey,
-                  });
-
-                  toast.success("Teamaccount toegevoegd.");
-                  setStaffName("");
-                  setStaffEmail("");
-                  setStaffPassword("");
-                  setStaffRoleKey("manager");
-                });
-              }}
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  Naam
-                  <input
-                    className={fieldClassName()}
-                    value={staffName}
-                    autoComplete="name"
-                    onChange={(event) => setStaffName(event.target.value)}
-                    placeholder="Naam teamlid"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Rol
-                  <select
-                    className={fieldClassName()}
-                    value={staffRoleKey}
-                    onChange={(event) =>
-                      setStaffRoleKey(
-                        event.target.value as
-                          | "owner"
-                          | "manager"
-                          | "trainer"
-                          | "frontdesk",
-                      )
-                    }
-                  >
-                    {PLATFORM_ROLE_OPTIONS.map((role) => (
-                      <option key={role.key} value={role.key}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  E-mail
-                  <input
-                    className={fieldClassName()}
-                    type="email"
-                    autoComplete="username"
-                    value={staffEmail}
-                    onChange={(event) => setStaffEmail(event.target.value)}
-                    placeholder="teamlid@jouwgym.nl"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Tijdelijk wachtwoord
-                  <input
-                    className={fieldClassName()}
-                    type="password"
-                    minLength={8}
-                    autoComplete="new-password"
-                    value={staffPassword}
-                    onChange={(event) => setStaffPassword(event.target.value)}
-                    placeholder="Minimaal 8 tekens"
-                  />
-                </label>
-              </div>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Opslaan..." : "Teamaccount toevoegen"}
-                </Button>
-              </div>
-            </form>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("remote-access")}
-          sectionId="platform-step-remote-access"
-          eyebrow={formEyebrow(8)}
-          title={formTitle("8. Beheer remote toegang", "Smartdeur koppelen")}
-          description="Koppel een slim slot zoals Nuki, wijs het aan een vestiging toe en beheer owner-only remote openen."
-          countLabel={remoteAccessCountLabel}
-          statusLabel={snapshot.remoteAccess.statusLabel}
-          statusTone={remoteAccessStatusTone}
-          disabled={!snapshot.uiCapabilities.canManageRemoteAccess}
-          highlighted={highlightStepKey === "remote-access"}
-        >
-          {!snapshot.uiCapabilities.canManageRemoteAccess ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Alleen de eigenaar kan slimme sloten koppelen of de deur op afstand openen.
-            </p>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                preventNativeSubmit(event);
-                runAction(async () => {
-                  const remoteAccess = await submitJson<
-                    GymDashboardSnapshot["remoteAccess"]
-                  >("/api/platform/remote-access", {
-                    enabled: remoteAccessEnabled,
-                    provider: remoteAccessProvider,
-                    bridgeType: remoteAccessBridgeType,
-                    locationId: remoteAccessLocationId || null,
-                    deviceLabel: remoteAccessDeviceLabel,
-                    externalDeviceId: remoteAccessExternalDeviceId,
-                    notes: remoteAccessNotes || undefined,
-                  });
-
-                  toast.success(
-                    `${remoteAccess.providerLabel} opgeslagen voor ${remoteAccess.deviceLabel}.`,
-                  );
-                });
-              }}
-            >
-              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 text-sm leading-6 text-slate-600">
-                <p className="font-medium text-slate-900">Remote access status</p>
-                <p className="mt-2">{snapshot.remoteAccess.helpText}</p>
-                {snapshot.remoteAccess.lastRemoteActionAt ? (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Laatste remote actie: {snapshot.remoteAccess.lastRemoteActionAt}
-                    {snapshot.remoteAccess.lastRemoteActionBy
-                      ? ` door ${snapshot.remoteAccess.lastRemoteActionBy}`
-                      : ""}
-                  </p>
-                ) : null}
-              </div>
-
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-sm font-medium text-slate-900">
-                <input
-                  type="checkbox"
-                  checked={remoteAccessEnabled}
-                  onChange={(event) => setRemoteAccessEnabled(event.target.checked)}
-                />
-                Remote toegang actief voor deze gym
-              </label>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  Provider
-                  <select
-                    className={fieldClassName()}
-                    value={remoteAccessProvider}
-                    onChange={(event) =>
-                      setRemoteAccessProvider(
-                        event.target.value as typeof remoteAccessProvider,
-                      )
-                    }
-                  >
-                    {REMOTE_ACCESS_PROVIDER_OPTIONS.map((provider) => (
-                      <option key={provider.key} value={provider.key}>
-                        {provider.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Koppelmodus
-                  <select
-                    className={fieldClassName()}
-                    value={remoteAccessBridgeType}
-                    onChange={(event) =>
-                      setRemoteAccessBridgeType(
-                        event.target.value as typeof remoteAccessBridgeType,
-                      )
-                    }
-                  >
-                    {REMOTE_ACCESS_BRIDGE_OPTIONS.map((bridgeOption) => (
-                      <option key={bridgeOption.key} value={bridgeOption.key}>
-                        {bridgeOption.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Vestiging
-                  <select
-                    className={fieldClassName()}
-                    value={remoteAccessLocationId}
-                    onChange={(event) => setRemoteAccessLocationId(event.target.value)}
-                  >
-                    <option value="">Kies later een deur</option>
-                    {snapshot.locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Slot- of deuurnaam
-                  <input
-                    className={fieldClassName()}
-                    value={remoteAccessDeviceLabel}
-                    onChange={(event) => setRemoteAccessDeviceLabel(event.target.value)}
-                    placeholder="Bijvoorbeeld: Hoofdingang"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800 md:col-span-2">
-                  Device ID / extern slot-ID
-                  <input
-                    className={fieldClassName()}
-                    value={remoteAccessExternalDeviceId}
-                    onChange={(event) =>
-                      setRemoteAccessExternalDeviceId(event.target.value)
-                    }
-                    placeholder="Bijvoorbeeld: nuki-lock-01"
-                  />
-                </label>
-              </div>
-
-              <label className="block text-sm font-medium text-slate-800">
-                Notities
-                <textarea
-                  className={textareaClassName()}
-                  value={remoteAccessNotes}
-                  onChange={(event) => setRemoteAccessNotes(event.target.value)}
-                  placeholder="Bijvoorbeeld: alleen gebruiken voor owner remote open buiten openingstijd."
-                />
-              </label>
-
-              <div className="flex flex-wrap justify-end gap-3">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Opslaan..." : "Remote toegang opslaan"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    isPending ||
-                    !snapshot.remoteAccess.enabled ||
-                    snapshot.remoteAccess.connectionStatus !== "configured"
-                  }
-                  onClick={() =>
-                    runAction(async () => {
-                      const receipt = await submitJson("/api/platform/remote-access/open", {});
-                      const actionReceipt = receipt as {
-                        summary: string;
-                      };
-
-                      toast.success(actionReceipt.summary);
-                    })
-                  }
-                >
-                  Open deur op afstand
-                </Button>
-              </div>
-            </form>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("payments")}
-          sectionId="platform-step-payments"
-          eyebrow={formEyebrow(9)}
-          title={formTitle("9. Koppel betalingen", "Mollie betalingen koppelen")}
-          description="Configureer Mollie voor automatische incasso, eenmalige betalingen en deelbare betaalverzoeken per gym."
-          countLabel={paymentsCountLabel}
-          statusLabel={snapshot.payments.statusLabel}
-          statusTone={paymentsStatusTone}
-          disabled={!snapshot.uiCapabilities.canManagePayments}
-          highlighted={highlightStepKey === "payments"}
-        >
-          {!snapshot.uiCapabilities.canManagePayments ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Alleen de eigenaar kan betaalproviders koppelen of betaalflows previewen.
-            </p>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                preventNativeSubmit(event);
-                runAction(async () => {
-                  const payments = await submitJson<
-                    GymDashboardSnapshot["payments"]
-                  >("/api/platform/billing", {
-                    enabled: billingEnabled,
-                    provider: billingProvider,
-                    profileLabel: billingProfileLabel,
-                    profileId: billingProfileId,
-                    settlementLabel: billingSettlementLabel,
-                    supportEmail: billingSupportEmail,
-                    paymentMethods: billingPaymentMethods,
-                    notes: billingNotes || undefined,
-                  });
-
-                  toast.success(`${payments.providerLabel} opgeslagen voor ${payments.profileLabel}.`);
-                });
-              }}
-            >
-              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 text-sm leading-6 text-slate-600">
-                <p className="font-medium text-slate-900">Betaalstatus</p>
-                <p className="mt-2">{snapshot.payments.helpText}</p>
-                {snapshot.payments.lastPaymentActionAt ? (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Laatste preview: {snapshot.payments.lastPaymentActionAt}
-                    {snapshot.payments.lastPaymentActionBy
-                      ? ` door ${snapshot.payments.lastPaymentActionBy}`
-                      : ""}
-                  </p>
-                ) : null}
-              </div>
-
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-sm font-medium text-slate-900">
-                <input
-                  type="checkbox"
-                  checked={billingEnabled}
-                  onChange={(event) => setBillingEnabled(event.target.checked)}
-                />
-                Betalingen actief voor deze gym
-              </label>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-800">
-                  Provider
-                  <select
-                    className={fieldClassName()}
-                    value={billingProvider}
-                    onChange={(event) =>
-                      setBillingProvider(event.target.value as typeof billingProvider)
-                    }
-                  >
-                    {BILLING_PROVIDER_OPTIONS.map((provider) => (
-                      <option key={provider.key} value={provider.key}>
-                        {provider.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Profielnaam
-                  <input
-                    className={fieldClassName()}
-                    value={billingProfileLabel}
-                    onChange={(event) => setBillingProfileLabel(event.target.value)}
-                    placeholder="Atlas Forge Payments"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Mollie profiel-ID
-                  <input
-                    className={fieldClassName()}
-                    value={billingProfileId}
-                    onChange={(event) => setBillingProfileId(event.target.value)}
-                    placeholder="pfl_live_..."
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800">
-                  Uitbetalingslabel
-                  <input
-                    className={fieldClassName()}
-                    value={billingSettlementLabel}
-                    onChange={(event) => setBillingSettlementLabel(event.target.value)}
-                    placeholder="Atlas Forge Club"
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-800 md:col-span-2">
-                  Support e-mail
-                  <input
-                    className={fieldClassName()}
-                    type="email"
-                    value={billingSupportEmail}
-                    onChange={(event) => setBillingSupportEmail(event.target.value)}
-                    placeholder="billing@jouwgym.nl"
-                  />
-                </label>
-              </div>
-
-              <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4">
-                <p className="text-sm font-medium text-slate-900">Betaalflows</p>
-                <div className="grid gap-3 md:grid-cols-3">
-                  {BILLING_PAYMENT_METHOD_OPTIONS.map((paymentMethod) => (
-                    <label
-                      key={paymentMethod.key}
-                      className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 text-sm text-slate-700"
-                    >
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={billingPaymentMethods.includes(paymentMethod.key)}
-                          onChange={(event) =>
-                            toggleBillingMethod(paymentMethod.key, event.target.checked)
-                          }
-                        />
-                        <div>
-                          <p className="font-medium text-slate-900">{paymentMethod.label}</p>
-                          <p className="mt-2 leading-6 text-slate-600">{paymentMethod.helper}</p>
-                        </div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <label className="block text-sm font-medium text-slate-800">
-                Notities
-                <textarea
-                  className={textareaClassName()}
-                  value={billingNotes}
-                  onChange={(event) => setBillingNotes(event.target.value)}
-                  placeholder="Bijvoorbeeld: eerst memberships via incasso, losse intro via betaalverzoek."
-                />
-              </label>
-
-              <div className="space-y-4 rounded-2xl border border-dashed border-teal-200 bg-teal-50/80 p-4">
-                <div>
-                  <p className="text-sm font-medium text-teal-950">Preview betaalflow</p>
-                  <p className="mt-1 text-sm leading-6 text-teal-900/80">
-                    Gebruik dit om te testen hoe een incasso, eenmalige betaling of
-                    betaalverzoek straks per gym wordt aangestuurd.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="text-sm font-medium text-slate-800">
-                    Flow
-                    <select
-                      className={fieldClassName()}
-                      value={billingPreviewMethod}
-                      onChange={(event) =>
-                        setBillingPreviewMethod(
-                          event.target.value as typeof billingPreviewMethod,
-                        )
-                      }
-                    >
-                      {billingPaymentMethods.map((paymentMethod) => (
-                        <option key={paymentMethod} value={paymentMethod}>
-                          {BILLING_PAYMENT_METHOD_OPTIONS.find(
-                            (option) => option.key === paymentMethod,
-                          )?.label ?? paymentMethod}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm font-medium text-slate-800">
-                    Bedrag in centen
-                    <input
-                      className={fieldClassName()}
-                      type="number"
-                      min={100}
-                      step={5}
-                      value={billingPreviewAmount}
-                      onChange={(event) => setBillingPreviewAmount(event.target.value)}
-                    />
-                  </label>
-                  <label className="text-sm font-medium text-slate-800">
-                    Omschrijving
-                    <input
-                      className={fieldClassName()}
-                      value={billingPreviewDescription}
-                      onChange={(event) => setBillingPreviewDescription(event.target.value)}
-                      placeholder="Intake bundle"
-                    />
-                  </label>
-                  <label className="text-sm font-medium text-slate-800">
-                    Lidnaam
-                    <input
-                      className={fieldClassName()}
-                      value={billingPreviewMemberName}
-                      onChange={(event) => setBillingPreviewMemberName(event.target.value)}
-                      placeholder="Optioneel"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-3">
-                <Button type="submit" disabled={isPending || billingPaymentMethods.length === 0}>
-                  {isPending ? "Opslaan..." : "Betalingen opslaan"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    isPending ||
-                    !snapshot.payments.enabled ||
-                    snapshot.payments.connectionStatus !== "configured" ||
-                    billingPaymentMethods.length === 0
-                  }
-                  onClick={() =>
-                    runAction(async () => {
-                      const receipt = await submitJson("/api/platform/billing/preview", {
-                        paymentMethod: billingPreviewMethod,
-                        amountCents: Number(billingPreviewAmount),
-                        currency: "EUR",
-                        description: billingPreviewDescription,
-                        memberName: billingPreviewMemberName || undefined,
-                      });
-                      const previewReceipt = receipt as {
-                        summary: string;
-                      };
-
-                      toast.success(previewReceipt.summary);
-                    })
-                  }
-                >
-                  Preview betaalflow
-                </Button>
-              </div>
-            </form>
-          )}
-        </FormCard>
-
-        <FormCard
-          visible={shouldShowSection("legal")}
-          sectionId="platform-step-legal"
-          eyebrow="Live readiness"
-          title="Juridische flows afronden"
-          description="Leg voorwaarden, privacy, SEPA-toestemming, contract-PDF template en waiver-opslag vast voordat leden echt gaan betalen of tekenen."
-          countLabel={snapshot.legal.statusLabel}
-          statusLabel={snapshot.legal.statusLabel}
-          statusTone={snapshot.legal.statusLabel === "Juridisch klaar" ? "complete" : "current"}
-        >
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              preventNativeSubmit(event);
-              runAction(async () => {
-                const legal = await submitJson<GymDashboardSnapshot["legal"]>(
-                  "/api/platform/legal",
-                  {
-                    termsUrl: legalTermsUrl,
-                    privacyUrl: legalPrivacyUrl,
-                    sepaCreditorId: legalSepaCreditorId,
-                    sepaMandateText: legalSepaMandateText,
-                    contractPdfTemplateKey: legalContractPdfTemplateKey,
-                    waiverStorageKey: legalWaiverStorageKey,
-                    waiverRetentionMonths: Number(legalWaiverRetentionMonths),
-                  },
-                );
-
-                toast.success(`${legal.statusLabel}: juridische instellingen opgeslagen.`);
-              });
-            }}
+      <div className={`grid gap-4 ${visibleSections.size === 1 ? "" : "2xl:grid-cols-2"}`}>
+        {shouldShowSection("locations") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.locations.length, "vestiging", "vestigingen")}
+            description="Add the location, its manager, capacity, and amenities. This unlocks trainers, members, and class scheduling."
+            highlighted={isHighlighted("locations")}
+            statusLabel={snapshot.locations.length > 0 ? "Klaar" : "Nu"}
+            statusTone={snapshot.locations.length > 0 ? "complete" : "current"}
+            title="Vestiging toevoegen"
           >
-            <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 text-sm leading-6 text-slate-600">
-              <p className="font-medium text-slate-900">Juridische status</p>
-              <p className="mt-2">{snapshot.legal.helpText}</p>
-            </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-sm font-medium text-slate-800">
-                Algemene voorwaarden URL
-                <input
-                  className={fieldClassName()}
-                  value={legalTermsUrl}
-                  onChange={(event) => setLegalTermsUrl(event.target.value)}
-                  placeholder="https://jouwgym.nl/voorwaarden"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-800">
-                Privacyverklaring URL
-                <input
-                  className={fieldClassName()}
-                  value={legalPrivacyUrl}
-                  onChange={(event) => setLegalPrivacyUrl(event.target.value)}
-                  placeholder="https://jouwgym.nl/privacy"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-800">
-                SEPA creditor ID
-                <input
-                  className={fieldClassName()}
-                  value={legalSepaCreditorId}
-                  onChange={(event) => setLegalSepaCreditorId(event.target.value)}
-                  placeholder="NL00ZZZ..."
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-800">
-                Contract-PDF template key
-                <input
-                  className={fieldClassName()}
-                  value={legalContractPdfTemplateKey}
-                  onChange={(event) => setLegalContractPdfTemplateKey(event.target.value)}
-                  placeholder="contracts/templates/membership-v1.pdf"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-800">
-                Waiver opslagpad
-                <input
-                  className={fieldClassName()}
-                  value={legalWaiverStorageKey}
-                  onChange={(event) => setLegalWaiverStorageKey(event.target.value)}
-                  placeholder="waivers/signed/"
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-800">
-                Waiver bewaartermijn maanden
-                <input
-                  className={fieldClassName()}
-                  type="number"
-                  min={1}
-                  value={legalWaiverRetentionMonths}
-                  onChange={(event) => setLegalWaiverRetentionMonths(event.target.value)}
-                />
-              </label>
+              <Field label="Naam">
+                <Input fullWidth placeholder="Downtown Club" value={locationName} onChange={(event) => setLocationName(event.target.value)} />
+              </Field>
+              <Field label="Manager">
+                <Input fullWidth placeholder="Naam manager" value={locationManagerName} onChange={(event) => setLocationManagerName(event.target.value)} />
+              </Field>
+              <Field label="Stad">
+                <Input fullWidth placeholder="Amsterdam" value={locationCity} onChange={(event) => setLocationCity(event.target.value)} />
+              </Field>
+              <Field label="Wijk">
+                <Input fullWidth placeholder="Oost" value={locationNeighborhood} onChange={(event) => setLocationNeighborhood(event.target.value)} />
+              </Field>
+              <Field label="Capaciteit">
+                <Input fullWidth min={1} type="number" value={locationCapacity} onChange={(event) => setLocationCapacity(event.target.value)} />
+              </Field>
+              <Field label="Faciliteiten">
+                <TextArea fullWidth rows={4} placeholder="sauna, PT studio, open gym" value={locationAmenities} onChange={(event) => setLocationAmenities(event.target.value)} />
+              </Field>
             </div>
-
-            <label className="block text-sm font-medium text-slate-800">
-              SEPA machtigingstekst
-              <textarea
-                className={textareaClassName()}
-                value={legalSepaMandateText}
-                onChange={(event) => setLegalSepaMandateText(event.target.value)}
-              />
-            </label>
-
             <div className="flex justify-end">
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Opslaan..." : "Juridische instellingen opslaan"}
+              <Button
+                isDisabled={isPending}
+                onPress={() =>
+                  runAction(async () => {
+                    await submitJson("/api/platform/locations", {
+                      name: locationName,
+                      city: locationCity,
+                      neighborhood: locationNeighborhood,
+                      capacity: Number(locationCapacity),
+                      managerName: locationManagerName,
+                      amenities: parseList(locationAmenities),
+                    });
+                    toast.success("Vestiging toegevoegd.");
+                    setLocationName("");
+                    setLocationCity("");
+                    setLocationNeighborhood("");
+                    setLocationCapacity("120");
+                    setLocationManagerName("");
+                    setLocationAmenities("");
+                  })
+                }
+              >
+                {isPending ? "Opslaan..." : "Vestiging toevoegen"}
               </Button>
             </div>
-          </form>
-        </FormCard>
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("contracts") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.membershipPlans.length, "membership", "memberships")}
+            description="Define the membership types you actually sell: billing cadence, monthly value, and core perks."
+            highlighted={isHighlighted("memberships", "contracts")}
+            statusLabel={snapshot.membershipPlans.length > 0 ? "Klaar" : "Nu"}
+            statusTone={snapshot.membershipPlans.length > 0 ? "complete" : "current"}
+            title="Membership toevoegen"
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Naam">
+                <Input fullWidth placeholder="Unlimited" value={planName} onChange={(event) => setPlanName(event.target.value)} />
+              </Field>
+              <Field label="Prijs per maand">
+                <Input fullWidth min={1} step="0.01" type="number" value={planPrice} onChange={(event) => setPlanPrice(event.target.value)} />
+              </Field>
+              <SelectField
+                label="Contractduur"
+                options={MEMBERSHIP_BILLING_CYCLE_OPTIONS.map((option) => ({
+                  value: option.key,
+                  label: option.label,
+                }))}
+                value={planBillingCycle}
+                onChange={(value) => setPlanBillingCycle(value as typeof planBillingCycle)}
+              />
+              <Field label="Perks">
+                <TextArea fullWidth rows={4} placeholder="open gym, priority booking" value={planPerks} onChange={(event) => setPlanPerks(event.target.value)} />
+              </Field>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                isDisabled={isPending}
+                onPress={() =>
+                  runAction(async () => {
+                    await submitJson("/api/platform/membership-plans", {
+                      name: planName,
+                      priceMonthly: Number(planPrice),
+                      billingCycle: planBillingCycle,
+                      perks: parseList(planPerks),
+                    });
+                    toast.success("Membership toegevoegd.");
+                    setPlanName("");
+                    setPlanPrice("99");
+                    setPlanBillingCycle("monthly");
+                    setPlanPerks("");
+                  })
+                }
+              >
+                {isPending ? "Opslaan..." : "Membership toevoegen"}
+              </Button>
+            </div>
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("trainers") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.trainers.length, "trainer", "trainers")}
+            description="Add the coaches who make the schedule credible, together with their home location and expertise."
+            disabled={snapshot.locations.length === 0}
+            highlighted={isHighlighted("trainers")}
+            statusLabel={snapshot.trainers.length > 0 ? "Klaar" : "Daarna"}
+            statusTone={snapshot.trainers.length > 0 ? "complete" : "upcoming"}
+            title="Trainer toevoegen"
+          >
+            {snapshot.locations.length === 0 ? (
+              <p className="text-muted text-sm">Voeg eerst minstens één vestiging toe.</p>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Naam">
+                    <Input fullWidth placeholder="Naam trainer" value={trainerName} onChange={(event) => setTrainerName(event.target.value)} />
+                  </Field>
+                  <SelectField
+                    label="Thuisvestiging"
+                    options={snapshot.locations.map((location) => ({
+                      value: location.id,
+                      label: location.name,
+                    }))}
+                    value={trainerLocationId}
+                    onChange={setTrainerLocationId}
+                  />
+                  <Field label="Specialisaties">
+                    <TextArea fullWidth rows={4} placeholder="Hyrox, yoga, strength" value={trainerSpecialties} onChange={(event) => setTrainerSpecialties(event.target.value)} />
+                  </Field>
+                  <Field label="Certificeringen">
+                    <TextArea fullWidth rows={4} placeholder="NASM-CPT, CF-L2" value={trainerCertifications} onChange={(event) => setTrainerCertifications(event.target.value)} />
+                  </Field>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    isDisabled={isPending}
+                    onPress={() =>
+                      runAction(async () => {
+                        await submitJson("/api/platform/trainers", {
+                          fullName: trainerName,
+                          homeLocationId: trainerLocationId,
+                          specialties: parseList(trainerSpecialties),
+                          certifications: parseList(trainerCertifications),
+                        });
+                        toast.success("Trainer toegevoegd.");
+                        setTrainerName("");
+                        setTrainerSpecialties("");
+                        setTrainerCertifications("");
+                      })
+                    }
+                  >
+                    {isPending ? "Opslaan..." : "Trainer toevoegen"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("classes") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.classSessions.length, "les", "lessen")}
+            description="Schedule one-off sessions or a weekly class series with trainer, location, level, and capacity."
+            disabled={snapshot.locations.length === 0 || snapshot.trainers.length === 0}
+            highlighted={isHighlighted("classes")}
+            statusLabel={snapshot.classSessions.length > 0 ? "Klaar" : "Nu"}
+            statusTone={snapshot.classSessions.length > 0 ? "complete" : "current"}
+            title="Les plannen"
+          >
+            {snapshot.locations.length === 0 || snapshot.trainers.length === 0 ? (
+              <p className="text-muted text-sm">
+                Voeg eerst minstens één vestiging en één trainer toe.
+              </p>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Titel">
+                    <Input fullWidth placeholder="Morning Strength" value={classTitle} onChange={(event) => setClassTitle(event.target.value)} />
+                  </Field>
+                  <Field label="Start">
+                    <Input fullWidth type="datetime-local" value={classStartsAt} onChange={(event) => setClassStartsAt(event.target.value)} />
+                  </Field>
+                  <div className="md:col-span-2">
+                    <div className="grid gap-4 rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4">
+                      <Switch
+                        isSelected={classRepeatsWeekly}
+                        onChange={setClassRepeatsWeekly}
+                      >
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                        <Switch.Content>
+                          <Label>Wekelijks herhalen</Label>
+                        </Switch.Content>
+                      </Switch>
+
+                      {classRepeatsWeekly ? (
+                        <div className="grid gap-4">
+                          <Field label="Dagen">
+                            <CheckboxButtonGroup
+                              className="w-full grid-cols-4 gap-2 md:grid-cols-7"
+                              layout="grid"
+                              value={[...classRecurringWeekdays]}
+                              onChange={(value) =>
+                                setClassRecurringWeekdays(value as ClassWeekdayKey[])
+                              }
+                            >
+                              {CLASS_WEEKDAY_OPTIONS.map((weekday) => (
+                                <CheckboxButtonGroup.Item
+                                  key={weekday.key}
+                                  value={weekday.key}
+                                >
+                                  <CheckboxButtonGroup.ItemContent className="items-center justify-center text-center">
+                                    <span className="text-sm font-medium">
+                                      {weekday.label}
+                                    </span>
+                                  </CheckboxButtonGroup.ItemContent>
+                                </CheckboxButtonGroup.Item>
+                              ))}
+                            </CheckboxButtonGroup>
+                          </Field>
+
+                          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                            <Field label="Herhaal t/m">
+                              <Input
+                                fullWidth
+                                type="date"
+                                value={classRecurringUntil}
+                                onChange={(event) =>
+                                  setClassRecurringUntil(event.target.value)
+                                }
+                              />
+                            </Field>
+                            {classCreateCount > 0 ? (
+                              <Chip size="sm" variant="soft" className="w-fit">
+                                {formatCountLabel(classCreateCount, "les", "lessen")}
+                              </Chip>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <SelectField
+                    label="Vestiging"
+                    options={snapshot.locations.map((location) => ({
+                      value: location.id,
+                      label: location.name,
+                    }))}
+                    value={classLocationId}
+                    onChange={setClassLocationId}
+                  />
+                  <SelectField
+                    label="Trainer"
+                    options={snapshot.trainers.map((trainer) => ({
+                      value: trainer.id,
+                      label: trainer.fullName,
+                    }))}
+                    value={classTrainerId}
+                    onChange={setClassTrainerId}
+                  />
+                  <Field label="Duur (minuten)">
+                    <Input fullWidth min={15} type="number" value={classDuration} onChange={(event) => setClassDuration(event.target.value)} />
+                  </Field>
+                  <Field label="Capaciteit">
+                    <Input fullWidth min={1} type="number" value={classCapacity} onChange={(event) => setClassCapacity(event.target.value)} />
+                  </Field>
+                  <SelectField
+                    label="Niveau"
+                    options={[
+                      { value: "beginner", label: "Beginner" },
+                      { value: "mixed", label: "Mixed" },
+                      { value: "advanced", label: "Advanced" },
+                    ]}
+                    value={classLevel}
+                    onChange={(value) => setClassLevel(value as typeof classLevel)}
+                  />
+                  <Field label="Focus">
+                    <TextArea fullWidth rows={4} placeholder="techniek, engine, mobility" value={classFocus} onChange={(event) => setClassFocus(event.target.value)} />
+                  </Field>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    isDisabled={isPending}
+                    onPress={() =>
+                      runAction(async () => {
+                        const startsToCreate = classRepeatsWeekly
+                          ? recurringClassStarts
+                          : classStartsAt
+                            ? [classStartsAt]
+                            : [];
+
+                        if (startsToCreate.length === 0) {
+                          throw new Error(
+                            classRepeatsWeekly
+                              ? "Kies minstens één dag en een geldige einddatum voor de herhaling."
+                              : "Kies eerst een geldige startdatum en tijd.",
+                          );
+                        }
+
+                        for (const localStart of startsToCreate) {
+                          await submitJson("/api/platform/classes", {
+                            title: classTitle,
+                            locationId: classLocationId,
+                            trainerId: classTrainerId,
+                            startsAt: new Date(localStart).toISOString(),
+                            durationMinutes: Number(classDuration),
+                            capacity: Number(classCapacity),
+                            level: classLevel,
+                            focus: classFocus,
+                          });
+                        }
+
+                        toast.success(
+                          startsToCreate.length === 1
+                            ? "Les toegevoegd."
+                            : `${startsToCreate.length} lessen toegevoegd.`,
+                        );
+                        setClassTitle("");
+                        setClassStartsAt("");
+                        setClassDuration("60");
+                        setClassCapacity("12");
+                        setClassLevel("mixed");
+                        setClassFocus("");
+                        setClassRepeatsWeekly(false);
+                        setClassRecurringWeekdays([]);
+                        setClassRecurringUntil("");
+                      })
+                    }
+                  >
+                    {isPending
+                      ? "Opslaan..."
+                      : classCreateCount > 1
+                        ? "Lessen toevoegen"
+                        : "Les toevoegen"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("members") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.members.length, "lid", "leden")}
+            description="Add members manually when needed, or leave this until the offer is live and import them later."
+            disabled={snapshot.locations.length === 0 || snapshot.membershipPlans.length === 0}
+            highlighted={isHighlighted("members")}
+            statusLabel={snapshot.members.length > 0 ? "Klaar" : "Later"}
+            statusTone={snapshot.members.length > 0 ? "complete" : "upcoming"}
+            title="Lid toevoegen"
+          >
+            {snapshot.locations.length === 0 || snapshot.membershipPlans.length === 0 ? (
+              <p className="text-muted text-sm">
+                Voeg eerst minstens één vestiging en één membership toe.
+              </p>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Naam">
+                    <Input fullWidth placeholder="Naam lid" value={memberName} onChange={(event) => setMemberName(event.target.value)} />
+                  </Field>
+                  <Field label="E-mail">
+                    <Input fullWidth placeholder="lid@voorbeeld.nl" type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
+                  </Field>
+                  <SelectField
+                    label="Membership"
+                    options={snapshot.membershipPlans.map((plan) => ({
+                      value: plan.id,
+                      label: plan.name,
+                    }))}
+                    value={memberPlanId}
+                    onChange={setMemberPlanId}
+                  />
+                  <SelectField
+                    label="Vestiging"
+                    options={snapshot.locations.map((location) => ({
+                      value: location.id,
+                      label: location.name,
+                    }))}
+                    value={memberLocationId}
+                    onChange={setMemberLocationId}
+                  />
+                  <SelectField
+                    label="Status"
+                    options={[
+                      { value: "active", label: "Actief" },
+                      { value: "trial", label: "Trial" },
+                      { value: "paused", label: "Gepauzeerd" },
+                    ]}
+                    value={memberStatus}
+                    onChange={(value) => setMemberStatus(value as typeof memberStatus)}
+                  />
+                  <SelectField
+                    label="Waiver"
+                    options={[
+                      { value: "pending", label: "Nog open" },
+                      { value: "complete", label: "Al rond" },
+                    ]}
+                    value={memberWaiverStatus}
+                    onChange={(value) => setMemberWaiverStatus(value as typeof memberWaiverStatus)}
+                  />
+                </div>
+
+                <HeroPhoneNumberField
+                  country={memberPhoneCountry}
+                  onCountryChange={setMemberPhoneCountry}
+                  phone={memberPhone}
+                  onPhoneChange={setMemberPhone}
+                />
+
+                <Field label="Tags">
+                  <TextArea fullWidth rows={4} placeholder="morning, hyrox, trial" value={memberTags} onChange={(event) => setMemberTags(event.target.value)} />
+                </Field>
+
+                <div className="flex justify-end">
+                  <Button
+                    isDisabled={isPending}
+                    onPress={() =>
+                      runAction(async () => {
+                        await submitJson("/api/platform/members", {
+                          fullName: memberName,
+                          email: memberEmail,
+                          phone: memberPhone,
+                          phoneCountry: memberPhoneCountry,
+                          membershipPlanId: memberPlanId,
+                          homeLocationId: memberLocationId,
+                          status: memberStatus,
+                          tags: parseList(memberTags),
+                          waiverStatus: memberWaiverStatus,
+                        });
+                        toast.success("Lid toegevoegd.");
+                        setMemberName("");
+                        setMemberEmail("");
+                        setMemberPhone("");
+                        setMemberTags("");
+                        setMemberStatus("active");
+                        setMemberWaiverStatus("pending");
+                      })
+                    }
+                  >
+                    {isPending ? "Opslaan..." : "Lid toevoegen"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("imports") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.members.length, "lid live", "leden live")}
+            description="Paste existing member and contract data. The system creates missing memberships automatically."
+            disabled={snapshot.locations.length === 0}
+            highlighted={isHighlighted("imports")}
+            statusLabel={snapshot.locations.length > 0 ? "Import klaar" : "Eerst vestiging"}
+            statusTone={snapshot.locations.length > 0 ? "current" : "locked"}
+            title="Contracten en klanten importeren"
+          >
+            {snapshot.locations.length === 0 ? (
+              <p className="text-muted text-sm">
+                Voeg eerst minstens één vestiging toe zodat geïmporteerde klanten meteen een thuislocatie krijgen.
+              </p>
+            ) : (
+              <form
+                className="section-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  runAction(async () => {
+                    const result = await submitJson<{
+                      createdMembershipPlans: number;
+                      importedMembers: number;
+                      skippedMembers: number;
+                    }>("/api/platform/import/contracts", {
+                      defaultLocationId: importLocationId,
+                      csv: importCsv,
+                      phoneCountry: "NL",
+                    });
+
+                    toast.success(
+                      `${result.importedMembers} klanten geïmporteerd, ${result.createdMembershipPlans} contracten aangemaakt${result.skippedMembers > 0 ? `, ${result.skippedMembers} dubbelen overgeslagen` : ""}.`,
+                    );
+                  });
+                }}
+              >
+                <div className="flex flex-wrap justify-between gap-3 rounded-2xl border border-border/70 bg-surface-secondary px-4 py-3">
+                  <p className="text-muted text-sm">
+                    Verplicht: naam, email, telefoon, contract, contractduur en prijs.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onPress={() => setImportCsv(CONTRACT_IMPORT_REQUIRED_CSV_HEADER)}
+                  >
+                    CSV-template
+                  </Button>
+                </div>
+                <SelectField
+                  label="Standaard vestiging"
+                  options={snapshot.locations.map((location) => ({
+                    value: location.id,
+                    label: location.name,
+                  }))}
+                  value={importLocationId}
+                  onChange={setImportLocationId}
+                />
+                <Field label="Contracten en klantenlijst">
+                  <TextArea fullWidth rows={10} placeholder={CONTRACT_IMPORT_REQUIRED_CSV_HEADER} value={importCsv} onChange={(event) => setImportCsv(event.target.value)} />
+                </Field>
+                <div className="flex justify-end">
+                  <Button isDisabled={isPending} type="submit">
+                    {isPending ? "Importeren..." : "Import starten"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("staff") ? (
+          <SectionCard
+            countLabel={formatCountLabel(snapshot.staff.length, "account live", "accounts live")}
+            description="Invite owner, manager, trainer, or frontdesk accounts with the correct workspace role."
+            disabled={!snapshot.uiCapabilities.canManageStaff}
+            highlighted={isHighlighted("staff")}
+            statusLabel={snapshot.uiCapabilities.canManageStaff ? "Owner" : "Owner-only"}
+            statusTone={snapshot.uiCapabilities.canManageStaff ? "current" : "locked"}
+            title="Teamlid uitnodigen"
+          >
+            {!snapshot.uiCapabilities.canManageStaff ? (
+              <p className="text-muted text-sm">
+                Alleen de eigenaar kan teamaccounts aanmaken of rechten aanpassen.
+              </p>
+            ) : (
+              <form
+                className="section-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  runAction(async () => {
+                    await submitJson("/api/platform/staff", {
+                      displayName: staffName,
+                      email: staffEmail,
+                      password: staffPassword,
+                      roleKey: staffRoleKey,
+                    });
+
+                    toast.success("Teamaccount toegevoegd.");
+                    setStaffName("");
+                    setStaffEmail("");
+                    setStaffPassword("");
+                    setStaffRoleKey("manager");
+                  });
+                }}
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Naam">
+                    <Input fullWidth autoComplete="name" placeholder="Naam teamlid" value={staffName} onChange={(event) => setStaffName(event.target.value)} />
+                  </Field>
+                  <SelectField
+                    label="Rol"
+                    options={PLATFORM_ROLE_OPTIONS.map((role) => ({
+                      value: role.key,
+                      label: role.label,
+                    }))}
+                    value={staffRoleKey}
+                    onChange={(value) => setStaffRoleKey(value as typeof staffRoleKey)}
+                  />
+                  <Field label="E-mail">
+                    <Input fullWidth autoComplete="username" placeholder="teamlid@jouwgym.nl" type="email" value={staffEmail} onChange={(event) => setStaffEmail(event.target.value)} />
+                  </Field>
+                  <Field label="Tijdelijk wachtwoord">
+                    <Input fullWidth autoComplete="new-password" minLength={8} placeholder="Minimaal 8 tekens" type="password" value={staffPassword} onChange={(event) => setStaffPassword(event.target.value)} />
+                  </Field>
+                </div>
+                <div className="flex justify-end">
+                  <Button isDisabled={isPending} type="submit">
+                    {isPending ? "Opslaan..." : "Teamaccount toevoegen"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("remote-access") ? (
+          <SectionCard
+            countLabel={snapshot.remoteAccess.deviceLabel || "Geen slot gekoppeld"}
+            description="Connect the smart lock, assign it to a location, and keep remote open as an owner-only action."
+            disabled={!snapshot.uiCapabilities.canManageRemoteAccess}
+            highlighted={isHighlighted("remote-access")}
+            statusLabel={snapshot.remoteAccess.statusLabel}
+            statusTone={
+              !snapshot.uiCapabilities.canManageRemoteAccess
+                ? "locked"
+                : snapshot.remoteAccess.connectionStatus === "configured" &&
+                    snapshot.remoteAccess.enabled
+                  ? "complete"
+                  : snapshot.remoteAccess.connectionStatus === "attention"
+                    ? "current"
+                    : "upcoming"
+            }
+            title="Smartdeur koppelen"
+          >
+            {!snapshot.uiCapabilities.canManageRemoteAccess ? (
+              <p className="text-muted text-sm">
+                Alleen de eigenaar kan slimme sloten koppelen of de deur op afstand openen.
+              </p>
+            ) : (
+              <form
+                className="section-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  runAction(async () => {
+                    const remoteAccess = await submitJson<
+                      GymDashboardSnapshot["remoteAccess"]
+                    >("/api/platform/remote-access", {
+                      enabled: remoteAccessEnabled,
+                      provider: remoteAccessProvider,
+                      bridgeType: remoteAccessBridgeType,
+                      locationId: remoteAccessLocationId || null,
+                      deviceLabel: remoteAccessDeviceLabel,
+                      externalDeviceId: remoteAccessExternalDeviceId,
+                      notes: remoteAccessNotes || undefined,
+                    });
+
+                    toast.success(
+                      `${remoteAccess.providerLabel} opgeslagen voor ${remoteAccess.deviceLabel}.`,
+                    );
+                  });
+                }}
+              >
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Content className="space-y-2">
+                    <p className="font-medium">Remote access status</p>
+                    <p className="text-muted text-sm leading-6">
+                      {snapshot.remoteAccess.helpText}
+                    </p>
+                  </Card.Content>
+                </Card>
+
+                <Switch
+                  isSelected={remoteAccessEnabled}
+                  onChange={setRemoteAccessEnabled}
+                >
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Switch.Content>
+                    <Label>Remote toegang actief voor deze gym</Label>
+                  </Switch.Content>
+                </Switch>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectField
+                    label="Provider"
+                    options={REMOTE_ACCESS_PROVIDER_OPTIONS.map((provider) => ({
+                      value: provider.key,
+                      label: provider.label,
+                    }))}
+                    value={remoteAccessProvider}
+                    onChange={(value) => setRemoteAccessProvider(value as typeof remoteAccessProvider)}
+                  />
+                  <SelectField
+                    label="Koppelmodus"
+                    options={REMOTE_ACCESS_BRIDGE_OPTIONS.map((option) => ({
+                      value: option.key,
+                      label: option.label,
+                    }))}
+                    value={remoteAccessBridgeType}
+                    onChange={(value) => setRemoteAccessBridgeType(value as typeof remoteAccessBridgeType)}
+                  />
+                  <SelectField
+                    label="Vestiging"
+                    options={[
+                      { value: "", label: "Kies later een deur" },
+                      ...snapshot.locations.map((location) => ({
+                        value: location.id,
+                        label: location.name,
+                      })),
+                    ]}
+                    value={remoteAccessLocationId}
+                    onChange={setRemoteAccessLocationId}
+                  />
+                  <Field label="Slot- of deuurnaam">
+                    <Input fullWidth placeholder="Hoofdingang" value={remoteAccessDeviceLabel} onChange={(event) => setRemoteAccessDeviceLabel(event.target.value)} />
+                  </Field>
+                  <div className="md:col-span-2">
+                    <Field label="Device ID / extern slot-ID">
+                      <Input fullWidth placeholder="nuki-lock-01" value={remoteAccessExternalDeviceId} onChange={(event) => setRemoteAccessExternalDeviceId(event.target.value)} />
+                    </Field>
+                  </div>
+                </div>
+
+                <Field label="Notities">
+                  <TextArea fullWidth rows={4} placeholder="alleen gebruiken buiten openingstijd" value={remoteAccessNotes} onChange={(event) => setRemoteAccessNotes(event.target.value)} />
+                </Field>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button isDisabled={isPending} type="submit">
+                    {isPending ? "Opslaan..." : "Remote toegang opslaan"}
+                  </Button>
+                  <Button
+                    isDisabled={
+                      isPending ||
+                      !snapshot.remoteAccess.enabled ||
+                      snapshot.remoteAccess.connectionStatus !== "configured"
+                    }
+                    type="button"
+                    variant="outline"
+                    onPress={() =>
+                      runAction(async () => {
+                        const receipt = await submitJson<{ summary: string }>(
+                          "/api/platform/remote-access/open",
+                          {},
+                        );
+
+                        toast.success(receipt.summary);
+                      })
+                    }
+                  >
+                    Open deur op afstand
+                  </Button>
+                </div>
+              </form>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("payments") ? (
+          <SectionCard
+            countLabel={
+              snapshot.payments.connectionStatus !== "not_configured" &&
+              snapshot.payments.paymentMethods.length > 0
+                ? formatCountLabel(
+                    snapshot.payments.paymentMethods.length,
+                    "betaalflow klaar",
+                    "betaalflows klaar",
+                  )
+                : "Nog niet gekoppeld"
+            }
+            description="Connect Mollie and decide which payment flows are live for this workspace."
+            disabled={!snapshot.uiCapabilities.canManagePayments}
+            highlighted={isHighlighted("payments")}
+            statusLabel={snapshot.payments.statusLabel}
+            statusTone={
+              !snapshot.uiCapabilities.canManagePayments
+                ? "locked"
+                : snapshot.payments.connectionStatus === "configured" &&
+                    snapshot.payments.enabled
+                  ? "complete"
+                  : snapshot.payments.connectionStatus === "attention"
+                    ? "current"
+                    : "upcoming"
+            }
+            title="Betalingen koppelen"
+          >
+            {!snapshot.uiCapabilities.canManagePayments ? (
+              <p className="text-muted text-sm">
+                Alleen de eigenaar kan betaalproviders koppelen of betaalflows previewen.
+              </p>
+            ) : (
+              <form
+                className="section-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  runAction(async () => {
+                    const payments = await submitJson<GymDashboardSnapshot["payments"]>(
+                      "/api/platform/billing",
+                      {
+                        enabled: billingEnabled,
+                        provider: billingProvider,
+                        profileLabel: billingProfileLabel,
+                        profileId: billingProfileId,
+                        settlementLabel: billingSettlementLabel,
+                        supportEmail: billingSupportEmail,
+                        paymentMethods: billingPaymentMethods,
+                        notes: billingNotes || undefined,
+                      },
+                    );
+
+                    toast.success(
+                      `${payments.providerLabel} opgeslagen voor ${payments.profileLabel}.`,
+                    );
+                  });
+                }}
+              >
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Content className="space-y-2">
+                    <p className="font-medium">Betaalstatus</p>
+                    <p className="text-muted text-sm leading-6">
+                      {snapshot.payments.helpText}
+                    </p>
+                  </Card.Content>
+                </Card>
+
+                <Switch isSelected={billingEnabled} onChange={setBillingEnabled}>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Switch.Content>
+                    <Label>Betalingen actief voor deze gym</Label>
+                  </Switch.Content>
+                </Switch>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectField
+                    label="Provider"
+                    options={BILLING_PROVIDER_OPTIONS.map((provider) => ({
+                      value: provider.key,
+                      label: provider.label,
+                    }))}
+                    value={billingProvider}
+                    onChange={(value) => setBillingProvider(value as typeof billingProvider)}
+                  />
+                  <Field label="Profielnaam">
+                    <Input fullWidth placeholder="Atlas Forge Payments" value={billingProfileLabel} onChange={(event) => setBillingProfileLabel(event.target.value)} />
+                  </Field>
+                  <Field label="Mollie profiel-ID">
+                    <Input fullWidth placeholder="pfl_live_..." value={billingProfileId} onChange={(event) => setBillingProfileId(event.target.value)} />
+                  </Field>
+                  <Field label="Uitbetalingslabel">
+                    <Input fullWidth placeholder="Atlas Forge Club" value={billingSettlementLabel} onChange={(event) => setBillingSettlementLabel(event.target.value)} />
+                  </Field>
+                  <div className="md:col-span-2">
+                    <Field label="Support e-mail">
+                      <Input fullWidth placeholder="billing@jouwgym.nl" type="email" value={billingSupportEmail} onChange={(event) => setBillingSupportEmail(event.target.value)} />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="section-stack rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="font-medium">Betaalflows</p>
+                    <Chip size="sm" variant="tertiary">
+                      {billingPaymentMethods.length} geselecteerd
+                    </Chip>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {BILLING_PAYMENT_METHOD_OPTIONS.map((paymentMethod) => {
+                      const active = billingPaymentMethods.includes(paymentMethod.key);
+
+                      return (
+                        <Button
+                          key={paymentMethod.key}
+                          type="button"
+                          variant={active ? "primary" : "outline"}
+                          onPress={() => toggleBillingMethod(paymentMethod.key)}
+                        >
+                          {paymentMethod.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Field label="Notities">
+                  <TextArea fullWidth rows={4} placeholder="eerst memberships via incasso, intro via betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
+                </Field>
+
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Header>
+                    <Card.Title>Preview betaalflow</Card.Title>
+                    <Card.Description>
+                      Test one flow before it reaches live members.
+                    </Card.Description>
+                  </Card.Header>
+                  <Card.Content className="grid gap-4 md:grid-cols-2">
+                    <SelectField
+                      label="Flow"
+                      options={billingPaymentMethods.map((paymentMethod) => ({
+                        value: paymentMethod,
+                        label:
+                          BILLING_PAYMENT_METHOD_OPTIONS.find(
+                            (option) => option.key === paymentMethod,
+                          )?.label ?? paymentMethod,
+                      }))}
+                      value={billingPreviewMethod}
+                      onChange={(value) => setBillingPreviewMethod(value as typeof billingPreviewMethod)}
+                    />
+                    <Field label="Bedrag in centen">
+                      <Input fullWidth min={100} step={5} type="number" value={billingPreviewAmount} onChange={(event) => setBillingPreviewAmount(event.target.value)} />
+                    </Field>
+                    <Field label="Omschrijving">
+                      <Input fullWidth placeholder="Intake bundle" value={billingPreviewDescription} onChange={(event) => setBillingPreviewDescription(event.target.value)} />
+                    </Field>
+                    <Field label="Lidnaam">
+                      <Input fullWidth placeholder="Optioneel" value={billingPreviewMemberName} onChange={(event) => setBillingPreviewMemberName(event.target.value)} />
+                    </Field>
+                  </Card.Content>
+                </Card>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button
+                    isDisabled={isPending || billingPaymentMethods.length === 0}
+                    type="submit"
+                  >
+                    {isPending ? "Opslaan..." : "Betalingen opslaan"}
+                  </Button>
+                  <Button
+                    isDisabled={
+                      isPending ||
+                      !snapshot.payments.enabled ||
+                      snapshot.payments.connectionStatus !== "configured" ||
+                      billingPaymentMethods.length === 0
+                    }
+                    type="button"
+                    variant="outline"
+                    onPress={() =>
+                      runAction(async () => {
+                        const receipt = await submitJson<{ summary: string }>(
+                          "/api/platform/billing/preview",
+                          {
+                            paymentMethod: billingPreviewMethod,
+                            amountCents: Number(billingPreviewAmount),
+                            currency: "EUR",
+                            description: billingPreviewDescription,
+                            memberName: billingPreviewMemberName || undefined,
+                          },
+                        );
+
+                        toast.success(receipt.summary);
+                      })
+                    }
+                  >
+                    Preview betaalflow
+                  </Button>
+                </div>
+              </form>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {shouldShowSection("legal") ? (
+          <SectionCard
+            countLabel={snapshot.legal.statusLabel}
+            description="Store the legal URLs, SEPA mandate text, contract template, and waiver retention before going live with billing."
+            highlighted={isHighlighted("legal")}
+            statusLabel={snapshot.legal.statusLabel}
+            statusTone={
+              snapshot.legal.statusLabel === "Juridisch klaar" ? "complete" : "current"
+            }
+            title="Juridische instellingen"
+          >
+            <form
+              className="section-stack"
+              onSubmit={(event) => {
+                event.preventDefault();
+                runAction(async () => {
+                  const legal = await submitJson<GymDashboardSnapshot["legal"]>(
+                    "/api/platform/legal",
+                    {
+                      termsUrl: legalTermsUrl,
+                      privacyUrl: legalPrivacyUrl,
+                      sepaCreditorId: legalSepaCreditorId,
+                      sepaMandateText: legalSepaMandateText,
+                      contractPdfTemplateKey: legalContractPdfTemplateKey,
+                      waiverStorageKey: legalWaiverStorageKey,
+                      waiverRetentionMonths: Number(legalWaiverRetentionMonths),
+                    },
+                  );
+
+                  toast.success(`${legal.statusLabel}: juridische instellingen opgeslagen.`);
+                });
+              }}
+            >
+              <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                <Card.Content>
+                  <p className="text-muted text-sm leading-6">{snapshot.legal.helpText}</p>
+                </Card.Content>
+              </Card>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Algemene voorwaarden URL">
+                  <Input fullWidth placeholder="https://jouwgym.nl/voorwaarden" value={legalTermsUrl} onChange={(event) => setLegalTermsUrl(event.target.value)} />
+                </Field>
+                <Field label="Privacyverklaring URL">
+                  <Input fullWidth placeholder="https://jouwgym.nl/privacy" value={legalPrivacyUrl} onChange={(event) => setLegalPrivacyUrl(event.target.value)} />
+                </Field>
+                <Field label="SEPA creditor ID">
+                  <Input fullWidth placeholder="NL00ZZZ..." value={legalSepaCreditorId} onChange={(event) => setLegalSepaCreditorId(event.target.value)} />
+                </Field>
+                <Field label="Contract-PDF template key">
+                  <Input fullWidth placeholder="contracts/templates/membership-v1.pdf" value={legalContractPdfTemplateKey} onChange={(event) => setLegalContractPdfTemplateKey(event.target.value)} />
+                </Field>
+                <Field label="Waiver opslagpad">
+                  <Input fullWidth placeholder="waivers/signed/" value={legalWaiverStorageKey} onChange={(event) => setLegalWaiverStorageKey(event.target.value)} />
+                </Field>
+                <Field label="Waiver bewaartermijn maanden">
+                  <Input fullWidth min={1} type="number" value={legalWaiverRetentionMonths} onChange={(event) => setLegalWaiverRetentionMonths(event.target.value)} />
+                </Field>
+              </div>
+              <Field label="SEPA machtigingstekst">
+                <TextArea fullWidth rows={6} value={legalSepaMandateText} onChange={(event) => setLegalSepaMandateText(event.target.value)} />
+              </Field>
+              <div className="flex justify-end">
+                <Button isDisabled={isPending} type="submit">
+                  {isPending ? "Opslaan..." : "Juridische instellingen opslaan"}
+                </Button>
+              </div>
+            </form>
+          </SectionCard>
+        ) : null}
       </div>
     </section>
   );

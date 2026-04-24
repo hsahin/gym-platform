@@ -30,8 +30,13 @@ import type {
   MembershipPlan,
   WaiverRecord,
 } from "@/server/types";
+import { toClientPlain } from "@/server/lib/to-client-plain";
 
 type CollectionDocument<T> = T & TenantDocument;
+
+function toEntity<T>(document: CollectionDocument<T>): T {
+  return toClientPlain(document);
+}
 
 const collections = {
   locations: "gym_locations",
@@ -46,37 +51,37 @@ const collections = {
 
 function withLocationDefaults(location: CollectionDocument<GymLocation>) {
   return {
-    ...location,
+    ...toEntity(location),
     status: location.status ?? "active",
-  } satisfies CollectionDocument<GymLocation>;
+  } satisfies GymLocation;
 }
 
 function withMembershipPlanDefaults(plan: CollectionDocument<MembershipPlan>) {
   return {
-    ...plan,
+    ...toEntity(plan),
     status: plan.status ?? "active",
-  } satisfies CollectionDocument<MembershipPlan>;
+  } satisfies MembershipPlan;
 }
 
 function withMemberDefaults(member: CollectionDocument<GymMember>) {
   return {
-    ...member,
+    ...toEntity(member),
     status: member.status ?? "active",
-  } satisfies CollectionDocument<GymMember>;
+  } satisfies GymMember;
 }
 
 function withTrainerDefaults(trainer: CollectionDocument<GymTrainer>) {
   return {
-    ...trainer,
+    ...toEntity(trainer),
     status: trainer.status ?? "active",
-  } satisfies CollectionDocument<GymTrainer>;
+  } satisfies GymTrainer;
 }
 
 function withClassSessionDefaults(classSession: CollectionDocument<ClassSession>) {
   return {
-    ...classSession,
+    ...toEntity(classSession),
     status: classSession.status ?? "active",
-  } satisfies CollectionDocument<ClassSession>;
+  } satisfies ClassSession;
 }
 
 function assertExpectedVersion(
@@ -150,21 +155,24 @@ export class MongoGymStore implements GymStore {
   }
 
   async listBookings(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const bookings = await this.db(tenantContext)
       .collection<CollectionDocument<ClassBooking>>(collections.bookings)
       .findMany({}, { sort: { createdAt: -1 } });
+    return bookings.map((booking) => toEntity(booking));
   }
 
   async listAttendance(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const attendance = await this.db(tenantContext)
       .collection<CollectionDocument<AttendanceRecord>>(collections.attendance)
       .findMany({}, { sort: { checkedInAt: -1 } });
+    return attendance.map((entry) => toEntity(entry));
   }
 
   async listWaivers(tenantContext: TenantContext) {
-    return this.db(tenantContext)
+    const waivers = await this.db(tenantContext)
       .collection<CollectionDocument<WaiverRecord>>(collections.waivers)
       .findMany({}, { sort: { updatedAt: -1 } });
+    return waivers.map((waiver) => toEntity(waiver));
   }
 
   async createLocation(tenantContext: TenantContext, input: CreateLocationInput) {
@@ -1094,7 +1102,7 @@ export class MongoGymStore implements GymStore {
     const existing = await bookings.findOne({ idempotencyKey: input.idempotencyKey });
 
     if (existing) {
-      return { booking: existing, alreadyExisted: true };
+      return { booking: toEntity(existing), alreadyExisted: true };
     }
 
     const existingBooking = await bookings.findOne({
@@ -1104,7 +1112,7 @@ export class MongoGymStore implements GymStore {
     });
 
     if (existingBooking) {
-      return { booking: existingBooking, alreadyExisted: true };
+      return { booking: toEntity(existingBooking), alreadyExisted: true };
     }
 
     const member = await members.findOne({ id: input.memberId });
@@ -1153,7 +1161,7 @@ export class MongoGymStore implements GymStore {
       },
     );
 
-    return { booking, alreadyExisted: false };
+    return { booking: toEntity(booking), alreadyExisted: false };
   }
 
   async cancelBooking(
@@ -1188,7 +1196,7 @@ export class MongoGymStore implements GymStore {
     }
 
     if (booking.status === "cancelled") {
-      return { booking };
+      return { booking: toEntity(booking) };
     }
 
     if (booking.status === "checked_in") {
@@ -1294,8 +1302,8 @@ export class MongoGymStore implements GymStore {
     }
 
     return {
-      booking: cancelledBooking,
-      promotedBooking,
+      booking: toEntity(cancelledBooking),
+      promotedBooking: promotedBooking ? toEntity(promotedBooking) : undefined,
     };
   }
 
@@ -1363,6 +1371,6 @@ export class MongoGymStore implements GymStore {
       });
     }
 
-    return refreshedBooking;
+    return toEntity(refreshedBooking);
   }
 }

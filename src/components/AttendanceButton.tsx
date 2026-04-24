@@ -2,8 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@heroui/react";
 import { toast } from "sonner";
-import { Button } from "@claimtech/ui";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 
 export function AttendanceButton({
@@ -20,9 +20,8 @@ export function AttendanceButton({
     <Button
       type="button"
       variant="outline"
-      size="sm"
-      disabled={isPending}
-      onClick={() =>
+      isDisabled={isPending}
+      onPress={() =>
         startTransition(async () => {
           try {
             const response = await fetch(

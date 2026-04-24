@@ -1,20 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { Button, Card, Chip, Label, TextArea } from "@heroui/react";
+import { NativeSelect } from "@heroui-pro/react/native-select";
 import { toast } from "sonner";
-import {
-  Badge,
-  Button,
-  PhoneNumberField,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Textarea,
-} from "@claimtech/ui";
+import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type { ClassSession, GymMember } from "@/server/types";
 
@@ -38,8 +30,10 @@ export function BookingDialog({
   const [phone, setPhone] = useState(members[0]?.phone ?? "");
   const [phoneCountry, setPhoneCountry] = useState(members[0]?.phoneCountry ?? "NL");
 
-  const selectedMember =
-    members.find((member) => member.id === memberId) ?? members[0];
+  const selectedMember = useMemo(
+    () => members.find((member) => member.id === memberId) ?? members[0],
+    [memberId, members],
+  );
 
   useEffect(() => {
     if (members.length === 0) {
@@ -153,168 +147,128 @@ export function BookingDialog({
   return (
     <>
       <Button
-        type="button"
-        className="bg-teal-700 hover:bg-teal-800"
-        disabled={!canCreateBooking}
-        onClick={() => setOpen(true)}
+        isDisabled={!canCreateBooking}
+        variant="outline"
+        onPress={() => setOpen(true)}
       >
         Nieuwe booking
       </Button>
-      {!canCreateBooking ? (
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          Voeg eerst een lid en een les toe om boekingen te kunnen aanmaken.
-        </p>
-      ) : null}
+
       {open && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm"
+              className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm"
               onClick={() => setOpen(false)}
             >
               <div
                 ref={scrollContainerRef}
                 className="flex min-h-[100dvh] items-center justify-center overflow-y-auto p-4"
               >
-                <div
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="booking-dialog-title"
-                  className="w-full max-w-xl rounded-[28px] border border-white/70 bg-white shadow-glow"
+                <Card
+                  className="w-full max-w-2xl rounded-3xl"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-2">
-                        <h2
-                          id="booking-dialog-title"
-                          className="text-xl font-semibold text-slate-950"
-                        >
-                          Nieuwe booking
-                        </h2>
-                        <p className="text-sm leading-6 text-slate-600">
-                          Kies alleen lid, les en contactgegevens. De rest wordt op
-                          de achtergrond veilig afgehandeld.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
-                        onClick={() => setOpen(false)}
-                      >
-                        Sluit
-                      </button>
+                  <Card.Header className="items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <Card.Title>Nieuwe booking</Card.Title>
+                      <Card.Description>
+                        Kies lid, les en contactgegevens. De reserveringsflow verwerkt de rest.
+                      </Card.Description>
                     </div>
+                    <Button size="sm" variant="ghost" onPress={() => setOpen(false)}>
+                      Sluit
+                    </Button>
+                  </Card.Header>
 
-                    <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
-                      <div className="grid gap-4">
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-slate-800">
-                            Lid
-                          </p>
-                          <Select value={memberId} onValueChange={setMemberId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecteer lid" />
-                            </SelectTrigger>
-                            <SelectContent>
+                  <Card.Content>
+                    <form className="section-stack" onSubmit={handleSubmit}>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="field-stack">
+                          <Label>Lid</Label>
+                          <NativeSelect fullWidth>
+                            <NativeSelect.Trigger
+                              name="memberId"
+                              value={memberId}
+                              onChange={(event) => setMemberId(event.target.value)}
+                            >
                               {members.map((member) => (
-                                <SelectItem key={member.id} value={member.id}>
+                                <NativeSelect.Option key={member.id} value={member.id}>
                                   {member.fullName}
-                                </SelectItem>
+                                </NativeSelect.Option>
                               ))}
-                            </SelectContent>
-                          </Select>
+                              <NativeSelect.Indicator />
+                            </NativeSelect.Trigger>
+                          </NativeSelect>
                         </div>
 
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-slate-800">
-                            Les
-                          </p>
-                          <Select
-                            value={classSessionId}
-                            onValueChange={setClassSessionId}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecteer les" />
-                            </SelectTrigger>
-                            <SelectContent>
+                        <div className="field-stack">
+                          <Label>Les</Label>
+                          <NativeSelect fullWidth>
+                            <NativeSelect.Trigger
+                              name="classSessionId"
+                              value={classSessionId}
+                              onChange={(event) => setClassSessionId(event.target.value)}
+                            >
                               {classSessions.map((classSession) => (
-                                <SelectItem
+                                <NativeSelect.Option
                                   key={classSession.id}
                                   value={classSession.id}
                                 >
                                   {classSession.title}
-                                </SelectItem>
+                                </NativeSelect.Option>
                               ))}
-                            </SelectContent>
-                          </Select>
+                              <NativeSelect.Indicator />
+                            </NativeSelect.Trigger>
+                          </NativeSelect>
                         </div>
+                      </div>
 
-                        <PhoneNumberField
-                          country={phoneCountry as never}
-                          onCountryChange={(value) => setPhoneCountry(value)}
-                          phone={phone}
-                          onPhoneChange={setPhone}
-                          language="nl"
-                          countryLabel="Landcode"
-                          phoneLabel="Mobiel nummer"
+                      <HeroPhoneNumberField
+                        country={phoneCountry}
+                        onCountryChange={(value) =>
+                          setPhoneCountry(value as typeof phoneCountry)
+                        }
+                        phone={phone}
+                        onPhoneChange={setPhone}
+                      />
+
+                      <div className="field-stack">
+                        <Label>Notities</Label>
+                        <TextArea
+                          fullWidth
+                          rows={4}
+                          placeholder="Optioneel"
+                          value={notes}
+                          onChange={(event) => setNotes(event.target.value)}
                         />
-
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-slate-800">
-                            Notitie (optioneel)
-                          </p>
-                          <Textarea
-                            value={notes}
-                            onChange={(event) => setNotes(event.target.value)}
-                            placeholder="Bijvoorbeeld: eerste proefles, liever een rack aan het raam."
-                          />
-                        </div>
                       </div>
 
                       {selectedMember ? (
-                        <div className="rounded-2xl border border-slate-200 bg-slate-950/[0.03] p-4 text-sm text-slate-600">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-slate-900">
-                              {selectedMember.fullName}
-                            </span>
-                            <Badge
-                              variant={
-                                selectedMember.waiverStatus === "complete"
-                                  ? "success"
-                                  : "warning"
-                              }
-                            >
-                              waiver {selectedMember.waiverStatus}
-                            </Badge>
-                          </div>
-                          <p className="mt-2">
-                            De booking-API stuurt een previewbericht terug en
-                            bewaart de mutatie idempotent.
-                          </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Chip size="sm" variant="soft">
+                            {selectedMember.status}
+                          </Chip>
+                          <Chip size="sm" variant="tertiary">
+                            {selectedMember.email}
+                          </Chip>
                         </div>
                       ) : null}
 
-                      <div className="-mx-5 sticky bottom-0 mt-6 border-t border-slate-200 bg-white/95 px-5 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-4 backdrop-blur sm:-mx-6 sm:px-6">
-                        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                      <div className="flex flex-wrap justify-end gap-3">
                         <Button
                           type="button"
-                          variant="outline"
-                          onClick={() => setOpen(false)}
+                          variant="secondary"
+                          onPress={() => setOpen(false)}
                         >
-                          Annuleren
+                          Annuleer
                         </Button>
-                        <Button
-                          type="submit"
-                          disabled={isPending || !memberId || !classSessionId}
-                        >
+                        <Button type="submit" isDisabled={isPending}>
                           {isPending ? "Opslaan..." : "Boeking opslaan"}
                         </Button>
-                        </div>
                       </div>
                     </form>
-                  </div>
-                </div>
+                  </Card.Content>
+                </Card>
               </div>
             </div>,
             document.body,

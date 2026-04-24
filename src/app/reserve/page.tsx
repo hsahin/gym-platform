@@ -1,5 +1,5 @@
 import { PublicReservationPortal } from "@/components/PublicReservationPortal";
-import { GymOsAmbient } from "@/components/GymOsPrimitives";
+import { RuntimeConfigurationState } from "@/components/RuntimeConfigurationState";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
 export const dynamic = "force-dynamic";
@@ -7,25 +7,38 @@ export const dynamic = "force-dynamic";
 export default async function ReservePage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const services = await getGymPlatformServices();
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const gym =
-    typeof searchParams?.gym === "string"
-      ? searchParams.gym
-      : Array.isArray(searchParams?.gym)
-        ? searchParams?.gym[0]
+    typeof resolvedSearchParams?.gym === "string"
+      ? resolvedSearchParams.gym
+      : Array.isArray(resolvedSearchParams?.gym)
+        ? resolvedSearchParams?.gym[0]
         : undefined;
-  const snapshot = await services.getPublicReservationSnapshot({
-    tenantSlug: gym,
-  });
 
-  return (
-    <main className="min-h-screen overflow-hidden bg-[#0a0a0a] px-6 py-6 text-white md:py-8">
-      <GymOsAmbient />
-      <div className="mx-auto w-full max-w-7xl">
-        <PublicReservationPortal snapshot={snapshot} />
-      </div>
-    </main>
-  );
+  try {
+    const services = await getGymPlatformServices();
+    const snapshot = await services.getPublicReservationSnapshot({
+      tenantSlug: gym,
+    });
+
+    return (
+      <main className="min-h-screen bg-transparent">
+        <div className="app-page">
+          <PublicReservationPortal snapshot={snapshot} />
+        </div>
+      </main>
+    );
+  } catch (error) {
+    return (
+      <RuntimeConfigurationState
+        detail={
+          error instanceof Error
+            ? error.message
+            : "De reserveringsomgeving kon de live configuratie niet laden."
+        }
+      />
+    );
+  }
 }

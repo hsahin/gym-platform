@@ -1,14 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import {
-  ArrowRightIcon,
-  CheckIcon,
-  CreditCardIcon,
-  GymOsAmbient,
-  GymOsBadge,
-  GymOsLogo,
-  LockIcon,
-  UsersIcon,
-} from "@/components/GymOsPrimitives";
+import { Card, Chip } from "@heroui/react";
+import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
 
 const plans = [
   {
@@ -34,99 +28,93 @@ const plans = [
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#0a0a0a] text-white">
-      <GymOsAmbient />
+    <main className="app-page section-stack py-8 md:py-10">
+      <header className="app-header">
+        <div className="app-header__brand-copy">
+          <p className="text-sm font-semibold">GymOS</p>
+          <p className="text-muted text-sm">Pricing kept deliberately simple.</p>
+        </div>
 
-      <nav className="relative z-50 border-b border-white/[0.06]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <GymOsLogo />
-          <div className="flex items-center gap-3">
-            <Link href="/reserve" className="hidden text-sm text-white/60 transition hover:text-white sm:inline-flex">
+        <div className="app-header__actions">
+          <div className="app-header__nav text-sm">
+            <Link href="/reserve" className="text-muted transition hover:text-foreground">
               Boek een les
             </Link>
-            <Link href="/login?mode=signup" className="gym-os-button">
+            <Link
+              href="/login?mode=signup"
+              className="rounded-full bg-accent px-5 py-2.5 text-accent-foreground"
+            >
               Starten
-              <ArrowRightIcon className="h-4 w-4" />
             </Link>
           </div>
+          <ThemeModeSwitch />
         </div>
-      </nav>
+      </header>
 
-      <section className="relative z-10 mx-auto max-w-7xl px-6 py-20">
-        <div className="mx-auto mb-14 max-w-3xl text-center">
-          <GymOsBadge>Prijzen</GymOsBadge>
-          <h1 className="mb-6 mt-6 text-4xl font-bold leading-tight md:text-6xl">
-            Kies het model dat past bij je gymgroei
+      <section className="space-y-4">
+        <Chip size="sm" variant="soft">
+          Prijzen
+        </Chip>
+        <div className="max-w-3xl space-y-3">
+          <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+            Choose the setup that matches your gym footprint.
           </h1>
-          <p className="text-lg leading-8 text-white/45">
-            Deze pagina is bewust simpel: de echte omzet komt uit contracten,
-            reserveringen, betalingen en member experience die je in het platform beheert.
+          <p className="text-muted text-base leading-7">
+            The product value sits in operations, not packaging. These plans track how much
+            workflow you want active from day one.
           </p>
         </div>
+      </section>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {plans.map((plan) => (
-            <article
-              key={plan.name}
-              className={`glass-card p-8 ${
-                plan.highlighted ? "border-orange-500/30 bg-orange-500/10 shadow-2xl shadow-orange-500/10" : ""
-              }`}
-            >
-              <div className="mb-6 flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold">{plan.name}</h2>
-                  <p className="mt-2 text-sm leading-6 text-white/45">{plan.helper}</p>
-                </div>
-                {plan.highlighted ? <GymOsBadge>Populair</GymOsBadge> : null}
+      <section className="grid gap-4 lg:grid-cols-3">
+        {plans.map((plan) => (
+          <Card
+            key={plan.name}
+            className={`rounded-[28px] border-border/80 ${plan.highlighted ? "ring-2 ring-accent/20" : ""}`}
+          >
+            <Card.Header className="items-start justify-between gap-4">
+              <div className="space-y-2">
+                <Card.Title>{plan.name}</Card.Title>
+                <Card.Description>{plan.helper}</Card.Description>
               </div>
-              <p className="mb-6 text-5xl font-bold">
+              {plan.highlighted ? (
+                <Chip color="accent" size="sm" variant="soft">
+                  Populair
+                </Chip>
+              ) : null}
+            </Card.Header>
+            <Card.Content className="section-stack">
+              <p className="text-4xl font-semibold">
                 {plan.price}
                 {plan.price.startsWith("€") ? (
-                  <span className="text-base font-medium text-white/35"> / maand</span>
+                  <span className="text-muted text-base font-medium"> / maand</span>
                 ) : null}
               </p>
-              <div className="mb-8 space-y-3">
+
+              <div className="grid gap-2">
                 {plan.features.map((feature) => (
-                  <div key={feature} className="flex items-center gap-3 text-sm text-white/55">
-                    <CheckIcon className="h-4 w-4 text-emerald-400" />
+                  <div
+                    key={feature}
+                    className="rounded-2xl border border-border/70 bg-surface-secondary px-4 py-3 text-sm"
+                  >
                     {feature}
                   </div>
                 ))}
               </div>
-              <Link href="/login?mode=signup" className={plan.highlighted ? "gym-os-button w-full" : "gym-os-button-secondary w-full"}>
+
+              <Link
+                href="/login?mode=signup"
+                className={`rounded-full px-5 py-2.5 text-center text-sm font-medium ${
+                  plan.highlighted
+                    ? "bg-accent text-accent-foreground"
+                    : "border border-border bg-surface"
+                }`}
+              >
                 Gym aanmelden
               </Link>
-            </article>
-          ))}
-        </div>
-
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          {[
-            {
-              title: "Betalingen",
-              copy: "Mollie voor incasso, eenmalig en betaalverzoeken.",
-              icon: CreditCardIcon,
-            },
-            {
-              title: "Toegang",
-              copy: "Nuki-first smartdoor beheer, voorbereid op andere sloten.",
-              icon: LockIcon,
-            },
-            {
-              title: "Leden",
-              copy: "Importeer bestaande klanten en bouw contracten automatisch op.",
-              icon: UsersIcon,
-            },
-          ].map((item) => (
-            <div key={item.title} className="glass-card p-6">
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
-                <item.icon className="h-5 w-5 text-orange-400" />
-              </div>
-              <h2 className="mb-2 font-semibold">{item.title}</h2>
-              <p className="text-sm leading-6 text-white/40">{item.copy}</p>
-            </div>
-          ))}
-        </div>
+            </Card.Content>
+          </Card>
+        ))}
       </section>
     </main>
   );

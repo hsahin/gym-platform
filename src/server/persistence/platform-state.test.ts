@@ -19,23 +19,21 @@ import {
   updateLocalTenantBillingSettings,
   updateLocalPlatformData,
   updateLocalTenantRemoteAccess,
-} from "@/server/persistence/local-platform-state";
+} from "@/server/persistence/platform-state";
 
 let tempDir = "";
 
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-state-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
-  process.env.PLATFORM_STATE_BACKEND = "file";
 });
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
-  delete process.env.PLATFORM_STATE_BACKEND;
   await rm(tempDir, { recursive: true, force: true });
 });
 
-describe("local platform state", () => {
+describe("platform state", () => {
   it("starts empty and derives stable tenant slugs", async () => {
     await expect(readLocalPlatformState()).resolves.toBeNull();
     await expect(hasLocalPlatformSetup()).resolves.toBe(false);
@@ -77,7 +75,7 @@ describe("local platform state", () => {
     });
   });
 
-  it("authenticates accounts against the selected gym slug", async () => {
+  it("authenticates accounts without exposing gym selection", async () => {
     const firstTenant = await bootstrapLocalPlatform({
       tenantName: "Northside Athletics",
       ownerName: "Amina Hassan",
@@ -92,12 +90,17 @@ describe("local platform state", () => {
       password: "second-pass-123",
     });
 
+    const authenticatedWithoutSlug = await authenticateLocalAccount(
+      "owner@northside.test",
+      "strong-pass-123",
+    );
     const authenticated = await authenticateLocalAccount(
       "owner@northside.test",
       "strong-pass-123",
       firstTenant.tenant.id,
     );
 
+    expect(authenticatedWithoutSlug?.tenant.id).toBe(firstTenant.tenant.id);
     expect(authenticated?.tenant.id).toBe(firstTenant.tenant.id);
     expect(authenticated?.account.displayName).toBe("Amina Hassan");
     await expect(
@@ -106,6 +109,23 @@ describe("local platform state", () => {
     await expect(
       authenticateLocalAccount("unknown@northside.test", "strong-pass-123", firstTenant.tenant.id),
     ).resolves.toBeNull();
+  });
+
+  it("rejects ambiguous email and password combinations across gyms", async () => {
+    await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    await bootstrapLocalPlatform({
+      tenantName: "Atlas Forge Club",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
     await expect(
       authenticateLocalAccount("owner@northside.test", "strong-pass-123"),
     ).resolves.toBeNull();

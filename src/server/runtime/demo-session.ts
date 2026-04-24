@@ -7,7 +7,7 @@ import {
   type AuthActor,
 } from "@claimtech/auth";
 import { createTenantContext, type TenantContext } from "@claimtech/tenant";
-import type { LocalPlatformAccount } from "@/server/persistence/local-platform-state";
+import type { LocalPlatformAccount } from "@/server/persistence/platform-state";
 import { isProductionRuntime } from "@/server/runtime/production-readiness";
 import {
   PLATFORM_ROLE_OPTIONS,

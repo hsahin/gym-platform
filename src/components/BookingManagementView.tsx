@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@claimtech/ui";
+import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { CancelBookingButton } from "@/components/CancelBookingButton";
 import type { GymDashboardSnapshot } from "@/server/types";

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   bootstrapLocalPlatform,
   createLocalPlatformAccount,
-} from "@/server/persistence/local-platform-state";
+} from "@/server/persistence/platform-state";
 import { buildPlatformActor } from "@/server/runtime/demo-session";
 import { createGymPlatformServices } from "@/server/runtime/gym-services";
 
@@ -34,12 +34,10 @@ async function bootstrapOwnerPlatform() {
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
-  process.env.PLATFORM_STATE_BACKEND = "file";
 });
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
-  delete process.env.PLATFORM_STATE_BACKEND;
   await rm(tempDir, { recursive: true, force: true });
 });
 

@@ -104,14 +104,15 @@ import {
   updateLocalTenantRemoteAccess,
   updateLocalPlatformAccount,
   updateLocalPlatformData,
-} from "@/server/persistence/local-platform-state";
+} from "@/server/persistence/platform-state";
+import { toClientPlain } from "@/server/lib/to-client-plain";
 import {
   getMembershipRole,
 } from "@/server/runtime/platform-roles";
 import {
+  assertLiveInfrastructureConfiguration,
   assertProductionEnvironmentReady,
   getProductionReadinessChecks,
-  isProductionRuntime,
 } from "@/server/runtime/production-readiness";
 import type {
   BillingActionReceipt,
@@ -209,6 +210,10 @@ const featureDefinitions = [
   },
 ] as const;
 
+function shouldUseTestFallbacks() {
+  return process.env.NODE_ENV === "test";
+}
+
 class MemoryCacheClient implements KeyValueCacheClient {
   private readonly entries = new Map<
     string,
@@ -235,7 +240,11 @@ class MemoryCacheClient implements KeyValueCacheClient {
     return this.entries.get(key)?.value ?? null;
   }
 
-  async set(key: string, value: string, options?: { ttlSeconds?: number; ttlMilliseconds?: number; onlyIfAbsent?: boolean }) {
+  async set(
+    key: string,
+    value: string,
+    options?: { ttlSeconds?: number; ttlMilliseconds?: number; onlyIfAbsent?: boolean },
+  ) {
     this.purgeIfExpired(key);
 
     if (options?.onlyIfAbsent && this.entries.has(key)) {
@@ -390,23 +399,23 @@ async function resolveStore(): Promise<Pick<GymPlatformRuntime, "store" | "store
   assertProductionEnvironmentReady();
 
   if (!process.env.MONGODB_URI) {
-    if (isProductionRuntime()) {
-      throw new AppError("Productie mag niet zonder MongoDB starten.", {
-        code: "INVALID_INPUT",
-      });
+    if (shouldUseTestFallbacks()) {
+      const localState = await readLocalPlatformState();
+
+      return {
+        store: createMemoryGymStore({
+          initialState: localState?.data ?? createEmptyGymStoreState(),
+          onChange: async (nextState) => {
+            await updateLocalPlatformData(() => nextState);
+          },
+        }),
+        storeMode: "memory" as StoreMode,
+      };
     }
 
-    const localState = await readLocalPlatformState();
-
-    return {
-      store: createMemoryGymStore({
-        initialState: localState?.data ?? createEmptyGymStoreState(),
-        onChange: async (nextState) => {
-          await updateLocalPlatformData(() => nextState);
-        },
-      }),
-      storeMode: "memory",
-    };
+    throw new AppError("MONGODB_URI is verplicht. De app gebruikt geen memory store meer.", {
+      code: "INVALID_INPUT",
+    });
   }
 
   try {
@@ -424,21 +433,13 @@ async function resolveStore(): Promise<Pick<GymPlatformRuntime, "store" | "store
       storeMode: "mongo",
     };
   } catch (error) {
-    if (isProductionRuntime()) {
-      throw error;
-    }
-
-    console.warn("Falling back to memory store", error);
-    const localState = await readLocalPlatformState();
-    return {
-      store: createMemoryGymStore({
-        initialState: localState?.data ?? createEmptyGymStoreState(),
-        onChange: async (nextState) => {
-          await updateLocalPlatformData(() => nextState);
-        },
-      }),
-      storeMode: "memory",
-    };
+    throw new AppError("MongoDB-verbinding mislukt. Controleer MONGODB_URI en netwerktoegang.", {
+      code: "INVALID_INPUT",
+      cause: error,
+      details: {
+        storeMode: "mongo",
+      },
+    });
   }
 }
 
@@ -446,10 +447,16 @@ async function resolveCacheClient(): Promise<
   Pick<GymPlatformRuntime, "cacheClient" | "cacheMode">
 > {
   if (!process.env.REDIS_URL) {
-    return {
-      cacheClient: new MemoryCacheClient(),
-      cacheMode: "memory",
-    };
+    if (shouldUseTestFallbacks()) {
+      return {
+        cacheClient: new MemoryCacheClient(),
+        cacheMode: "memory" as CacheMode,
+      };
+    }
+
+    throw new AppError("REDIS_URL is verplicht. De app gebruikt geen memory cache meer.", {
+      code: "INVALID_INPUT",
+    });
   }
 
   try {
@@ -458,11 +465,13 @@ async function resolveCacheClient(): Promise<
       cacheMode: "redis",
     };
   } catch (error) {
-    console.warn("Falling back to memory cache", error);
-    return {
-      cacheClient: new MemoryCacheClient(),
-      cacheMode: "memory",
-    };
+    throw new AppError("Redis-verbinding mislukt. Controleer REDIS_URL en netwerktoegang.", {
+      code: "INVALID_INPUT",
+      cause: error,
+      details: {
+        cacheMode: "redis",
+      },
+    });
   }
 }
 
@@ -520,6 +529,8 @@ function resolveStorageMode(): StorageMode {
 }
 
 async function createRuntime(): Promise<GymPlatformRuntime> {
+  assertLiveInfrastructureConfiguration();
+
   const [storeConfig, cacheConfig, userDirectory] = await Promise.all([
     resolveStore(),
     resolveCacheClient(),
@@ -551,20 +562,14 @@ async function createRuntime(): Promise<GymPlatformRuntime> {
       name: "Data",
       run: () => ({
         status: "healthy",
-        summary:
-          storeConfig.storeMode === "mongo"
-            ? "Je clubdata draait op de vaste databaseconfiguratie."
-            : "Je clubdata draait lokaal en is klaar voor inrichting en testen.",
+        summary: "Je clubdata draait op de vaste databaseconfiguratie.",
       }),
     })
     .register({
       name: "Snelheid",
       run: () => ({
-        status: cacheConfig.cacheMode === "redis" ? "healthy" : "degraded",
-        summary:
-          cacheConfig.cacheMode === "redis"
-            ? "De app draait op de snelle live cachelaag."
-            : "De app reageert snel in de huidige setup; opschalen kan later zodra meer clubs live gaan.",
+        status: "healthy",
+        summary: "De app draait op de snelle live cachelaag.",
       }),
     })
     .register({
@@ -1571,11 +1576,13 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           .map((language) => language.nativeName),
       };
 
-      await cache.setJson("dashboard", actor.subjectId, snapshot, {
+      const serializedSnapshot = toClientPlain(snapshot);
+
+      await cache.setJson("dashboard", actor.subjectId, serializedSnapshot, {
         ttlSeconds: 30,
       });
 
-      return snapshot;
+      return serializedSnapshot;
     },
     async getPublicReservationSnapshot(input) {
       const [tenants, requestedTenant] = await Promise.all([
@@ -1586,7 +1593,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         requestedTenant ?? (tenants.length === 1 ? tenants[0] ?? null : null);
 
       if (!tenantProfile) {
-        return {
+        return toClientPlain({
           tenantName: tenants.length > 1 ? "Kies je sportschool" : "Jouw sportschool",
           tenantSlug: null,
           availableGyms: tenants.map((tenant) => ({
@@ -1595,7 +1602,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             name: tenant.name,
           })),
           classSessions: [],
-        };
+        });
       }
 
       const tenantContext = createPublicTenantContext(tenantProfile.id);
@@ -1612,7 +1619,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         trainers.map((trainer) => [trainer.id, trainer] as const),
       );
 
-      return {
+      return toClientPlain({
         tenantName: tenantProfile.name,
         tenantSlug: tenantProfile.id,
         availableGyms: tenants.map((tenant) => ({
@@ -1638,7 +1645,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             level: classSession.level,
             focus: classSession.focus,
           })),
-      };
+      });
     },
     async listMembers(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["members.read"]);
