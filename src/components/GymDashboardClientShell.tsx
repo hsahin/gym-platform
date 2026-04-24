@@ -17,7 +17,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { GymDashboard } from "@/components/GymDashboard";
-import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
+import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
 import type { GymDashboardSnapshot } from "@/server/types";
 
@@ -139,7 +139,7 @@ export function GymDashboardClientShell({
                     {copy.ctaLabel}
                   </Button>
                 ) : null}
-                <ThemeModeSwitch />
+                <LazyThemeModeSwitch />
                 <form action="/api/auth/logout" method="post">
                   <Button size="sm" type="submit" variant="outline">
                     Uitloggen

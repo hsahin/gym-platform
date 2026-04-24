@@ -218,4 +218,32 @@ describe("demo session runtime", () => {
     expect(actor.subjectId).toBe("member:nina@northside.test");
     expect(listActorTenants(actor)).toHaveLength(2);
   });
+
+  it("keeps the primary user id when combined accounts are not all members", () => {
+    const actor = buildActorForAccounts([
+      {
+        userId: "owner_northside",
+        tenantId: toTenantId("northside-athletics"),
+        email: "owner@northside.test",
+        displayName: "Amina Hassan",
+        roleKey: "owner",
+      },
+      {
+        userId: "manager_atlas",
+        tenantId: toTenantId("atlas-forge-club"),
+        email: "owner@northside.test",
+        displayName: "Amina Hassan",
+        roleKey: "manager",
+      },
+    ]);
+
+    expect(actor.subjectId).toBe("owner_northside");
+    expect(listActorTenants(actor)).toHaveLength(2);
+  });
+
+  it("requires at least one account to build a combined actor", () => {
+    expect(() => buildActorForAccounts([])).toThrow(
+      "Er is minstens één account nodig om een sessie te maken.",
+    );
+  });
 });

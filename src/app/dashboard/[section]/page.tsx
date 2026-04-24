@@ -4,8 +4,6 @@ import {
   resolveDashboardRouteKey,
 } from "@/lib/dashboard-pages";
 
-export const dynamic = "force-dynamic";
-
 export default async function DashboardSectionPage({
   params,
 }: {

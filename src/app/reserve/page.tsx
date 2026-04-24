@@ -8,8 +8,6 @@ import {
 } from "@/server/runtime/demo-session";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
-export const dynamic = "force-dynamic";
-
 export default async function ReservePage({
   searchParams,
 }: {

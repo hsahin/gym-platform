@@ -9,8 +9,6 @@ import {
   resolveViewerFromToken,
 } from "@/server/runtime/demo-session";
 
-export const dynamic = "force-dynamic";
-
 function readSearchParam(
   value: string | ReadonlyArray<string> | undefined,
 ) {

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { unstable_cache } from "next/cache";
 import { redirect } from "next/navigation";
 import { PublicLandingPage } from "@/components/PublicLandingPage";
 import { RuntimeConfigurationState } from "@/components/RuntimeConfigurationState";
@@ -8,7 +9,14 @@ import {
 } from "@/server/runtime/demo-session";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
-export const dynamic = "force-dynamic";
+const getCachedPublicReservationSnapshot = unstable_cache(
+  async () => {
+    const services = await getGymPlatformServices();
+    return services.getPublicReservationSnapshot();
+  },
+  ["public-reservation-snapshot"],
+  { revalidate: 60 },
+);
 
 export default async function Home() {
   const cookieStore = await cookies();
@@ -20,8 +28,7 @@ export default async function Home() {
   }
 
   try {
-    const services = await getGymPlatformServices();
-    const publicSnapshot = await services.getPublicReservationSnapshot();
+    const publicSnapshot = await getCachedPublicReservationSnapshot();
     return <PublicLandingPage snapshot={publicSnapshot} />;
   } catch (error) {
     return (

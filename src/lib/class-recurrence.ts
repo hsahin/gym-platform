@@ -87,7 +87,7 @@ export function getWeekdayKeyForLocalDateTime(
     return null;
   }
 
-  return weekdayByJsDay[toUtcDate(parsed).getUTCDay()] ?? null;
+  return weekdayByJsDay[toUtcDate(parsed).getUTCDay()] as ClassWeekdayKey;
 }
 
 export function buildWeeklyRecurringLocalStarts(input: {

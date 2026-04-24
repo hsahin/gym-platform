@@ -1,8 +1,5 @@
-"use client";
-
 import Link from "next/link";
-import { Card, Chip, ProgressBar } from "@heroui/react";
-import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
+import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import type { PublicReservationSnapshot } from "@/server/types";
 
 function formatSessionMoment(startsAt: string) {
@@ -14,6 +11,36 @@ function formatSessionMoment(startsAt: string) {
     minute: "2-digit",
     timeZone: "Europe/Amsterdam",
   }).format(new Date(startsAt));
+}
+
+function MetricCard({
+  label,
+  value,
+}: {
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <article className="rounded-2xl border border-border/70 bg-surface px-5 py-4">
+      <p className="text-muted text-sm">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
+    </article>
+  );
+}
+
+function FeatureCard({
+  title,
+  copy,
+}: {
+  readonly title: string;
+  readonly copy: string;
+}) {
+  return (
+    <article className="rounded-2xl border border-border/80 bg-surface px-6 py-5">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="text-muted mt-3 text-sm leading-6">{copy}</p>
+    </article>
+  );
 }
 
 export function PublicLandingPage({
@@ -48,148 +75,140 @@ export function PublicLandingPage({
 
         <div className="app-header__actions">
           <nav className="app-header__nav text-sm">
-            <Link href="/pricing" className="text-muted transition hover:text-foreground">
+            <Link
+              href="/pricing"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
               Prijzen
             </Link>
-            <Link href="/reserve" className="text-muted transition hover:text-foreground">
+            <Link
+              href="/reserve"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
               Reserveren
             </Link>
-            <Link href="/login" className="text-muted transition hover:text-foreground">
+            <Link
+              href="/login"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
               Team login
             </Link>
           </nav>
-          <ThemeModeSwitch />
+          <LazyThemeModeSwitch />
         </div>
       </header>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
-        <Card className="rounded-[28px] border-border/80 subtle-grid">
-          <Card.Header className="flex-col items-start gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Chip size="sm" variant="soft">
-                Multi-gym
-              </Chip>
-              <Chip size="sm" variant="tertiary">
-                Live booking data
-              </Chip>
-            </div>
-            <div className="space-y-3">
-              <Card.Title className="text-4xl leading-tight md:text-5xl">
-                Run bookings, members, payments, and access from one calm surface.
-              </Card.Title>
-              <Card.Description className="max-w-3xl text-base">
-                The product is focused on actual gym operations: schedule fill, member state,
-                revenue readiness, and launch setup. No marketing-shell dashboard.
-              </Card.Description>
-            </div>
-          </Card.Header>
+        <section className="subtle-grid rounded-[28px] border border-border/80 bg-background px-6 py-7 md:px-8 md:py-9">
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
+              Multi-gym
+            </span>
+            <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
+              Live booking data
+            </span>
+          </div>
 
-          <Card.Content className="section-stack">
-            <div className="grid gap-4 sm:grid-cols-3">
-              {[
-                { label: "Gyms", value: String(activeGymCount) },
-                { label: "Classes live", value: String(snapshot.classSessions.length) },
-                { label: "Occupancy", value: `${occupancy}%` },
-              ].map((metric) => (
-                <Card key={metric.label} className="rounded-2xl border-border/70 bg-surface">
-                  <Card.Content className="metric-stack">
-                    <p className="text-muted text-sm">{metric.label}</p>
-                    <p className="text-3xl font-semibold tabular-nums">{metric.value}</p>
-                  </Card.Content>
-                </Card>
-              ))}
-            </div>
+          <div className="mt-5 max-w-4xl space-y-3">
+            <h1 className="text-4xl leading-tight font-semibold md:text-5xl">
+              Run bookings, members, payments, and access from one calm surface.
+            </h1>
+            <p className="text-muted max-w-3xl text-base leading-7">
+              The product is focused on actual gym operations: schedule fill, member
+              state, revenue readiness, and launch setup. No marketing-shell dashboard.
+            </p>
+          </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/login?mode=signup"
-                className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground"
+          <div className="mt-7 grid gap-4 sm:grid-cols-3">
+            <MetricCard label="Gyms" value={String(activeGymCount)} />
+            <MetricCard label="Classes live" value={String(snapshot.classSessions.length)} />
+            <MetricCard label="Occupancy" value={`${occupancy}%`} />
+          </div>
+
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link
+              href="/login?mode=signup"
+              prefetch={false}
+              className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground"
+            >
+              Nieuwe gym starten
+            </Link>
+            <Link
+              href="/reserve"
+              prefetch={false}
+              className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
+            >
+              Lessen bekijken
+            </Link>
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-border/80 bg-background px-6 py-7 md:px-8 md:py-9">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-semibold">Live demand</p>
+              <p className="text-muted mt-1 text-sm leading-6">
+                The public flow exposes what is actually available, not a static brochure.
+              </p>
+            </div>
+            <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
+              {occupancy}% gevuld
+            </span>
+          </div>
+
+          <div className="mt-6 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Booked</span>
+              <span className="tabular-nums">
+                {bookedSpots} / {totalCapacity || 0}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-surface-secondary">
+              <div
+                className="h-full rounded-full bg-accent transition-[width]"
+                style={{ width: `${occupancy}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3">
+            {snapshot.classSessions.slice(0, 4).map((classSession) => (
+              <article
+                key={classSession.id}
+                className="rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4"
               >
-                Nieuwe gym starten
-              </Link>
-              <Link
-                href="/reserve"
-                className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
-              >
-                Lessen bekijken
-              </Link>
-            </div>
-          </Card.Content>
-        </Card>
-
-        <Card className="rounded-[28px] border-border/80">
-          <Card.Header className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <Card.Title>Live demand</Card.Title>
-              <Chip color={occupancy >= 75 ? "success" : "default"} size="sm" variant="soft">
-                {occupancy}% gevuld
-              </Chip>
-            </div>
-            <Card.Description>
-              The public flow exposes what is actually available, not a static brochure.
-            </Card.Description>
-          </Card.Header>
-
-          <Card.Content className="section-stack">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted">Booked</span>
-                <span className="tabular-nums">
-                  {bookedSpots} / {totalCapacity || 0}
-                </span>
-              </div>
-              <ProgressBar value={occupancy} />
-            </div>
-
-            <div className="section-stack">
-              {snapshot.classSessions.slice(0, 4).map((classSession) => (
-                <Card
-                  key={classSession.id}
-                  className="rounded-2xl border-border/70 bg-surface-secondary"
-                >
-                  <Card.Content className="grid gap-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{classSession.title}</p>
-                      <Chip size="sm" variant="tertiary">
-                        {classSession.bookedCount}/{classSession.capacity}
-                      </Chip>
-                    </div>
-                    <p className="text-muted text-sm">
-                      {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
-                    </p>
-                    <p className="text-muted text-sm">{classSession.trainerName}</p>
-                  </Card.Content>
-                </Card>
-              ))}
-            </div>
-          </Card.Content>
-        </Card>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium">{classSession.title}</p>
+                  <span className="inline-flex rounded-full border border-border/70 bg-surface px-3 py-1 text-xs font-medium">
+                    {classSession.bookedCount}/{classSession.capacity}
+                  </span>
+                </div>
+                <p className="text-muted mt-2 text-sm">
+                  {formatSessionMoment(classSession.startsAt)} · {classSession.locationName}
+                </p>
+                <p className="text-muted mt-1 text-sm">{classSession.trainerName}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        {[
-          {
-            title: "Operations first",
-            copy: "Pages are organized by work: classes, members, contracts, access, payments, settings.",
-          },
-          {
-            title: "Real setup flows",
-            copy: "The workbench creates locations, memberships, trainers, staff, payments, and legal setup.",
-          },
-          {
-            title: "Consumer flow included",
-            copy: "Every gym gets its own reservation flow and live schedule without separate tooling.",
-          },
-        ].map((item) => (
-          <Card key={item.title} className="rounded-2xl border-border/80">
-            <Card.Header>
-              <Card.Title>{item.title}</Card.Title>
-            </Card.Header>
-            <Card.Content>
-              <p className="text-muted text-sm leading-6">{item.copy}</p>
-            </Card.Content>
-          </Card>
-        ))}
+        <FeatureCard
+          title="Operations first"
+          copy="Pages are organized by work: classes, members, contracts, access, payments, settings."
+        />
+        <FeatureCard
+          title="Real setup flows"
+          copy="The workbench creates locations, memberships, trainers, staff, payments, and legal setup."
+        />
+        <FeatureCard
+          title="Consumer flow included"
+          copy="Every gym gets its own reservation flow and live schedule without separate tooling."
+        />
       </section>
     </main>
   );

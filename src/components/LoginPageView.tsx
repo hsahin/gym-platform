@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
 import { Segment } from "@heroui-pro/react/segment";
-import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
+import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 
 export function LoginPageView({
   isSetupComplete,
@@ -41,17 +41,25 @@ export function LoginPageView({
 
         <div className="app-header__actions">
           <nav className="app-header__nav text-sm">
-            <Link href="/" className="text-muted transition hover:text-foreground">
+            <Link href="/" prefetch={false} className="text-muted transition hover:text-foreground">
               Home
             </Link>
-            <Link href="/pricing" className="text-muted transition hover:text-foreground">
+            <Link
+              href="/pricing"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
               Prijzen
             </Link>
-            <Link href="/reserve" className="text-muted transition hover:text-foreground">
+            <Link
+              href="/reserve"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
               Reserveren
             </Link>
           </nav>
-          <ThemeModeSwitch />
+          <LazyThemeModeSwitch />
         </div>
       </header>
 

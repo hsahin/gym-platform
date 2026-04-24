@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button, Card, Chip, TextArea } from "@heroui/react";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
-import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
+import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type { MemberReservationSnapshot } from "@/server/types";
 
@@ -166,14 +166,18 @@ export function PublicReservationPortal({
             </Chip>
           ) : null}
           <nav className="app-header__nav text-sm">
-            <Link href="/" className="text-muted transition hover:text-foreground">
+            <Link href="/" prefetch={false} className="text-muted transition hover:text-foreground">
               Home
             </Link>
-            <Link href="/dashboard" className="text-muted transition hover:text-foreground">
+            <Link
+              href="/dashboard"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
               Dashboard
             </Link>
           </nav>
-          <ThemeModeSwitch />
+          <LazyThemeModeSwitch />
         </div>
       </header>
 
