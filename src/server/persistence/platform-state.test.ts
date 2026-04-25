@@ -1,11 +1,26 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyGymStoreState } from "@/server/persistence/memory-gym-store";
 import {
   authenticateLocalAccount,
   bootstrapLocalPlatform,
+  createLocalTenantCollectionCase,
+  createLocalTenantLead,
+  createLocalTenantMemberSignup,
+  createLocalTenantBillingInvoice,
+  createLocalTenantLeadTask,
+  createLocalTenantLeadAttribution,
+  createLocalTenantAppointmentPack,
+  createLocalTenantCoachAppointments,
+  createLocalTenantCommunityGroup,
+  createLocalTenantChallenge,
+  createLocalTenantQuestionnaire,
+  createLocalTenantQuestionnaireResponse,
+  createLocalTenantPaymentMethodRequest,
+  createLocalTenantPauseRequest,
+  createLocalTenantContractRecord,
   createLocalPlatformAccount,
   getLocalTenantProfile,
   getLocalTenantProfileBySlug,
@@ -19,8 +34,27 @@ import {
   slugifyTenantName,
   upsertLocalMemberPortalAccount,
   updateLocalTenantBillingSettings,
+  updateLocalTenantBookingSettings,
+  updateLocalTenantCoachingSettings,
+  updateLocalTenantFeatureFlag,
+  updateLocalTenantIntegrationSettings,
+  updateLocalTenantMarketingSettings,
+  updateLocalTenantCollectionCase,
+  updateLocalTenantLead,
   updateLocalPlatformData,
+  updateLocalTenantBookingPolicy,
+  updateLocalTenantMobileSettings,
   updateLocalTenantRemoteAccess,
+  updateLocalTenantRevenueSettings,
+  updateLocalTenantRetentionSettings,
+  reviewLocalTenantMemberSignup,
+  updateLocalTenantBillingInvoice,
+  createLocalTenantBillingRefund,
+  createLocalTenantBillingWebhook,
+  createLocalTenantBillingReconciliationRun,
+  updateLocalTenantLeadTask,
+  reviewLocalTenantPaymentMethodRequest,
+  reviewLocalTenantPauseRequest,
 } from "@/server/persistence/platform-state";
 
 let tempDir = "";
@@ -32,6 +66,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
+  vi.unstubAllEnvs();
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -46,6 +81,23 @@ describe("platform state", () => {
     await expect(authenticateLocalAccount("missing@example.test", "password")).resolves.toBeNull();
     expect(slugifyTenantName(" Atlas Forge Club! ")).toBe("atlas-forge-club");
     expect(slugifyTenantName("!!!")).toBe("gym-platform");
+  });
+
+  it("keeps file fallback available for local production-like runs without live markers", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "");
+    delete process.env.DIGITALOCEAN_APP_ID;
+
+    await expect(readLocalPlatformState()).resolves.toBeNull();
+
+    await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    await expect(hasLocalPlatformSetup()).resolves.toBe(true);
   });
 
   it("can store multiple gyms next to each other", async () => {
@@ -343,6 +395,415 @@ describe("platform state", () => {
     expect(updatedTenant?.billing.lastValidatedAt).toEqual(expect.any(String));
   });
 
+  it("stores tenant feature flag overrides per gym", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    await updateLocalTenantFeatureFlag(tenant.tenant.id, {
+      key: "coaching.ai_max",
+      value: true,
+      updatedBy: "Amina Hassan",
+    });
+    await updateLocalTenantFeatureFlag(tenant.tenant.id, {
+      key: "billing.autocollect",
+      value: false,
+      updatedBy: "Amina Hassan",
+    });
+
+    const updatedTenant = await getLocalTenantProfile(tenant.tenant.id);
+
+    expect(updatedTenant?.featureFlags).toEqual([
+      expect.objectContaining({
+        key: "billing.autocollect",
+        value: false,
+        updatedBy: "Amina Hassan",
+      }),
+      expect.objectContaining({
+        key: "coaching.ai_max",
+        value: true,
+        updatedBy: "Amina Hassan",
+      }),
+    ]);
+  });
+
+  it("stores booking, revenue, coaching, retention, mobile, marketing and integration settings per gym", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    await updateLocalTenantBookingSettings(tenant.tenant.id, {
+      oneToOneSessionName: "Performance PT",
+      oneToOneDurationMinutes: 75,
+      trialBookingUrl: "https://book.northside.test/trial",
+      defaultCreditPackSize: 12,
+      schedulingWindowDays: 21,
+    });
+    await updateLocalTenantRevenueSettings(tenant.tenant.id, {
+      webshopCollectionName: "Northside Pro Shop",
+      pointOfSaleMode: "hybrid",
+      cardTerminalLabel: "Frontdesk terminal",
+      autocollectPolicy: "Incasso elke eerste werkdag van de maand",
+      directDebitLeadDays: 5,
+    });
+    await updateLocalTenantCoachingSettings(tenant.tenant.id, {
+      workoutPlanFocus: "Hyrox build blocks",
+      nutritionCadence: "biweekly",
+      videoLibraryUrl: "https://video.northside.test/library",
+      progressMetric: "PRs and consistency",
+      heartRateProvider: "Myzone",
+      aiCoachMode: "Premium AI copilot",
+    });
+    await updateLocalTenantRetentionSettings(tenant.tenant.id, {
+      retentionCadence: "monthly",
+      communityChannel: "Discord",
+      challengeTheme: "Summer reset",
+      questionnaireTrigger: "Week 2 and renewal week",
+      proContentPath: "https://content.northside.test/pro",
+      fitZoneOffer: "Recovery lounge",
+    });
+    await updateLocalTenantMobileSettings(tenant.tenant.id, {
+      appDisplayName: "Northside Club App",
+      onboardingHeadline: "Welkom terug bij Northside",
+      supportChannel: "support@northside.test",
+      primaryAccent: "#111827",
+      checkInMode: "qr",
+      whiteLabelDomain: "app.northside.test",
+    });
+    await updateLocalTenantMarketingSettings(tenant.tenant.id, {
+      emailSenderName: "Northside Athletics",
+      emailReplyTo: "hello@northside.test",
+      promotionHeadline: "Spring intake week",
+      leadPipelineLabel: "Trials -> members",
+      automationCadence: "biweekly",
+    });
+    await updateLocalTenantIntegrationSettings(tenant.tenant.id, {
+      hardwareVendors: ["Nuki", "Brivo"],
+      softwareIntegrations: ["Mollie", "Mailcoach"],
+      equipmentIntegrations: ["Concept2"],
+      migrationProvider: "Virtuagym",
+      bodyCompositionProvider: "InBody",
+    });
+
+    const updatedTenant = await getLocalTenantProfile(tenant.tenant.id);
+
+    expect(updatedTenant?.moduleSettings.booking).toMatchObject({
+      oneToOneSessionName: "Performance PT",
+      defaultCreditPackSize: 12,
+    });
+    expect(updatedTenant?.moduleSettings.revenue).toMatchObject({
+      webshopCollectionName: "Northside Pro Shop",
+      pointOfSaleMode: "hybrid",
+    });
+    expect(updatedTenant?.moduleSettings.coaching).toMatchObject({
+      workoutPlanFocus: "Hyrox build blocks",
+      nutritionCadence: "biweekly",
+    });
+    expect(updatedTenant?.moduleSettings.retention).toMatchObject({
+      communityChannel: "Discord",
+      fitZoneOffer: "Recovery lounge",
+    });
+    expect(updatedTenant?.moduleSettings.mobile).toMatchObject({
+      appDisplayName: "Northside Club App",
+      checkInMode: "qr",
+    });
+    expect(updatedTenant?.moduleSettings.marketing).toMatchObject({
+      emailSenderName: "Northside Athletics",
+      automationCadence: "biweekly",
+    });
+    expect(updatedTenant?.moduleSettings.integrations).toMatchObject({
+      hardwareVendors: ["Nuki", "Brivo"],
+      bodyCompositionProvider: "InBody",
+    });
+  });
+
+  it("stores lead funnels, collection cases and booking policy per gym", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    const lead = await createLocalTenantLead(tenant.tenant.id, {
+      fullName: "Nina de Boer",
+      email: "nina@northside.test",
+      phone: "0611112222",
+      source: "website",
+      stage: "new",
+      interest: "12-week transformatieprogramma",
+      notes: "Komt via Instagram campagne.",
+      expectedValueCents: 12900,
+    });
+    await updateLocalTenantLead(tenant.tenant.id, {
+      id: lead.id,
+      stage: "contacted",
+      notes: "Intake ingepland voor vrijdag.",
+      assignedStaffName: "Amina Hassan",
+    });
+    const collectionCase = await createLocalTenantCollectionCase(tenant.tenant.id, {
+      memberName: "Lars Visser",
+      paymentMethod: "direct_debit",
+      status: "open",
+      amountCents: 5900,
+      reason: "Mislukte incasso april",
+      dueAt: "2026-05-01T09:00:00.000Z",
+      notes: "Volg op met nieuwe SEPA machtiging.",
+    });
+    await updateLocalTenantCollectionCase(tenant.tenant.id, {
+      id: collectionCase.id,
+      status: "retrying",
+      notes: "Nieuwe poging staat ingepland.",
+    });
+    await updateLocalTenantBookingPolicy(tenant.tenant.id, {
+      cancellationWindowHours: 12,
+      lateCancelFeeCents: 1500,
+      noShowFeeCents: 2500,
+      maxDailyBookingsPerMember: 2,
+      maxDailyWaitlistPerMember: 1,
+      autoPromoteWaitlist: false,
+    });
+
+    const updatedTenant = await getLocalTenantProfile(tenant.tenant.id);
+
+    expect(updatedTenant?.leads).toEqual([
+      expect.objectContaining({
+        fullName: "Nina de Boer",
+        stage: "contacted",
+        assignedStaffName: "Amina Hassan",
+      }),
+    ]);
+    expect(updatedTenant?.collectionCases).toEqual([
+      expect.objectContaining({
+        memberName: "Lars Visser",
+        status: "retrying",
+      }),
+    ]);
+    expect(updatedTenant?.bookingPolicy).toMatchObject({
+      cancellationWindowHours: 12,
+      lateCancelFeeCents: 1500,
+      maxDailyBookingsPerMember: 2,
+      autoPromoteWaitlist: false,
+    });
+  });
+
+  it("stores signup, billing, automation, appointments, community and mobile self-service records per gym", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    const signup = await createLocalTenantMemberSignup(tenant.tenant.id, {
+      fullName: "Jade Vermeer",
+      email: "jade@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: "plan_unlimited",
+      preferredLocationId: "location_east",
+      paymentMethod: "direct_debit",
+      contractAcceptedAt: "2026-04-25T09:00:00.000Z",
+      waiverAcceptedAt: "2026-04-25T09:00:00.000Z",
+    });
+    await reviewLocalTenantMemberSignup(tenant.tenant.id, {
+      id: signup.id,
+      status: "approved",
+      ownerNotes: "Goedgekeurd",
+      approvedMemberId: "member_jade",
+    });
+    const invoice = await createLocalTenantBillingInvoice(tenant.tenant.id, {
+      memberId: "member_jade",
+      memberName: "Jade Vermeer",
+      description: "Membership May",
+      amountCents: 11900,
+      dueAt: "2026-05-01T08:00:00.000Z",
+      source: "membership",
+    });
+    await updateLocalTenantBillingInvoice(tenant.tenant.id, {
+      id: invoice.id,
+      status: "paid",
+      retryCount: 1,
+      paidAt: "2026-05-01T08:05:00.000Z",
+      lastWebhookEventType: "payment.paid",
+    });
+    await createLocalTenantBillingRefund(tenant.tenant.id, {
+      invoiceId: invoice.id,
+      amountCents: 2900,
+      reason: "Compensatie",
+      status: "processed",
+    });
+    await createLocalTenantBillingWebhook(tenant.tenant.id, {
+      invoiceId: invoice.id,
+      eventType: "payment.paid",
+      status: "processed",
+      providerReference: "tr_123",
+      payloadSummary: "Payment success",
+    });
+    await createLocalTenantBillingReconciliationRun(tenant.tenant.id, {
+      note: "Daily sync",
+      matchedInvoiceIds: [invoice.id],
+      unmatchedInvoiceIds: [],
+    });
+    const task = await createLocalTenantLeadTask(tenant.tenant.id, {
+      type: "nurture",
+      title: "Bel Jade na proefweek",
+      dueAt: "2026-04-27T09:00:00.000Z",
+      leadId: "lead_1",
+      source: "website",
+    });
+    await updateLocalTenantLeadTask(tenant.tenant.id, {
+      id: task.id,
+      status: "done",
+      notes: "Lidmaatschap besproken",
+    });
+    await createLocalTenantLeadAttribution(tenant.tenant.id, {
+      leadId: "lead_1",
+      source: "meta_ads",
+      campaignLabel: "Spring launch",
+      medium: "paid_social",
+    });
+    const pack = await createLocalTenantAppointmentPack(tenant.tenant.id, {
+      memberId: "member_jade",
+      memberName: "Jade Vermeer",
+      trainerId: "trainer_eva",
+      title: "10x PT pack",
+      totalCredits: 10,
+      remainingCredits: 10,
+      validUntil: "2026-12-31T00:00:00.000Z",
+    });
+    await createLocalTenantCoachAppointments(tenant.tenant.id, [
+      {
+        trainerId: "trainer_eva",
+        trainerName: "Eva Trainer",
+        memberId: "member_jade",
+        memberName: "Jade Vermeer",
+        locationId: "location_east",
+        startsAt: "2026-05-05T08:00:00.000Z",
+        durationMinutes: 60,
+        status: "scheduled",
+        recurrence: "weekly",
+        seriesId: "series_1",
+        creditPackId: pack.id,
+      },
+    ]);
+    await createLocalTenantCommunityGroup(tenant.tenant.id, {
+      name: "Women lifting club",
+      channel: "WhatsApp",
+      description: "Vrijdagavond community",
+      memberIds: ["member_jade"],
+    });
+    await createLocalTenantChallenge(tenant.tenant.id, {
+      title: "10-class streak",
+      rewardLabel: "Recovery hoodie",
+      startsAt: "2026-05-01T00:00:00.000Z",
+      endsAt: "2026-06-01T00:00:00.000Z",
+      participantMemberIds: ["member_jade"],
+    });
+    const questionnaire = await createLocalTenantQuestionnaire(tenant.tenant.id, {
+      title: "Week 2 pulse check",
+      trigger: "After week 2",
+      questions: ["Hoe gaat het herstel?"],
+    });
+    await createLocalTenantQuestionnaireResponse(tenant.tenant.id, {
+      questionnaireId: questionnaire.id,
+      memberId: "member_jade",
+      memberName: "Jade Vermeer",
+      answers: ["Goed"],
+    });
+    const paymentRequest = await createLocalTenantPaymentMethodRequest(tenant.tenant.id, {
+      memberId: "member_jade",
+      memberName: "Jade Vermeer",
+      requestedMethodLabel: "Nieuwe SEPA IBAN",
+      note: "Nieuwe rekening",
+    });
+    await reviewLocalTenantPaymentMethodRequest(tenant.tenant.id, {
+      id: paymentRequest.id,
+      status: "approved",
+      ownerNotes: "Verwerkt",
+    });
+    const pauseRequest = await createLocalTenantPauseRequest(tenant.tenant.id, {
+      memberId: "member_jade",
+      memberName: "Jade Vermeer",
+      startsAt: "2026-06-01T00:00:00.000Z",
+      endsAt: "2026-06-30T00:00:00.000Z",
+      reason: "Vakantie",
+    });
+    await reviewLocalTenantPauseRequest(tenant.tenant.id, {
+      id: pauseRequest.id,
+      status: "approved",
+      ownerNotes: "Pauze bevestigd",
+    });
+    await createLocalTenantContractRecord(tenant.tenant.id, {
+      memberId: "member_jade",
+      memberName: "Jade Vermeer",
+      membershipPlanId: "plan_unlimited",
+      contractName: "Unlimited",
+      documentLabel: "Unlimited contract",
+      documentUrl: "https://contracts.northside.test/unlimited.pdf",
+      status: "active",
+      signedAt: "2026-04-25T09:00:00.000Z",
+    });
+
+    const updatedTenant = await getLocalTenantProfile(tenant.tenant.id);
+
+    expect(updatedTenant?.moduleData.memberSignups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: signup.id,
+          status: "approved",
+          approvedMemberId: "member_jade",
+        }),
+      ]),
+    );
+    expect(updatedTenant?.moduleData.billingBackoffice.invoices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: invoice.id,
+          status: "paid",
+          retryCount: 1,
+        }),
+      ]),
+    );
+    expect(updatedTenant?.moduleData.leadAutomation.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: task.id,
+          status: "done",
+        }),
+      ]),
+    );
+    expect(updatedTenant?.moduleData.appointments.creditPacks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: pack.id,
+        }),
+      ]),
+    );
+    expect(updatedTenant?.moduleData.community.questionnaires).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: questionnaire.id,
+          responseCount: 1,
+        }),
+      ]),
+    );
+    expect(updatedTenant?.moduleData.mobileSelfService.contracts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          memberId: "member_jade",
+          contractName: "Unlimited",
+        }),
+      ]),
+    );
+  });
+
   it("rejects billing updates before setup or for unknown gyms", async () => {
     await expect(
       updateLocalTenantBillingSettings("missing", {
@@ -486,7 +947,7 @@ describe("platform state", () => {
     const migrated = await readLocalPlatformState();
 
     expect(migrated).toMatchObject({
-      version: 3,
+      version: 8,
       tenants: [expect.objectContaining({ id: "single-gym" })],
       accounts: [expect.objectContaining({ tenantId: "single-gym" })],
     });

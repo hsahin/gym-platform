@@ -1,11 +1,19 @@
 import { AppError, createPrefixedIdGenerator } from "@claimtech/core";
+import { InMemoryRateLimiter, buildRateLimitKey } from "@claimtech/ops";
 import { ZodError } from "zod";
 
 const requestIdGenerator = createPrefixedIdGenerator({ prefix: "req" });
+const mutationRateLimiter = new InMemoryRateLimiter();
 
 export const MUTATION_CSRF_HEADER = "x-claimtech-csrf";
 export const MUTATION_CSRF_TOKEN = "claimtech-gym-platform";
 export const IDEMPOTENCY_HEADER = "x-idempotency-key";
+
+interface MutationRateLimitOptions {
+  readonly scope: string;
+  readonly maxRequests: number;
+  readonly windowMs: number;
+}
 
 export interface ApiSuccessEnvelope<TData> {
   readonly ok: true;
@@ -59,7 +67,90 @@ export function getRequestId(request: Request) {
   return request.headers.get("x-request-id")?.trim() || requestIdGenerator.next();
 }
 
-export function requireMutationSecurity(request: Request) {
+function readRequestOrigin(request: Request) {
+  const directOrigin = request.headers.get("origin")?.trim();
+
+  if (directOrigin) {
+    return directOrigin;
+  }
+
+  const referer = request.headers.get("referer")?.trim();
+
+  if (!referer) {
+    return null;
+  }
+
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return null;
+  }
+}
+
+function assertSameOriginMutation(request: Request) {
+  const origin = readRequestOrigin(request);
+
+  if (!origin) {
+    return;
+  }
+
+  const requestUrl = new URL(request.url);
+
+  if (new URL(origin).host !== requestUrl.host) {
+    throw new AppError(
+      "Deze mutatie mag alleen vanaf dezelfde applicatie-origin worden verstuurd.",
+      {
+        code: "FORBIDDEN",
+        details: {
+          origin,
+          expectedHost: requestUrl.host,
+        },
+      },
+    );
+  }
+}
+
+function resolveClientIdentifier(request: Request) {
+  return (
+    request.headers.get("cf-connecting-ip")?.trim() ||
+    request.headers
+      .get("x-forwarded-for")
+      ?.split(",")[0]
+      ?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    request.headers.get("user-agent")?.trim() ||
+    new URL(request.url).host
+  );
+}
+
+function enforceMutationRateLimit(
+  request: Request,
+  rateLimit: MutationRateLimitOptions,
+) {
+  const result = mutationRateLimiter.consume({
+    key: buildRateLimitKey({
+      scope: rateLimit.scope,
+      identifier: resolveClientIdentifier(request),
+      fallbackIdentifier: new URL(request.url).pathname,
+    }),
+    windowMs: rateLimit.windowMs,
+    maxRequests: rateLimit.maxRequests,
+  });
+
+  if (!result.allowed) {
+    throw new AppError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.", {
+      code: "RATE_LIMIT_EXCEEDED",
+      details: result,
+    });
+  }
+}
+
+export function requireMutationSecurity(
+  request: Request,
+  options?: {
+    readonly rateLimit?: MutationRateLimitOptions;
+  },
+) {
   const csrfToken = request.headers.get(MUTATION_CSRF_HEADER);
   const idempotencyKey = request.headers.get(IDEMPOTENCY_HEADER)?.trim();
 
@@ -79,6 +170,12 @@ export function requireMutationSecurity(request: Request) {
         expectedHeader: IDEMPOTENCY_HEADER,
       },
     });
+  }
+
+  assertSameOriginMutation(request);
+
+  if (options?.rateLimit) {
+    enforceMutationRateLimit(request, options.rateLimit);
   }
 
   return { idempotencyKey };

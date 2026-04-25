@@ -90,6 +90,13 @@ export function PublicLandingPage({
               Reserveren
             </Link>
             <Link
+              href="/join"
+              prefetch={false}
+              className="text-muted transition hover:text-foreground"
+            >
+              Lid worden
+            </Link>
+            <Link
               href="/login"
               prefetch={false}
               className="text-muted transition hover:text-foreground"
@@ -142,6 +149,13 @@ export function PublicLandingPage({
               className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
             >
               Lessen bekijken
+            </Link>
+            <Link
+              href="/join"
+              prefetch={false}
+              className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
+            >
+              Lid aanmelden
             </Link>
           </div>
         </section>

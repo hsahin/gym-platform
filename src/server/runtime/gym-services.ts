@@ -20,6 +20,10 @@ import {
   createMongoClient,
 } from "@claimtech/database";
 import { FeatureFlagEvaluator } from "@claimtech/feature-flags";
+import type { FeatureFlagOverride } from "@claimtech/feature-flags";
+import {
+  DASHBOARD_FEATURE_CATALOG,
+} from "@/features/dashboard-feature-catalog";
 import {
   formatCurrencyValue,
   getLanguageOptions,
@@ -90,6 +94,25 @@ import {
 } from "@/server/persistence/memory-gym-store";
 import { MongoGymStore } from "@/server/persistence/mongo-gym-store";
 import {
+  createLocalTenantAppointmentPack,
+  createLocalTenantBillingInvoice,
+  createLocalTenantBillingReconciliationRun,
+  createLocalTenantBillingRefund,
+  createLocalTenantBillingWebhook,
+  createLocalTenantChallenge,
+  createLocalTenantCollectionCase,
+  createLocalTenantCommunityGroup,
+  createLocalTenantContractRecord,
+  createLocalTenantLead,
+  createLocalTenantLeadAttribution,
+  createLocalTenantLeadAutomationRun,
+  createLocalTenantLeadTask,
+  createLocalTenantCoachAppointments,
+  createLocalTenantMemberSignup,
+  createLocalTenantPauseRequest,
+  createLocalTenantPaymentMethodRequest,
+  createLocalTenantQuestionnaire,
+  createLocalTenantQuestionnaireResponse,
   createLocalPlatformAccount,
   deleteLocalMemberPortalAccountByMemberId,
   deleteLocalPlatformAccount,
@@ -101,13 +124,29 @@ import {
   markLocalTenantBillingAction,
   markLocalTenantRemoteAccessAction,
   readLocalPlatformState,
+  updateLocalTenantBookingSettings,
   syncLocalMemberPortalAccount,
   upsertLocalMemberPortalAccount,
+  updateLocalTenantCoachingSettings,
   updateLocalTenantBillingSettings,
+  updateLocalTenantBookingPolicy,
+  updateLocalTenantFeatureFlag,
+  updateLocalTenantIntegrationSettings,
   updateLocalTenantLegalSettings,
+  updateLocalTenantLead,
+  updateLocalTenantMarketingSettings,
+  updateLocalTenantMobileSettings,
   updateLocalTenantRemoteAccess,
+  updateLocalTenantRevenueSettings,
+  updateLocalTenantRetentionSettings,
+  updateLocalTenantCollectionCase,
   updateLocalPlatformAccount,
   updateLocalPlatformData,
+  reviewLocalTenantMemberSignup,
+  reviewLocalTenantPauseRequest,
+  reviewLocalTenantPaymentMethodRequest,
+  updateLocalTenantAppointmentPack,
+  updateLocalTenantBillingInvoice,
 } from "@/server/persistence/platform-state";
 import { toClientPlain } from "@/server/lib/to-client-plain";
 import {
@@ -116,8 +155,10 @@ import {
 import {
   assertLiveInfrastructureConfiguration,
   assertProductionEnvironmentReady,
+  allowsRuntimeFallbacks,
   getProductionReadinessChecks,
 } from "@/server/runtime/production-readiness";
+import type { DashboardPageKey } from "@/lib/dashboard-pages";
 import type {
   BillingActionReceipt,
   ClassBooking,
@@ -125,6 +166,7 @@ import type {
   GymDashboardSnapshot,
   GymMember,
   MemberReservationSnapshot,
+  PublicMembershipSignupSnapshot,
   PublicReservationSnapshot,
   RemoteAccessActionReceipt,
   RuntimeState,
@@ -193,36 +235,18 @@ const roleDefinitions = [
   },
 ] as const;
 
-const featureDefinitions = [
-  {
-    key: "bookings.waitlist",
-    defaultValue: true,
-    description: "Leden kunnen op een waitlist landen wanneer een les vol zit.",
-  },
-  {
-    key: "attendance.self_check_in",
-    defaultValue: true,
-    description: "QR/self check-in voor lessen staat aan.",
-  },
-  {
-    key: "waivers.digital_upload",
-    defaultValue: true,
-    description: "Digitale waivers en uploadmomenten staan klaar voor leden.",
-  },
-  {
-    key: "marketing.automations",
-    defaultValue: false,
-    description: "Marketing automation voor reactivatie wordt nog niet uitgerold.",
-  },
-  {
-    key: "analytics.multi_location",
-    defaultValue: true,
-    description: "Multi-locatie rapportages zijn beschikbaar voor deze gymgroep.",
-  },
-] as const;
+const featureDefinitions = DASHBOARD_FEATURE_CATALOG.map((feature) => ({
+  key: feature.key,
+  defaultValue: feature.defaultValue,
+  description: feature.description,
+}));
 
-function shouldUseTestFallbacks() {
-  return process.env.NODE_ENV === "test";
+const dashboardFeatureDefinitionMap = new Map(
+  DASHBOARD_FEATURE_CATALOG.map((feature) => [feature.key, feature]),
+);
+
+function shouldUseRuntimeFallbacks() {
+  return allowsRuntimeFallbacks();
 }
 
 class MemoryCacheClient implements KeyValueCacheClient {
@@ -340,7 +364,6 @@ interface GymPlatformRuntime {
   readonly messagingMode: MessagingMode;
   readonly storageMode: StorageMode;
   readonly permissionRegistry: PermissionRegistry;
-  readonly featureEvaluator: FeatureFlagEvaluator;
   readonly userDirectory: UserDirectory;
   readonly auditLogger: AuditLogger;
   readonly rateLimiter: InMemoryRateLimiter;
@@ -412,7 +435,7 @@ async function resolveStore(): Promise<Pick<GymPlatformRuntime, "store" | "store
   assertProductionEnvironmentReady();
 
   if (!process.env.MONGODB_URI) {
-    if (shouldUseTestFallbacks()) {
+    if (shouldUseRuntimeFallbacks()) {
       const localState = await readLocalPlatformState();
 
       return {
@@ -460,7 +483,7 @@ async function resolveCacheClient(): Promise<
   Pick<GymPlatformRuntime, "cacheClient" | "cacheMode">
 > {
   if (!process.env.REDIS_URL) {
-    if (shouldUseTestFallbacks()) {
+    if (shouldUseRuntimeFallbacks()) {
       return {
         cacheClient: new MemoryCacheClient(),
         cacheMode: "memory" as CacheMode,
@@ -785,7 +808,6 @@ async function createRuntime(): Promise<GymPlatformRuntime> {
     messagingMode,
     storageMode,
     permissionRegistry: new PermissionRegistry(roleDefinitions),
-    featureEvaluator: new FeatureFlagEvaluator(featureDefinitions),
     userDirectory,
     auditLogger,
     rateLimiter: new InMemoryRateLimiter(),
@@ -800,6 +822,31 @@ async function createRuntime(): Promise<GymPlatformRuntime> {
       product: PRODUCT_NAME,
     }),
   };
+}
+
+async function createFeatureEvaluatorForTenant(tenantId: string) {
+  const tenantProfile = await getLocalTenantProfile(tenantId);
+  const overrides: FeatureFlagOverride[] = (tenantProfile?.featureFlags ?? []).map(
+    (feature) => ({
+      key: feature.key,
+      value: feature.value,
+      tenantId: toTenantId(tenantId),
+    }),
+  );
+
+  return new FeatureFlagEvaluator(featureDefinitions, overrides);
+}
+
+async function evaluateFeatureFlag(
+  actor: AuthActor,
+  tenantContext: TenantContext,
+  key: string,
+) {
+  const evaluator = await createFeatureEvaluatorForTenant(tenantContext.tenantId);
+  return evaluator.evaluate(key, {
+    actor,
+    tenantContext,
+  });
 }
 
 function formatClassSlot(startsAt: string) {
@@ -995,17 +1042,217 @@ async function buildLegalComplianceSummary(
   };
 }
 
-function featureStates(runtime: GymPlatformRuntime, actor: AuthActor, tenantContext: TenantContext) {
-  return runtime.featureEvaluator
+async function buildBookingWorkspaceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["bookingWorkspace"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.booking ?? {
+    oneToOneSessionName: "PT intake",
+    oneToOneDurationMinutes: 60,
+    trialBookingUrl: "",
+    defaultCreditPackSize: 10,
+    schedulingWindowDays: 14,
+  };
+}
+
+async function buildRevenueWorkspaceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["revenueWorkspace"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.revenue ?? {
+    webshopCollectionName: "Club essentials",
+    pointOfSaleMode: "frontdesk",
+    cardTerminalLabel: "Frontdesk terminal",
+    autocollectPolicy: "Incasso op de eerste werkdag van de maand",
+    directDebitLeadDays: 5,
+  };
+}
+
+async function buildCoachingWorkspaceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["coachingWorkspace"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.coaching ?? {
+    workoutPlanFocus: "Strength and conditioning blocks",
+    nutritionCadence: "weekly",
+    videoLibraryUrl: "",
+    progressMetric: "Attendance and PR milestones",
+    heartRateProvider: "Polar / Myzone",
+    aiCoachMode: "Premium coach copilot",
+  };
+}
+
+async function buildRetentionWorkspaceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["retentionWorkspace"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.retention ?? {
+    retentionCadence: "weekly",
+    communityChannel: "WhatsApp community",
+    challengeTheme: "8-week consistency streak",
+    questionnaireTrigger: "After trial and after 30 days",
+    proContentPath: "",
+    fitZoneOffer: "Recovery and lifestyle corner",
+  };
+}
+
+async function buildMobileExperienceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["mobileExperience"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.mobile ?? {
+    appDisplayName: "GymOS Member App",
+    onboardingHeadline: "Welcome back to your club",
+    supportChannel: "support@gym.test",
+    primaryAccent: "#F97316",
+    checkInMode: "hybrid",
+    whiteLabelDomain: "",
+  };
+}
+
+async function buildMarketingWorkspaceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["marketingWorkspace"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.marketing ?? {
+    emailSenderName: "Gym team",
+    emailReplyTo: "hello@gym.test",
+    promotionHeadline: "Nieuwe proefweek live",
+    leadPipelineLabel: "Trials naar members",
+    automationCadence: "weekly",
+  };
+}
+
+async function buildIntegrationWorkspaceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["integrationWorkspace"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleSettings.integrations ?? {
+    hardwareVendors: ["Nuki", "QR scanners"],
+    softwareIntegrations: ["Mollie", "WhatsApp"],
+    equipmentIntegrations: [],
+    migrationProvider: "Virtuagym / CSV import",
+    bodyCompositionProvider: "",
+  };
+}
+
+async function buildBookingPolicySummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["bookingPolicy"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return (
+    tenantProfile?.bookingPolicy ?? {
+      cancellationWindowHours: 12,
+      lateCancelFeeCents: 1500,
+      noShowFeeCents: 2500,
+      maxDailyBookingsPerMember: 3,
+      maxDailyWaitlistPerMember: 2,
+      autoPromoteWaitlist: true,
+    }
+  );
+}
+
+async function buildMemberSignupSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["memberSignups"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleData.memberSignups ?? [];
+}
+
+async function buildBillingBackofficeSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["billingBackoffice"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return (
+    tenantProfile?.moduleData.billingBackoffice ?? {
+      invoices: [],
+      refunds: [],
+      webhooks: [],
+      reconciliationRuns: [],
+    }
+  );
+}
+
+async function buildLeadAutomationSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["leadAutomation"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return (
+    tenantProfile?.moduleData.leadAutomation ?? {
+      tasks: [],
+      attributions: [],
+      runs: [],
+    }
+  );
+}
+
+async function buildAppointmentSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["appointments"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return tenantProfile?.moduleData.appointments ?? { creditPacks: [], sessions: [] };
+}
+
+async function buildCommunitySummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["communityHub"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return (
+    tenantProfile?.moduleData.community ?? {
+      groups: [],
+      challenges: [],
+      questionnaires: [],
+      responses: [],
+    }
+  );
+}
+
+async function buildMobileSelfServiceSummary(
+  tenantContext: TenantContext,
+): Promise<GymDashboardSnapshot["mobileSelfService"]> {
+  const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+  return (
+    tenantProfile?.moduleData.mobileSelfService ?? {
+      receipts: [],
+      paymentMethodRequests: [],
+      pauseRequests: [],
+      contracts: [],
+    }
+  );
+}
+
+function isSameUtcDay(left: string, right: string) {
+  return left.slice(0, 10) === right.slice(0, 10);
+}
+
+function hoursUntil(targetIso: string, fromIso = new Date().toISOString()) {
+  return (new Date(targetIso).getTime() - new Date(fromIso).getTime()) / (1000 * 60 * 60);
+}
+
+async function featureStates(
+  actor: AuthActor,
+  tenantContext: TenantContext,
+) {
+  const evaluator = await createFeatureEvaluatorForTenant(tenantContext.tenantId);
+
+  return evaluator
     .list({ actor, tenantContext })
-    .map<FeatureState>((evaluation) => ({
-      key: evaluation.key,
-      enabled: evaluation.enabled,
-      reason: evaluation.reason,
-      description:
-        featureDefinitions.find((definition) => definition.key === evaluation.key)
-          ?.description ?? "Geen omschrijving beschikbaar.",
-    }));
+    .map<FeatureState>((evaluation) => {
+      const definition = dashboardFeatureDefinitionMap.get(evaluation.key);
+
+      return {
+        key: evaluation.key,
+        title: definition?.title ?? evaluation.key,
+        categoryKey: definition?.categoryKey ?? "operations",
+        categoryTitle: definition?.categoryTitle ?? "Operations",
+        dashboardPage: definition?.dashboardPage ?? "overview",
+        enabled: evaluation.enabled,
+        reason: evaluation.reason,
+        description: definition?.description ?? "Geen omschrijving beschikbaar.",
+        statusLabel: definition?.statusLabel ?? "Expanded",
+        badgeLabel: definition?.badgeLabel,
+      };
+    });
 }
 
 function normalizeEmailValue(email: string) {
@@ -1048,15 +1295,135 @@ type ReservableTenantAccess = {
   readonly member: GymMember;
 };
 
+function slimDashboardSnapshotForPage(
+  snapshot: GymDashboardSnapshot,
+  page?: DashboardPageKey,
+): GymDashboardSnapshot {
+  if (!page || page === "overview") {
+    return snapshot;
+  }
+
+  const keepMembers =
+    page === "classes" ||
+    page === "members" ||
+    page === "coaching" ||
+    page === "retention" ||
+    page === "payments" ||
+    page === "mobile" ||
+    page === "marketing";
+  const keepLocations =
+    page === "members" ||
+    page === "coaching" ||
+    page === "payments" ||
+    page === "mobile" ||
+    page === "marketing" ||
+    page === "settings";
+  const keepMembershipPlans =
+    page === "members" ||
+    page === "contracts" ||
+    page === "marketing";
+  const keepClassSessions =
+    page === "classes" || page === "coaching" || page === "marketing";
+  const keepBookings =
+    page === "classes" || page === "retention" || page === "marketing";
+
+  return {
+    ...snapshot,
+    metrics: [],
+    locations: keepLocations ? snapshot.locations : [],
+    membershipPlans: keepMembershipPlans ? snapshot.membershipPlans : [],
+    members: keepMembers ? snapshot.members : [],
+    memberPortalAccessMemberIds:
+      page === "members" || page === "coaching" || page === "mobile"
+        ? snapshot.memberPortalAccessMemberIds
+        : [],
+    trainers: page === "coaching" ? snapshot.trainers : [],
+    classSessions: keepClassSessions ? snapshot.classSessions : [],
+    bookings: keepBookings ? snapshot.bookings : [],
+    attendance: page === "classes" ? snapshot.attendance : [],
+    waivers: page === "members" ? snapshot.waivers : [],
+    leads: page === "marketing" ? snapshot.leads : [],
+    collectionCases: page === "payments" ? snapshot.collectionCases : [],
+    memberSignups: page === "members" ? snapshot.memberSignups : [],
+    billingBackoffice:
+      page === "payments"
+        ? snapshot.billingBackoffice
+        : {
+            invoices: [],
+            refunds: [],
+            webhooks: [],
+            reconciliationRuns: [],
+          },
+    leadAutomation:
+      page === "marketing"
+        ? snapshot.leadAutomation
+        : {
+            tasks: [],
+            attributions: [],
+            runs: [],
+          },
+    appointments:
+      page === "coaching"
+        ? snapshot.appointments
+        : {
+            creditPacks: [],
+            sessions: [],
+          },
+    communityHub:
+      page === "retention"
+        ? snapshot.communityHub
+        : {
+            groups: [],
+            challenges: [],
+            questionnaires: [],
+            responses: [],
+          },
+    mobileSelfService:
+      page === "mobile"
+        ? snapshot.mobileSelfService
+        : {
+            receipts: [],
+            paymentMethodRequests: [],
+            pauseRequests: [],
+            contracts: [],
+          },
+    staff: page === "settings" ? snapshot.staff : [],
+    auditEntries: page === "access" ? snapshot.auditEntries : [],
+    notificationPreview:
+      page === "retention" || page === "marketing" ? snapshot.notificationPreview : "",
+    waiverUploadPath: page === "members" ? snapshot.waiverUploadPath : "",
+    supportedLanguages: page === "mobile" ? snapshot.supportedLanguages : [],
+  };
+}
+
 export interface GymPlatformServices {
   createRequestTenantContext(actor: AuthActor, tenantId?: string): TenantContext;
   getDashboardSnapshot(
     actor: AuthActor,
     tenantContext: TenantContext,
+    options?: {
+      readonly page?: DashboardPageKey;
+    },
   ): Promise<GymDashboardSnapshot>;
   getPublicReservationSnapshot(input?: {
     readonly tenantSlug?: string;
   }): Promise<PublicReservationSnapshot>;
+  getPublicMembershipSignupSnapshot(input?: {
+    readonly tenantSlug?: string;
+  }): Promise<PublicMembershipSignupSnapshot>;
+  submitPublicMemberSignup(input: {
+    readonly tenantSlug?: string;
+    readonly fullName: string;
+    readonly email: string;
+    readonly phone: string;
+    readonly phoneCountry: CreateMemberInput["phoneCountry"];
+    readonly membershipPlanId: string;
+    readonly preferredLocationId: string;
+    readonly paymentMethod: GymDashboardSnapshot["memberSignups"][number]["paymentMethod"];
+    readonly contractAccepted: boolean;
+    readonly waiverAccepted: boolean;
+    readonly notes?: string;
+  }): Promise<GymDashboardSnapshot["memberSignups"][number]>;
   getMemberReservationSnapshot(
     actor: AuthActor,
     input?: {
@@ -1076,6 +1443,252 @@ export interface GymPlatformServices {
     actor: AuthActor,
     tenantContext: TenantContext,
   ): Promise<GymDashboardSnapshot["bookings"]>;
+  createLead(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly fullName: string;
+      readonly email: string;
+      readonly phone: string;
+      readonly source: GymDashboardSnapshot["leads"][number]["source"];
+      readonly stage: GymDashboardSnapshot["leads"][number]["stage"];
+      readonly interest: string;
+      readonly notes?: string;
+      readonly assignedStaffName?: string;
+      readonly expectedValueCents?: number;
+    },
+  ): Promise<GymDashboardSnapshot["leads"][number]>;
+  updateLead(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly id: string;
+      readonly stage: GymDashboardSnapshot["leads"][number]["stage"];
+      readonly notes?: string;
+      readonly assignedStaffName?: string;
+    },
+  ): Promise<GymDashboardSnapshot["leads"][number]>;
+  convertLeadToMember(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly leadId: string;
+      readonly membershipPlanId: string;
+      readonly homeLocationId: string;
+      readonly status: CreateMemberInput["status"];
+      readonly tags: ReadonlyArray<string>;
+      readonly waiverStatus: CreateMemberInput["waiverStatus"];
+      readonly portalPassword?: string;
+    },
+  ): Promise<{
+    readonly lead: GymDashboardSnapshot["leads"][number];
+    readonly member: GymDashboardSnapshot["members"][number];
+  }>;
+  createCollectionCase(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId?: string;
+      readonly memberName: string;
+      readonly paymentMethod: GymDashboardSnapshot["collectionCases"][number]["paymentMethod"];
+      readonly status: GymDashboardSnapshot["collectionCases"][number]["status"];
+      readonly amountCents: number;
+      readonly reason: string;
+      readonly dueAt: string;
+      readonly notes?: string;
+    },
+  ): Promise<GymDashboardSnapshot["collectionCases"][number]>;
+  updateCollectionCase(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly id: string;
+      readonly status: GymDashboardSnapshot["collectionCases"][number]["status"];
+      readonly notes?: string;
+    },
+  ): Promise<GymDashboardSnapshot["collectionCases"][number]>;
+  reviewMemberSignupRequest(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly signupRequestId: string;
+      readonly decision: "approved" | "rejected";
+      readonly ownerNotes?: string;
+      readonly memberStatus: CreateMemberInput["status"];
+      readonly portalPassword?: string;
+    },
+  ): Promise<{
+    readonly signup: GymDashboardSnapshot["memberSignups"][number];
+    readonly member?: GymDashboardSnapshot["members"][number];
+  }>;
+  createBillingInvoice(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId?: string;
+      readonly memberName: string;
+      readonly description: string;
+      readonly amountCents: number;
+      readonly dueAt: string;
+      readonly source: GymDashboardSnapshot["billingBackoffice"]["invoices"][number]["source"];
+      readonly currency?: string;
+    },
+  ): Promise<GymDashboardSnapshot["billingBackoffice"]["invoices"][number]>;
+  retryBillingInvoice(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly invoiceId: string;
+      readonly reason: string;
+    },
+  ): Promise<GymDashboardSnapshot["billingBackoffice"]["invoices"][number]>;
+  refundBillingInvoice(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly invoiceId: string;
+      readonly amountCents: number;
+      readonly reason: string;
+    },
+  ): Promise<GymDashboardSnapshot["billingBackoffice"]["refunds"][number]>;
+  recordBillingWebhook(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly invoiceId: string;
+      readonly eventType: string;
+      readonly status: GymDashboardSnapshot["billingBackoffice"]["webhooks"][number]["status"];
+      readonly providerReference: string;
+      readonly payloadSummary: string;
+    },
+  ): Promise<GymDashboardSnapshot["billingBackoffice"]["webhooks"][number]>;
+  reconcileBillingLedger(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly note?: string;
+    },
+  ): Promise<GymDashboardSnapshot["billingBackoffice"]["reconciliationRuns"][number]>;
+  runLeadAutomations(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly trigger: GymDashboardSnapshot["leadAutomation"]["runs"][number]["trigger"];
+    },
+  ): Promise<GymDashboardSnapshot["leadAutomation"]["runs"][number]>;
+  createAppointmentPack(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId: string;
+      readonly memberName: string;
+      readonly trainerId: string;
+      readonly title: string;
+      readonly totalCredits: number;
+      readonly validUntil: string;
+    },
+  ): Promise<GymDashboardSnapshot["appointments"]["creditPacks"][number]>;
+  createCoachAppointments(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly trainerId: string;
+      readonly memberId?: string;
+      readonly memberName?: string;
+      readonly locationId: string;
+      readonly startsAt: string;
+      readonly durationMinutes: number;
+      readonly recurrence: GymDashboardSnapshot["appointments"]["sessions"][number]["recurrence"];
+      readonly occurrences: number;
+      readonly creditPackId?: string;
+      readonly notes?: string;
+    },
+  ): Promise<{
+    readonly appointments: ReadonlyArray<GymDashboardSnapshot["appointments"]["sessions"][number]>;
+    readonly pack?: GymDashboardSnapshot["appointments"]["creditPacks"][number];
+  }>;
+  createCommunityGroup(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly name: string;
+      readonly channel: string;
+      readonly description: string;
+      readonly memberIds: ReadonlyArray<string>;
+    },
+  ): Promise<GymDashboardSnapshot["communityHub"]["groups"][number]>;
+  createMemberChallenge(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly title: string;
+      readonly rewardLabel: string;
+      readonly startsAt: string;
+      readonly endsAt: string;
+      readonly participantMemberIds: ReadonlyArray<string>;
+    },
+  ): Promise<GymDashboardSnapshot["communityHub"]["challenges"][number]>;
+  createQuestionnaire(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly title: string;
+      readonly trigger: string;
+      readonly questions: ReadonlyArray<string>;
+    },
+  ): Promise<GymDashboardSnapshot["communityHub"]["questionnaires"][number]>;
+  submitQuestionnaireResponse(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly questionnaireId: string;
+      readonly memberId: string;
+      readonly memberName: string;
+      readonly answers: ReadonlyArray<string>;
+    },
+  ): Promise<GymDashboardSnapshot["communityHub"]["responses"][number]>;
+  requestMobilePaymentMethodUpdate(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId: string;
+      readonly memberName: string;
+      readonly requestedMethodLabel: string;
+      readonly note?: string;
+    },
+  ): Promise<GymDashboardSnapshot["mobileSelfService"]["paymentMethodRequests"][number]>;
+  reviewMobilePaymentMethodUpdate(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly requestId: string;
+      readonly decision: "approved" | "rejected";
+      readonly ownerNotes?: string;
+    },
+  ): Promise<GymDashboardSnapshot["mobileSelfService"]["paymentMethodRequests"][number]>;
+  requestMembershipPause(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId: string;
+      readonly memberName: string;
+      readonly startsAt: string;
+      readonly endsAt: string;
+      readonly reason: string;
+    },
+  ): Promise<GymDashboardSnapshot["mobileSelfService"]["pauseRequests"][number]>;
+  reviewMembershipPause(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly requestId: string;
+      readonly decision: "approved" | "rejected";
+      readonly ownerNotes?: string;
+    },
+  ): Promise<{
+    readonly request: GymDashboardSnapshot["mobileSelfService"]["pauseRequests"][number];
+    readonly member?: GymDashboardSnapshot["members"][number];
+  }>;
   createLocation(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -1276,6 +1889,54 @@ export interface GymPlatformServices {
     tenantContext: TenantContext,
     input: Omit<GymDashboardSnapshot["legal"], "statusLabel" | "helpText" | "lastValidatedAt">,
   ): Promise<GymDashboardSnapshot["legal"]>;
+  updateBookingWorkspace(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["bookingWorkspace"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["bookingWorkspace"]>;
+  updateBookingPolicy(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["bookingPolicy"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["bookingPolicy"]>;
+  updateRevenueWorkspace(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["revenueWorkspace"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["revenueWorkspace"]>;
+  updateCoachingWorkspace(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["coachingWorkspace"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["coachingWorkspace"]>;
+  updateRetentionWorkspace(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["retentionWorkspace"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["retentionWorkspace"]>;
+  updateMobileExperience(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["mobileExperience"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["mobileExperience"]>;
+  updateMarketingWorkspace(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["marketingWorkspace"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["marketingWorkspace"]>;
+  updateIntegrationWorkspace(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: Omit<GymDashboardSnapshot["integrationWorkspace"], "lastUpdatedAt">,
+  ): Promise<GymDashboardSnapshot["integrationWorkspace"]>;
+  updateFeatureFlag(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly key: string;
+      readonly enabled: boolean;
+    },
+  ): Promise<FeatureState>;
   requestRemoteAccessUnlock(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -1378,10 +2039,50 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
     }
 
-    const waitlistFeature = runtime.featureEvaluator.evaluate("bookings.waitlist", {
+    const waitlistFeature = await evaluateFeatureFlag(
       actor,
       tenantContext,
+      "booking.group_classes",
+    );
+    const bookingPolicy = await buildBookingPolicySummary(tenantContext);
+    const [existingBookings, allClassSessions] = await Promise.all([
+      runtime.store.listBookings(tenantContext),
+      runtime.store.listClassSessions(tenantContext),
+    ]);
+    const sessionById = new Map(allClassSessions.map((session) => [session.id, session] as const));
+    const sameDayBookings = existingBookings.filter((booking) => {
+      if (booking.memberId !== member.id || booking.status === "cancelled") {
+        return false;
+      }
+
+      const bookingSession =
+        booking.classSessionId === classSession.id
+          ? classSession
+          : sessionById.get(booking.classSessionId);
+
+      return bookingSession ? isSameUtcDay(bookingSession.startsAt, classSession.startsAt) : false;
     });
+    const dailyConfirmedBookings = sameDayBookings.filter(
+      (booking) => booking.status !== "waitlisted",
+    ).length;
+    const dailyWaitlistBookings = sameDayBookings.filter(
+      (booking) => booking.status === "waitlisted",
+    ).length;
+    const willWaitlist = classSession.bookedCount >= classSession.capacity;
+
+    if (!willWaitlist && dailyConfirmedBookings >= bookingPolicy.maxDailyBookingsPerMember) {
+      throw new AppError("Deze member heeft de daglimiet voor boekingen bereikt.", {
+        code: "FORBIDDEN",
+        details: { limit: bookingPolicy.maxDailyBookingsPerMember },
+      });
+    }
+
+    if (willWaitlist && dailyWaitlistBookings >= bookingPolicy.maxDailyWaitlistPerMember) {
+      throw new AppError("Deze member heeft de daglimiet voor wachtlijstboekingen bereikt.", {
+        code: "FORBIDDEN",
+        details: { limit: bookingPolicy.maxDailyWaitlistPerMember },
+      });
+    }
 
     if (
       classSession.bookedCount >= classSession.capacity &&
@@ -1536,6 +2237,47 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     };
   }
 
+  async function resolveSelfServiceMemberAccess(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    memberId: string,
+  ) {
+    const member = await runtime.store.getMember(tenantContext, memberId);
+
+    if (!member) {
+      throw new AppError("Lid voor self-service kon niet gevonden worden.", {
+        code: "RESOURCE_NOT_FOUND",
+      });
+    }
+
+    if (runtime.permissionRegistry.hasPermissions(actor, ["operations.manage"], tenantContext)) {
+      return member;
+    }
+
+    const tenantMembership = getTenantMembership(actor, tenantContext.tenantId);
+    const memberRole = getMembershipRole("member");
+
+    if (!tenantMembership?.roles.includes(memberRole)) {
+      throw new AppError("De huidige rol mist permissies voor deze actie.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    if (!actor.email || normalizeEmailValue(actor.email) !== normalizeEmailValue(member.email)) {
+      throw new AppError("Je kunt alleen self-service aanvragen voor je eigen lidprofiel.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    if (!isReservableMemberStatus(member.status)) {
+      throw new AppError("Self-service is alleen beschikbaar voor actieve of trial leden.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    return member;
+  }
+
   async function buildMemberReservationSnapshot(
     actor: AuthActor,
     input?: { readonly tenantSlug?: string },
@@ -1560,14 +2302,21 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           baseMember?.fullName || actor.displayName || actor.email || "Account",
         memberEmail: baseMember?.email || actor.email || "",
         hasEligibleMembership: memberships.length > 0,
+        selfService: {
+          receipts: [],
+          paymentMethodRequests: [],
+          pauseRequests: [],
+          contracts: [],
+        },
       } satisfies MemberReservationSnapshot);
     }
 
     const tenantContext = createPublicTenantContext(selectedMembership.tenant.id);
-    const [locations, trainers, classSessions] = await Promise.all([
+    const [locations, trainers, classSessions, mobileSelfService] = await Promise.all([
       runtime.store.listLocations(tenantContext),
       runtime.store.listTrainers(tenantContext),
       runtime.store.listClassSessions(tenantContext),
+      buildMobileSelfServiceSummary(tenantContext),
     ]);
 
     const locationById = new Map(
@@ -1610,7 +2359,50 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         "Lid",
       memberEmail: selectedMembership.member.email || actor.email || "",
       hasEligibleMembership: true,
+      selfService: {
+        receipts: mobileSelfService.receipts.filter(
+          (receipt) => receipt.memberId === selectedMembership.member.id,
+        ),
+        paymentMethodRequests: mobileSelfService.paymentMethodRequests.filter(
+          (request) => request.memberId === selectedMembership.member.id,
+        ),
+        pauseRequests: mobileSelfService.pauseRequests.filter(
+          (request) => request.memberId === selectedMembership.member.id,
+        ),
+        contracts: mobileSelfService.contracts.filter(
+          (contract) => contract.memberId === selectedMembership.member.id,
+        ),
+      },
     } satisfies MemberReservationSnapshot);
+  }
+
+  async function ensureMemberContractRecord(
+    tenantContext: TenantContext,
+    member: GymDashboardSnapshot["members"][number],
+  ) {
+    const [membershipPlans, legal] = await Promise.all([
+      runtime.store.listMembershipPlans(tenantContext),
+      buildLegalComplianceSummary(tenantContext),
+    ]);
+    const plan = membershipPlans.find((entry) => entry.id === member.membershipPlanId);
+
+    if (!plan) {
+      return null;
+    }
+
+    return createLocalTenantContractRecord(tenantContext.tenantId, {
+      memberId: member.id,
+      memberName: member.fullName,
+      membershipPlanId: plan.id,
+      contractName: plan.name,
+      documentLabel: `${plan.name} contract`,
+      documentUrl:
+        legal.contractPdfTemplateKey ||
+        legal.termsUrl ||
+        `https://contracts.${tenantContext.tenantId}/${plan.id}.pdf`,
+      status: "active",
+      signedAt: member.joinedAt,
+    });
   }
 
   return {
@@ -1624,7 +2416,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         actorId: actor.subjectId,
       });
     },
-    async getDashboardSnapshot(actor, tenantContext) {
+    async getDashboardSnapshot(actor, tenantContext, options) {
       assertAccess(runtime, actor, tenantContext, ["dashboard.read"]);
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
 
@@ -1635,7 +2427,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       );
 
       if (cached) {
-        return cached;
+        return slimDashboardSnapshotForPage(cached, options?.page);
       }
 
       const [
@@ -1665,9 +2457,43 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         runtime.healthRegistry.run({ tenantContext }),
         buildStaffSummaries(runtime, tenantContext),
       ]);
-      const remoteAccess = await buildRemoteAccessSummary(tenantContext, locations);
-      const payments = await buildBillingSummary(tenantContext);
-      const legal = await buildLegalComplianceSummary(tenantContext);
+      const [
+        remoteAccess,
+        payments,
+        legal,
+        bookingWorkspace,
+        bookingPolicy,
+        memberSignups,
+        billingBackoffice,
+        leadAutomation,
+        appointments,
+        communityHub,
+        mobileSelfService,
+        revenueWorkspace,
+        coachingWorkspace,
+        retentionWorkspace,
+        mobileExperience,
+        marketingWorkspace,
+        integrationWorkspace,
+      ] = await Promise.all([
+        buildRemoteAccessSummary(tenantContext, locations),
+        buildBillingSummary(tenantContext),
+        buildLegalComplianceSummary(tenantContext),
+        buildBookingWorkspaceSummary(tenantContext),
+        buildBookingPolicySummary(tenantContext),
+        buildMemberSignupSummary(tenantContext),
+        buildBillingBackofficeSummary(tenantContext),
+        buildLeadAutomationSummary(tenantContext),
+        buildAppointmentSummary(tenantContext),
+        buildCommunitySummary(tenantContext),
+        buildMobileSelfServiceSummary(tenantContext),
+        buildRevenueWorkspaceSummary(tenantContext),
+        buildCoachingWorkspaceSummary(tenantContext),
+        buildRetentionWorkspaceSummary(tenantContext),
+        buildMobileExperienceSummary(tenantContext),
+        buildMarketingWorkspaceSummary(tenantContext),
+        buildIntegrationWorkspaceSummary(tenantContext),
+      ]);
 
       const activeMemberCount = members.filter((member) => member.status === "active").length;
       const occupancyRate =
@@ -1745,10 +2571,29 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             ["settings.manage"],
             tenantContext,
           ),
+          canManageFeatureFlags: runtime.permissionRegistry.hasPermissions(
+            actor,
+            ["settings.manage"],
+            tenantContext,
+          ),
         },
         remoteAccess,
         payments,
         legal,
+        bookingWorkspace,
+        bookingPolicy,
+        memberSignups,
+        billingBackoffice,
+        leadAutomation,
+        appointments,
+        communityHub,
+        mobileSelfService,
+        revenueWorkspace,
+        coachingWorkspace,
+        retentionWorkspace,
+        mobileExperience,
+        marketingWorkspace,
+        integrationWorkspace,
         metrics: [
           {
             label: "Actieve leden",
@@ -1775,7 +2620,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             tone: "default",
           },
         ],
-        featureFlags: featureStates(runtime, actor, tenantContext),
+        featureFlags: await featureStates(actor, tenantContext),
         locations,
         membershipPlans,
         members,
@@ -1785,6 +2630,8 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         bookings,
         attendance,
         waivers,
+        leads: tenantProfile?.leads ?? [],
+        collectionCases: tenantProfile?.collectionCases ?? [],
         staff,
         auditEntries: auditEntries.slice(0, 6) as ReadonlyArray<AuditEntry>,
         healthReport,
@@ -1802,7 +2649,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         ttlSeconds: 30,
       });
 
-      return serializedSnapshot;
+      return slimDashboardSnapshotForPage(serializedSnapshot, options?.page);
     },
     async getPublicReservationSnapshot(input) {
       const [tenants, requestedTenant] = await Promise.all([
@@ -1867,6 +2714,150 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           })),
       });
     },
+    async getPublicMembershipSignupSnapshot(input) {
+      const [tenants, requestedTenant] = await Promise.all([
+        listLocalTenants(),
+        input?.tenantSlug ? getLocalTenantProfileBySlug(input.tenantSlug) : Promise.resolve(null),
+      ]);
+      const tenantProfile =
+        requestedTenant ?? (tenants.length === 1 ? tenants[0] ?? null : null);
+
+      if (!tenantProfile) {
+        return toClientPlain({
+          tenantName: tenants.length > 1 ? "Kies je sportschool" : "Jouw sportschool",
+          tenantSlug: null,
+          availableGyms: tenants.map((tenant) => ({
+            id: tenant.id,
+            slug: tenant.id,
+            name: tenant.name,
+          })),
+          membershipPlans: [],
+          locations: [],
+          legal: {
+            termsUrl: "",
+            privacyUrl: "",
+            sepaMandateText: "",
+            contractPdfTemplateKey: "",
+          },
+          billingReady: false,
+        } satisfies PublicMembershipSignupSnapshot);
+      }
+
+      const tenantContext = createPublicTenantContext(tenantProfile.id);
+      const [locations, plans, legal, payments] = await Promise.all([
+        runtime.store.listLocations(tenantContext),
+        runtime.store.listMembershipPlans(tenantContext),
+        buildLegalComplianceSummary(tenantContext),
+        buildBillingSummary(tenantContext),
+      ]);
+
+      return toClientPlain({
+        tenantName: tenantProfile.name,
+        tenantSlug: tenantProfile.id,
+        availableGyms: tenants.map((tenant) => ({
+          id: tenant.id,
+          slug: tenant.id,
+          name: tenant.name,
+        })),
+        membershipPlans: plans
+          .filter((plan) => plan.status === "active")
+          .map((plan) => ({
+            id: plan.id,
+            name: plan.name,
+            priceMonthly: plan.priceMonthly,
+            billingCycle: plan.billingCycle,
+          })),
+        locations: locations
+          .filter((location) => location.status === "active")
+          .map((location) => ({
+            id: location.id,
+            name: location.name,
+            city: location.city,
+          })),
+        legal: {
+          termsUrl: legal.termsUrl,
+          privacyUrl: legal.privacyUrl,
+          sepaMandateText: legal.sepaMandateText,
+          contractPdfTemplateKey: legal.contractPdfTemplateKey,
+        },
+        billingReady: payments.enabled,
+      } satisfies PublicMembershipSignupSnapshot);
+    },
+    async submitPublicMemberSignup(input) {
+      const tenantProfile = input.tenantSlug
+        ? await getLocalTenantProfileBySlug(input.tenantSlug)
+        : (await listLocalTenants())[0] ?? null;
+
+      if (!tenantProfile) {
+        throw new AppError("Sportschool niet gevonden voor aanmelding.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      if (!input.contractAccepted || !input.waiverAccepted) {
+        throw new AppError("Contract en waiver moeten akkoord zijn voordat iemand zich aanmeldt.", {
+          code: "INVALID_INPUT",
+        });
+      }
+
+      const tenantContext = createPublicTenantContext(tenantProfile.id);
+      const [locations, membershipPlans] = await Promise.all([
+        runtime.store.listLocations(tenantContext),
+        runtime.store.listMembershipPlans(tenantContext),
+      ]);
+      const normalizedPhone = normalizePhoneForStorage(input.phone, input.phoneCountry);
+      const rateLimitResult = runtime.rateLimiter.consume({
+        key: buildRateLimitKey({
+          scope: "member_signups.create",
+          identifier: `${tenantProfile.id}:${normalizeEmailValue(input.email)}`,
+          fallbackIdentifier: normalizedPhone,
+        }),
+        windowMs: 15 * 60_000,
+        maxRequests: 4,
+      });
+
+      if (!rateLimitResult.allowed) {
+        throw new AppError("Te veel aanmeldverzoeken in korte tijd.", {
+          code: "RATE_LIMIT_EXCEEDED",
+          details: rateLimitResult,
+        });
+      }
+
+      const activeLocation = locations.find(
+        (location) =>
+          location.id === input.preferredLocationId && location.status === "active",
+      );
+      const activeMembershipPlan = membershipPlans.find(
+        (plan) => plan.id === input.membershipPlanId && plan.status === "active",
+      );
+
+      if (!activeLocation) {
+        throw new AppError("Vestiging voor de aanmelding is niet actief of bestaat niet.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      if (!activeMembershipPlan) {
+        throw new AppError("Contract voor de aanmelding is niet actief of bestaat niet.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const signup = await createLocalTenantMemberSignup(tenantContext.tenantId, {
+        fullName: input.fullName,
+        email: input.email,
+        phone: normalizedPhone,
+        phoneCountry: input.phoneCountry,
+        membershipPlanId: input.membershipPlanId,
+        preferredLocationId: input.preferredLocationId,
+        paymentMethod: input.paymentMethod,
+        contractAcceptedAt: new Date().toISOString(),
+        waiverAcceptedAt: new Date().toISOString(),
+        notes: input.notes,
+      });
+
+      return signup;
+    },
     async getMemberReservationSnapshot(actor, input) {
       return buildMemberReservationSnapshot(actor, input);
     },
@@ -1885,6 +2876,724 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async listBookings(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["classes.read"]);
       return runtime.store.listBookings(tenantContext);
+    },
+    async createLead(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const lead = await createLocalTenantLead(tenantContext.tenantId, input);
+      await createLocalTenantLeadAttribution(tenantContext.tenantId, {
+        leadId: lead.id,
+        source: lead.source,
+        campaignLabel: input.interest || "General inbound",
+        medium: lead.source === "walk_in" ? "offline" : "digital",
+      });
+      await createLocalTenantLeadTask(tenantContext.tenantId, {
+        type: "nurture",
+        title: `Volg ${lead.fullName} op`,
+        dueAt: new Date().toISOString(),
+        source: lead.source,
+        leadId: lead.id,
+        notes: lead.notes,
+        assignedStaffName: lead.assignedStaffName,
+      });
+      await runtime.auditLogger.write({
+        action: "lead.created",
+        category: "marketing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { leadId: lead.id, source: lead.source, stage: lead.stage },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return lead;
+    },
+    async updateLead(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const lead = await updateLocalTenantLead(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "lead.updated",
+        category: "marketing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { leadId: lead.id, stage: lead.stage },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return lead;
+    },
+    async convertLeadToMember(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+      const lead = tenantProfile?.leads.find((entry) => entry.id === input.leadId);
+
+      if (!lead) {
+        throw new AppError("Lead kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const [membershipPlan, location] = await Promise.all([
+        runtime.store
+          .listMembershipPlans(tenantContext)
+          .then((plans) => plans.find((entry) => entry.id === input.membershipPlanId) ?? null),
+        runtime.store
+          .listLocations(tenantContext)
+          .then((locations) => locations.find((entry) => entry.id === input.homeLocationId) ?? null),
+      ]);
+
+      if (!membershipPlan || !location) {
+        throw new AppError("Contract of vestiging voor leadconversie ontbreekt.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const member = await runtime.store.createMember(tenantContext, {
+        fullName: lead.fullName,
+        email: lead.email,
+        phone: normalizePhoneForStorage(lead.phone, "NL"),
+        phoneCountry: "NL",
+        membershipPlanId: membershipPlan.id,
+        homeLocationId: location.id,
+        status: input.status,
+        tags: [...input.tags],
+        waiverStatus: input.waiverStatus,
+      });
+
+      if (input.portalPassword?.trim()) {
+        await upsertLocalMemberPortalAccount(tenantContext.tenantId, {
+          memberId: member.id,
+          displayName: member.fullName,
+          email: member.email,
+          password: input.portalPassword.trim(),
+        });
+      }
+      await ensureMemberContractRecord(tenantContext, member);
+
+      const updatedLead = await updateLocalTenantLead(tenantContext.tenantId, {
+        id: lead.id,
+        stage: "won",
+        notes: lead.notes,
+        assignedStaffName: lead.assignedStaffName,
+        convertedMemberId: member.id,
+      });
+
+      await runtime.auditLogger.write({
+        action: "lead.converted",
+        category: "marketing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { leadId: lead.id, memberId: member.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return {
+        lead: updatedLead,
+        member,
+      };
+    },
+    async createCollectionCase(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const collectionCase = await createLocalTenantCollectionCase(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "collection_case.created",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          collectionCaseId: collectionCase.id,
+          amountCents: collectionCase.amountCents,
+          status: collectionCase.status,
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return collectionCase;
+    },
+    async updateCollectionCase(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const collectionCase = await updateLocalTenantCollectionCase(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "collection_case.updated",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          collectionCaseId: collectionCase.id,
+          status: collectionCase.status,
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return collectionCase;
+    },
+    async reviewMemberSignupRequest(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+      const signup = tenantProfile?.moduleData.memberSignups.find(
+        (entry) => entry.id === input.signupRequestId,
+      );
+
+      if (!signup) {
+        throw new AppError("Member signup niet gevonden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      if (input.decision === "rejected") {
+        const rejectedSignup = await reviewLocalTenantMemberSignup(tenantContext.tenantId, {
+          id: signup.id,
+          status: "rejected",
+          ownerNotes: input.ownerNotes,
+        });
+        await runtime.auditLogger.write({
+          action: "member_signup.rejected",
+          category: "members",
+          actorId: actor.subjectId,
+          tenantId: tenantContext.tenantId,
+          metadata: { signupRequestId: signup.id },
+        });
+        await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+        return {
+          signup: rejectedSignup,
+        };
+      }
+
+      const [membershipPlans, locations] = await Promise.all([
+        runtime.store.listMembershipPlans(tenantContext),
+        runtime.store.listLocations(tenantContext),
+      ]);
+      const membershipPlan = membershipPlans.find(
+        (entry) => entry.id === signup.membershipPlanId && entry.status === "active",
+      );
+      const location = locations.find(
+        (entry) => entry.id === signup.preferredLocationId && entry.status === "active",
+      );
+
+      if (!membershipPlan || !location) {
+        throw new AppError("Het gekozen contract of de vestiging is niet meer actief.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const member = await runtime.store.createMember(tenantContext, {
+        fullName: signup.fullName,
+        email: signup.email,
+        phone: signup.phone,
+        phoneCountry: signup.phoneCountry,
+        membershipPlanId: membershipPlan.id,
+        homeLocationId: location.id,
+        status: input.memberStatus,
+        tags: ["self-signup"],
+        waiverStatus: "complete",
+      });
+
+      if (input.portalPassword?.trim()) {
+        await upsertLocalMemberPortalAccount(tenantContext.tenantId, {
+          memberId: member.id,
+          displayName: member.fullName,
+          email: member.email,
+          password: input.portalPassword.trim(),
+        });
+      }
+
+      const approvedSignup = await reviewLocalTenantMemberSignup(tenantContext.tenantId, {
+        id: signup.id,
+        status: "approved",
+        ownerNotes: input.ownerNotes,
+        approvedMemberId: member.id,
+      });
+      await createLocalTenantBillingInvoice(tenantContext.tenantId, {
+        memberId: member.id,
+        memberName: member.fullName,
+        description: `Membership checkout · ${membershipPlan.name}`,
+        amountCents: membershipPlan.priceMonthly * 100,
+        dueAt: new Date().toISOString(),
+        source: "signup_checkout",
+        externalReference: signup.id,
+      });
+      await ensureMemberContractRecord(tenantContext, member);
+      await runtime.auditLogger.write({
+        action: "member_signup.approved",
+        category: "members",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { signupRequestId: signup.id, memberId: member.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return {
+        signup: approvedSignup,
+        member,
+      };
+    },
+    async createBillingInvoice(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      const invoice = await createLocalTenantBillingInvoice(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "billing.invoice_created",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { invoiceId: invoice.id, amountCents: invoice.amountCents },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return invoice;
+    },
+    async retryBillingInvoice(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      const billingBackoffice = await buildBillingBackofficeSummary(tenantContext);
+      const invoice = billingBackoffice.invoices.find((entry) => entry.id === input.invoiceId);
+
+      if (!invoice) {
+        throw new AppError("Invoice niet gevonden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const updated = await updateLocalTenantBillingInvoice(tenantContext.tenantId, {
+        id: invoice.id,
+        status: "open",
+        retryCount: invoice.retryCount + 1,
+        lastWebhookEventType: input.reason,
+      });
+      await runtime.auditLogger.write({
+        action: "billing.invoice_retried",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { invoiceId: invoice.id, retryCount: updated.retryCount },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return updated;
+    },
+    async refundBillingInvoice(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      const billingBackoffice = await buildBillingBackofficeSummary(tenantContext);
+      const invoice = billingBackoffice.invoices.find((entry) => entry.id === input.invoiceId);
+
+      if (!invoice) {
+        throw new AppError("Invoice niet gevonden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const refund = await createLocalTenantBillingRefund(tenantContext.tenantId, {
+        invoiceId: invoice.id,
+        amountCents: input.amountCents,
+        reason: input.reason,
+        status: "processed",
+      });
+      await updateLocalTenantBillingInvoice(tenantContext.tenantId, {
+        id: invoice.id,
+        status: "refunded",
+        refundedAt: new Date().toISOString(),
+      });
+      await runtime.auditLogger.write({
+        action: "billing.refund_created",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { invoiceId: invoice.id, refundId: refund.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return refund;
+    },
+    async recordBillingWebhook(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      const webhook = await createLocalTenantBillingWebhook(tenantContext.tenantId, input);
+      const nextStatus =
+        input.eventType === "payment.paid"
+          ? "paid"
+          : input.eventType === "payment.refunded"
+            ? "refunded"
+            : input.eventType === "payment.failed"
+              ? "failed"
+              : null;
+
+      if (nextStatus) {
+        await updateLocalTenantBillingInvoice(tenantContext.tenantId, {
+          id: input.invoiceId,
+          status: nextStatus,
+          paidAt: nextStatus === "paid" ? new Date().toISOString() : undefined,
+          refundedAt: nextStatus === "refunded" ? new Date().toISOString() : undefined,
+          lastWebhookEventType: input.eventType,
+        });
+      }
+
+      await runtime.auditLogger.write({
+        action: "billing.webhook_recorded",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { invoiceId: input.invoiceId, eventType: input.eventType },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return webhook;
+    },
+    async reconcileBillingLedger(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      const billingBackoffice = await buildBillingBackofficeSummary(tenantContext);
+      const matchedInvoiceIds = billingBackoffice.invoices
+        .filter((invoice) => invoice.status === "paid" || invoice.status === "refunded")
+        .map((invoice) => invoice.id);
+      const unmatchedInvoiceIds = billingBackoffice.invoices
+        .filter((invoice) => invoice.status === "open" || invoice.status === "failed")
+        .map((invoice) => invoice.id);
+      const run = await createLocalTenantBillingReconciliationRun(tenantContext.tenantId, {
+        note: input.note,
+        matchedInvoiceIds,
+        unmatchedInvoiceIds,
+      });
+      await runtime.auditLogger.write({
+        action: "billing.reconciled",
+        category: "billing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { reconciliationRunId: run.id, totalInvoices: run.totalInvoices },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return run;
+    },
+    async runLeadAutomations(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const [tenantProfile, bookings] = await Promise.all([
+        getLocalTenantProfile(tenantContext.tenantId),
+        runtime.store.listBookings(tenantContext),
+      ]);
+      const existingTasks = tenantProfile?.moduleData.leadAutomation.tasks ?? [];
+      let createdTasks = 0;
+
+      for (const lead of tenantProfile?.leads ?? []) {
+        const hasOpenTask = existingTasks.some(
+          (task) => task.leadId === lead.id && task.status === "open" && task.type === "nurture",
+        );
+
+        if (!hasOpenTask && lead.stage !== "won" && lead.stage !== "lost") {
+          await createLocalTenantLeadTask(tenantContext.tenantId, {
+            type: "nurture",
+            title: `Nurture ${lead.fullName}`,
+            dueAt: new Date().toISOString(),
+            source: lead.source,
+            leadId: lead.id,
+            notes: lead.notes,
+            assignedStaffName: lead.assignedStaffName,
+          });
+          createdTasks += 1;
+        }
+      }
+
+      for (const booking of bookings.filter((entry) => entry.status === "cancelled")) {
+        const hasAbandonedTask = existingTasks.some(
+          (task) =>
+            task.bookingId === booking.id &&
+            task.type === "abandoned_booking" &&
+            task.status === "open",
+        );
+
+        if (!hasAbandonedTask) {
+          await createLocalTenantLeadTask(tenantContext.tenantId, {
+            type: "abandoned_booking",
+            title: `Volg geannuleerde booking van ${booking.memberName} op`,
+            dueAt: new Date().toISOString(),
+            source: "system",
+            memberId: booking.memberId,
+            bookingId: booking.id,
+          });
+          createdTasks += 1;
+        }
+      }
+
+      const run = await createLocalTenantLeadAutomationRun(tenantContext.tenantId, {
+        trigger: input.trigger,
+        createdTasks,
+      });
+      await runtime.auditLogger.write({
+        action: "lead_automation.run",
+        category: "marketing",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { trigger: input.trigger, createdTasks },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return run;
+    },
+    async createAppointmentPack(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const pack = await createLocalTenantAppointmentPack(tenantContext.tenantId, {
+        ...input,
+        remainingCredits: input.totalCredits,
+      });
+      await runtime.auditLogger.write({
+        action: "appointments.pack_created",
+        category: "coaching",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { packId: pack.id, memberId: pack.memberId },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return pack;
+    },
+    async createCoachAppointments(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const trainer = await runtime.store
+        .listTrainers(tenantContext)
+        .then((trainers) => trainers.find((entry) => entry.id === input.trainerId) ?? null);
+
+      if (!trainer) {
+        throw new AppError("Trainer voor appointment niet gevonden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const occurrences = Math.max(1, input.occurrences);
+      const seriesId = occurrences > 1 ? crypto.randomUUID() : undefined;
+      let pack;
+
+      if (input.creditPackId) {
+        const appointmentSummary = await buildAppointmentSummary(tenantContext);
+        const existingPack = appointmentSummary.creditPacks.find(
+          (entry) => entry.id === input.creditPackId,
+        );
+
+        if (!existingPack) {
+          throw new AppError("Credit pack niet gevonden voor appointment.", {
+            code: "RESOURCE_NOT_FOUND",
+          });
+        }
+
+        if (existingPack.remainingCredits < occurrences) {
+          throw new AppError("Deze credit pack heeft niet genoeg credits voor alle sessies.", {
+            code: "INVALID_INPUT",
+            details: {
+              remainingCredits: existingPack.remainingCredits,
+              requestedCredits: occurrences,
+            },
+          });
+        }
+
+        pack = existingPack;
+      }
+
+      const appointments = await createLocalTenantCoachAppointments(
+        tenantContext.tenantId,
+        Array.from({ length: occurrences }, (_, index) => ({
+          trainerId: trainer.id,
+          trainerName: trainer.fullName,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          locationId: input.locationId,
+          startsAt: new Date(
+            new Date(input.startsAt).getTime() + index * 7 * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          durationMinutes: input.durationMinutes,
+          status: "scheduled",
+          recurrence: input.recurrence,
+          seriesId,
+          creditPackId: input.creditPackId,
+          notes: input.notes,
+        })),
+      );
+
+      if (input.creditPackId && pack) {
+        pack = await updateLocalTenantAppointmentPack(tenantContext.tenantId, {
+          id: pack.id,
+          remainingCredits: pack.remainingCredits - appointments.length,
+        });
+      }
+
+      await runtime.auditLogger.write({
+        action: "appointments.created",
+        category: "coaching",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { count: appointments.length, trainerId: trainer.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return {
+        appointments,
+        pack,
+      };
+    },
+    async createCommunityGroup(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const group = await createLocalTenantCommunityGroup(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "community.group_created",
+        category: "retention",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { groupId: group.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return group;
+    },
+    async createMemberChallenge(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const challenge = await createLocalTenantChallenge(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "community.challenge_created",
+        category: "retention",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { challengeId: challenge.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return challenge;
+    },
+    async createQuestionnaire(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const questionnaire = await createLocalTenantQuestionnaire(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "community.questionnaire_created",
+        category: "retention",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { questionnaireId: questionnaire.id },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return questionnaire;
+    },
+    async submitQuestionnaireResponse(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const response = await createLocalTenantQuestionnaireResponse(
+        tenantContext.tenantId,
+        input,
+      );
+      await runtime.auditLogger.write({
+        action: "community.questionnaire_response_created",
+        category: "retention",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { questionnaireId: input.questionnaireId, memberId: input.memberId },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return response;
+    },
+    async requestMobilePaymentMethodUpdate(actor, tenantContext, input) {
+      const member = await resolveSelfServiceMemberAccess(
+        actor,
+        tenantContext,
+        input.memberId,
+      );
+      const request = await createLocalTenantPaymentMethodRequest(tenantContext.tenantId, {
+        ...input,
+        memberName: member.fullName,
+      });
+      await runtime.auditLogger.write({
+        action: "mobile.payment_method_request_created",
+        category: "mobile",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          requestId: request.id,
+          memberId: request.memberId,
+          requestedByRole: runtime.permissionRegistry.hasPermissions(
+            actor,
+            ["operations.manage"],
+            tenantContext,
+          )
+            ? "staff"
+            : "member",
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return request;
+    },
+    async reviewMobilePaymentMethodUpdate(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const request = await reviewLocalTenantPaymentMethodRequest(tenantContext.tenantId, {
+        id: input.requestId,
+        status: input.decision,
+        ownerNotes: input.ownerNotes,
+      });
+      await runtime.auditLogger.write({
+        action: "mobile.payment_method_request_reviewed",
+        category: "mobile",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { requestId: request.id, status: request.status },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return request;
+    },
+    async requestMembershipPause(actor, tenantContext, input) {
+      const member = await resolveSelfServiceMemberAccess(
+        actor,
+        tenantContext,
+        input.memberId,
+      );
+      const request = await createLocalTenantPauseRequest(tenantContext.tenantId, {
+        ...input,
+        memberName: member.fullName,
+      });
+      await runtime.auditLogger.write({
+        action: "mobile.pause_request_created",
+        category: "mobile",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          requestId: request.id,
+          memberId: request.memberId,
+          requestedByRole: runtime.permissionRegistry.hasPermissions(
+            actor,
+            ["operations.manage"],
+            tenantContext,
+          )
+            ? "staff"
+            : "member",
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return request;
+    },
+    async reviewMembershipPause(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+      const existing = tenantProfile?.moduleData.mobileSelfService.pauseRequests.find(
+        (entry) => entry.id === input.requestId,
+      );
+
+      if (!existing) {
+        throw new AppError("Pause request niet gevonden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      const request = await reviewLocalTenantPauseRequest(tenantContext.tenantId, {
+        id: input.requestId,
+        status: input.decision,
+        ownerNotes: input.ownerNotes,
+      });
+      let member;
+
+      if (input.decision === "approved") {
+        const existingMember = await runtime.store.getMember(tenantContext, existing.memberId);
+
+        if (!existingMember) {
+          throw new AppError("Lid voor pause request niet gevonden.", {
+            code: "RESOURCE_NOT_FOUND",
+          });
+        }
+
+        member = await runtime.store.updateMember(tenantContext, {
+          ...existingMember,
+          expectedVersion: existingMember.version,
+          status: "paused",
+        });
+        await syncLocalMemberPortalAccount(tenantContext.tenantId, {
+          memberId: member.id,
+          displayName: member.fullName,
+          email: member.email,
+          status: "archived",
+        });
+      }
+
+      await runtime.auditLogger.write({
+        action: "mobile.pause_request_reviewed",
+        category: "mobile",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: { requestId: request.id, status: request.status },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return {
+        request,
+        member,
+      };
     },
     async createLocation(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
@@ -2064,6 +3773,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           password: portalPassword.trim(),
         });
       }
+      await ensureMemberContractRecord(tenantContext, member);
 
       await runtime.auditLogger.write({
         action: "member.created",
@@ -2526,6 +4236,161 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return buildLegalComplianceSummary(tenantContext);
     },
+    async updateBookingWorkspace(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantBookingSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "booking_workspace.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildBookingWorkspaceSummary(tenantContext);
+    },
+    async updateBookingPolicy(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      await updateLocalTenantBookingPolicy(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "booking_policy.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildBookingPolicySummary(tenantContext);
+    },
+    async updateRevenueWorkspace(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantRevenueSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "revenue_workspace.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildRevenueWorkspaceSummary(tenantContext);
+    },
+    async updateCoachingWorkspace(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantCoachingSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "coaching_workspace.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildCoachingWorkspaceSummary(tenantContext);
+    },
+    async updateRetentionWorkspace(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantRetentionSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "retention_workspace.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildRetentionWorkspaceSummary(tenantContext);
+    },
+    async updateMobileExperience(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantMobileSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "mobile_experience.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildMobileExperienceSummary(tenantContext);
+    },
+    async updateMarketingWorkspace(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantMarketingSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "marketing_workspace.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildMarketingWorkspaceSummary(tenantContext);
+    },
+    async updateIntegrationWorkspace(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      await updateLocalTenantIntegrationSettings(tenantContext.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "integration_workspace.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return buildIntegrationWorkspaceSummary(tenantContext);
+    },
+    async updateFeatureFlag(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+
+      const featureDefinition = DASHBOARD_FEATURE_CATALOG.find(
+        (feature) => feature.key === input.key,
+      );
+
+      if (!featureDefinition) {
+        throw new AppError("Feature flag niet gevonden.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { key: input.key },
+        });
+      }
+
+      await updateLocalTenantFeatureFlag(tenantContext.tenantId, {
+        key: input.key,
+        value: input.enabled,
+        updatedBy: actor.displayName ?? actor.subjectId,
+      });
+
+      await runtime.auditLogger.write({
+        action: "feature_flag.updated",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          key: input.key,
+          enabled: input.enabled,
+        },
+      });
+
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      const nextFeatureStates = await featureStates(actor, tenantContext);
+      const updatedFeature = nextFeatureStates.find((feature) => feature.key === input.key);
+
+      if (!updatedFeature) {
+        throw new AppError("Feature flag kon niet worden teruggelezen.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { key: input.key },
+        });
+      }
+
+      return updatedFeature;
+    },
     async requestRemoteAccessUnlock(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
 
@@ -2880,6 +4745,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             (entry) => entry.id === classSession.locationId,
           )
         : null;
+      const bookingPolicy = await buildBookingPolicySummary(tenantContext);
 
       await runtime.auditLogger.write({
         action: "booking.cancelled",
@@ -2892,6 +4758,23 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           memberId: result.booking.memberId,
         },
       });
+
+      if (
+        classSession &&
+        bookingPolicy.lateCancelFeeCents > 0 &&
+        hoursUntil(classSession.startsAt) <= bookingPolicy.cancellationWindowHours
+      ) {
+        await createLocalTenantCollectionCase(tenantContext.tenantId, {
+          memberId: result.booking.memberId,
+          memberName: result.booking.memberName,
+          paymentMethod: "payment_request",
+          status: "open",
+          amountCents: bookingPolicy.lateCancelFeeCents,
+          reason: `Late cancellation fee for ${classSession.title}`,
+          dueAt: new Date().toISOString(),
+          notes: `Automatisch aangemaakt omdat de annulering binnen ${bookingPolicy.cancellationWindowHours} uur voor aanvang viel.`,
+        });
+      }
 
       let promotedMessagePreview: string | undefined;
 
@@ -2945,12 +4828,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async recordAttendance(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["attendance.write"]);
 
-      const checkInFeature = runtime.featureEvaluator.evaluate(
-        "attendance.self_check_in",
-        {
-          actor,
-          tenantContext,
-        },
+      const checkInFeature = await evaluateFeatureFlag(
+        actor,
+        tenantContext,
+        "mobile.checkin",
       );
 
       if (input.channel === "qr" && !checkInFeature.enabled) {

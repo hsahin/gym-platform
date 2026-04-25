@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowRight, CalendarDays, CreditCard, DoorOpen, Users } from "lucide-react";
 import { Card, Chip } from "@heroui/react";
 import { KPI } from "@heroui-pro/react/kpi";
 import { ListView } from "@heroui-pro/react/list-view";
+import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import {
   EmptyPanel,
@@ -12,6 +14,7 @@ import {
   statusChip,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
+import { getDashboardPages } from "@/lib/dashboard-pages";
 
 export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
   const upcomingSessions = [...snapshot.classSessions].sort((left, right) =>
@@ -35,6 +38,41 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
     totalCapacity === 0
       ? 0
       : Math.round((confirmedBookings.length / totalCapacity) * 100);
+  const coachingFeaturesEnabled = snapshot.featureFlags.filter(
+    (feature) => feature.dashboardPage === "coaching" && feature.enabled,
+  ).length;
+  const retentionFeaturesEnabled = snapshot.featureFlags.filter(
+    (feature) => feature.dashboardPage === "retention" && feature.enabled,
+  ).length;
+  const mobileFeaturesEnabled = snapshot.featureFlags.filter(
+    (feature) => feature.dashboardPage === "mobile" && feature.enabled,
+  ).length;
+  const integrationFeaturesEnabled = snapshot.featureFlags.filter(
+    (feature) => feature.dashboardPage === "integrations" && feature.enabled,
+  ).length;
+  const dashboardModules = getDashboardPages({
+    locationsCount: snapshot.locations.length,
+    membershipPlansCount: snapshot.membershipPlans.length,
+    trainersCount: snapshot.trainers.length,
+    membersCount: snapshot.members.length,
+    classSessionsCount: snapshot.classSessions.length,
+    bookingsCount: snapshot.bookings.length,
+    staffCount: snapshot.staff.length,
+    healthAttentionCount: openHealthChecks.length,
+    paymentsStatusLabel: snapshot.payments.statusLabel,
+    remoteAccessStatusLabel: snapshot.remoteAccess.statusLabel,
+    canManagePayments: snapshot.uiCapabilities.canManagePayments,
+    canManageRemoteAccess: snapshot.uiCapabilities.canManageRemoteAccess,
+    canManageStaff: snapshot.uiCapabilities.canManageStaff,
+    coachingFeaturesEnabled,
+    retentionFeaturesEnabled,
+    mobileFeaturesEnabled,
+    integrationFeaturesEnabled,
+    canManageFeatureFlags: snapshot.uiCapabilities.canManageFeatureFlags,
+  });
+  const overviewFeatures = snapshot.featureFlags.filter(
+    (feature) => feature.dashboardPage === "overview",
+  );
 
   const highlightedMetrics = [
     {
@@ -84,6 +122,40 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
           </KPI>
         ))}
       </div>
+
+      <PageSection
+        title="Platform modules"
+        description="Elke kernfunctie heeft nu een eigen dashboardpagina en kan tenant-breed worden uitgezet vanuit Superadmin."
+      >
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+          {dashboardModules.map((module) => (
+            <Link
+              key={module.key}
+              href={module.href}
+              prefetch={false}
+              className="group rounded-[24px] border border-border/80 bg-surface p-5 shadow-none transition hover:border-foreground/20 hover:bg-surface-secondary"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-lg font-semibold">{module.title}</p>
+                  <ArrowRight className="text-muted h-4 w-4 transition group-hover:translate-x-0.5" />
+                </div>
+                <p className="text-3xl font-semibold">{module.value}</p>
+                <p className="text-muted text-sm leading-6">{module.helper}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </PageSection>
+
+      {overviewFeatures.length > 0 ? (
+        <PageSection
+          title="Owner intelligence"
+          description="Advanced analytics en operationele signalen worden centraal zichtbaar op de overview."
+        >
+          <FeatureModuleBoard features={overviewFeatures} snapshot={snapshot} />
+        </PageSection>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] xl:items-start">
         <PageSection

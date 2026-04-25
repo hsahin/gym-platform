@@ -24,15 +24,30 @@ describe("dashboard page layout", () => {
       "Contract toevoegen",
       "Contracten en klanten importeren",
     ]);
+    expect(getDashboardPageLayout("coaching").formTitles).toEqual([
+      "Workout flow configureren",
+    ]);
+    expect(getDashboardPageLayout("retention").formTitles).toEqual([
+      "Retentiecampagne starten",
+    ]);
     expect(getDashboardPageLayout("access").formTitles).toEqual(["Smartdeur koppelen"]);
     expect(getDashboardPageLayout("payments").formTitles).toEqual([
       "Mollie betalingen koppelen",
+    ]);
+    expect(getDashboardPageLayout("mobile").formTitles).toEqual([
+      "Mobiele app configureren",
+    ]);
+    expect(getDashboardPageLayout("integrations").formTitles).toEqual([
+      "Integratie koppelen",
     ]);
     expect(getDashboardPageLayout("settings").formTitles).toEqual([
       "Vestiging toevoegen",
       "Trainer toevoegen",
       "Teamlid uitnodigen",
       "Contracten en klanten importeren",
+    ]);
+    expect(getDashboardPageLayout("superadmin").formTitles).toEqual([
+      "Feature flags beheren",
     ]);
   });
 });

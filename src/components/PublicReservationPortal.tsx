@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Button, Card, Chip, TextArea } from "@heroui/react";
+import { Button, Card, Chip, Input, Label, TextArea } from "@heroui/react";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
@@ -34,10 +34,16 @@ export function PublicReservationPortal({
   const [bookingStep, setBookingStep] = useState<BookingStep>(
     snapshot.tenantSlug ? "classes" : "club",
   );
+  const [isSelfServicePending, startSelfServiceTransition] = useTransition();
   const [notes, setNotes] = useState("");
   const [selectedClassSessionId, setSelectedClassSessionId] = useState(
     snapshot.classSessions[0]?.id ?? "",
   );
+  const [requestedMethodLabel, setRequestedMethodLabel] = useState("Nieuwe SEPA IBAN");
+  const [paymentMethodNote, setPaymentMethodNote] = useState("");
+  const [pauseStartsAt, setPauseStartsAt] = useState("");
+  const [pauseEndsAt, setPauseEndsAt] = useState("");
+  const [pauseReason, setPauseReason] = useState("");
   const [lastResult, setLastResult] = useState<{
     bookingId: string;
     status: string;
@@ -51,6 +57,11 @@ export function PublicReservationPortal({
     setSelectedClassSessionId(snapshot.classSessions[0]?.id ?? "");
     setLastResult(null);
     setNotes("");
+    setRequestedMethodLabel("Nieuwe SEPA IBAN");
+    setPaymentMethodNote("");
+    setPauseStartsAt("");
+    setPauseEndsAt("");
+    setPauseReason("");
   }, [snapshot.classSessions, snapshot.tenantSlug]);
 
   const selectedClass = useMemo(
@@ -140,6 +151,52 @@ export function PublicReservationPortal({
           error instanceof Error
             ? error.message
             : "Reserveren is op dit moment niet gelukt.",
+        );
+      }
+    });
+  }
+
+  async function handleMemberSelfServiceSubmit(input: {
+    readonly operation: "request_payment_method_update" | "request_pause";
+    readonly body: Record<string, unknown>;
+    readonly successMessage: string;
+  }) {
+    startSelfServiceTransition(async () => {
+      try {
+        const response = await fetch("/api/member/mobile-self-service", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
+            "x-idempotency-key": crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            operation: input.operation,
+            ...input.body,
+          }),
+        });
+        const payload = (await response.json()) as {
+          ok: boolean;
+          error?: { message?: string };
+        };
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error?.message ?? "Self-service aanvraag mislukt.");
+        }
+
+        if (input.operation === "request_payment_method_update") {
+          setRequestedMethodLabel("Nieuwe SEPA IBAN");
+          setPaymentMethodNote("");
+        } else {
+          setPauseStartsAt("");
+          setPauseEndsAt("");
+          setPauseReason("");
+        }
+
+        toast.success(input.successMessage);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Self-service aanvraag mislukt.",
         );
       }
     });
@@ -496,6 +553,209 @@ export function PublicReservationPortal({
             </Link>
           </Card.Content>
         </Card>
+      ) : null}
+
+      {snapshot.hasEligibleMembership && snapshot.tenantSlug ? (
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <Card className="rounded-[28px] border-border/80">
+            <Card.Header className="space-y-3">
+              <Card.Title>Member self-service</Card.Title>
+              <Card.Description>
+                Dien hier zelf een betaalmethode-update of pauzeverzoek in. Je club ziet de
+                aanvraag direct in het dashboard.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className="grid gap-6 md:grid-cols-2">
+              <form
+                className="section-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+
+                  const contract = snapshot.selfService.contracts[0];
+
+                  if (!contract) {
+                    toast.error("Er is nog geen contract gekoppeld aan dit lidprofiel.");
+                    return;
+                  }
+
+                  void handleMemberSelfServiceSubmit({
+                    operation: "request_payment_method_update",
+                    body: {
+                      memberId: contract.memberId,
+                      memberName: snapshot.memberDisplayName,
+                      requestedMethodLabel,
+                      note: paymentMethodNote || undefined,
+                    },
+                    successMessage: "Betaalmethode-update is verstuurd naar je club.",
+                  });
+                }}
+              >
+                <div className="space-y-1">
+                  <p className="text-base font-semibold">Betaalmethode aanpassen</p>
+                  <p className="text-muted text-sm leading-6">
+                    Bijvoorbeeld een nieuwe SEPA-machtiging of betaalverzoek.
+                  </p>
+                </div>
+                <div className="field-stack">
+                  <Label>Nieuwe methode</Label>
+                  <Input
+                    fullWidth
+                    value={requestedMethodLabel}
+                    onChange={(event) => setRequestedMethodLabel(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Notitie</Label>
+                  <TextArea
+                    fullWidth
+                    rows={4}
+                    value={paymentMethodNote}
+                    onChange={(event) => setPaymentMethodNote(event.target.value)}
+                  />
+                </div>
+                <Button isDisabled={isSelfServicePending} type="submit">
+                  {isSelfServicePending ? "Versturen..." : "Vraag update aan"}
+                </Button>
+              </form>
+
+              <form
+                className="section-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+
+                  const contract = snapshot.selfService.contracts[0];
+
+                  if (!contract) {
+                    toast.error("Er is nog geen contract gekoppeld aan dit lidprofiel.");
+                    return;
+                  }
+
+                  void handleMemberSelfServiceSubmit({
+                    operation: "request_pause",
+                    body: {
+                      memberId: contract.memberId,
+                      memberName: snapshot.memberDisplayName,
+                      startsAt: pauseStartsAt,
+                      endsAt: pauseEndsAt,
+                      reason: pauseReason,
+                    },
+                    successMessage: "Pauzeverzoek is verstuurd naar je club.",
+                  });
+                }}
+              >
+                <div className="space-y-1">
+                  <p className="text-base font-semibold">Pauze aanvragen</p>
+                  <p className="text-muted text-sm leading-6">
+                    Handig voor vakantie, herstel of een geplande stop.
+                  </p>
+                </div>
+                <div className="field-stack">
+                  <Label>Start</Label>
+                  <Input
+                    fullWidth
+                    type="date"
+                    value={pauseStartsAt}
+                    onChange={(event) => setPauseStartsAt(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Einde</Label>
+                  <Input
+                    fullWidth
+                    type="date"
+                    value={pauseEndsAt}
+                    onChange={(event) => setPauseEndsAt(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Reden</Label>
+                  <TextArea
+                    fullWidth
+                    rows={4}
+                    value={pauseReason}
+                    onChange={(event) => setPauseReason(event.target.value)}
+                  />
+                </div>
+                <Button isDisabled={isSelfServicePending} type="submit" variant="secondary">
+                  {isSelfServicePending ? "Versturen..." : "Vraag pauze aan"}
+                </Button>
+              </form>
+            </Card.Content>
+          </Card>
+
+          <Card className="rounded-[28px] border-border/80">
+            <Card.Header className="space-y-3">
+              <Card.Title>Jouw contracten en betalingen</Card.Title>
+              <Card.Description>
+                Bekijk contractdocumenten, recente receipts en de status van open verzoeken.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className="section-stack">
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Contracten</p>
+                {snapshot.selfService.contracts.length > 0 ? (
+                  snapshot.selfService.contracts.map((contract) => (
+                    <div key={contract.id} className="rounded-2xl border border-border/70 p-4">
+                      <p className="font-medium">{contract.contractName}</p>
+                      <p className="text-muted text-sm">{contract.documentLabel}</p>
+                      <a
+                        href={contract.documentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex text-sm font-medium text-accent"
+                      >
+                        Open document
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted text-sm">Nog geen contractdocument beschikbaar.</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Receipts</p>
+                {snapshot.selfService.receipts.length > 0 ? (
+                  snapshot.selfService.receipts.map((receipt) => (
+                    <div key={receipt.invoiceId} className="rounded-2xl border border-border/70 p-4">
+                      <p className="font-medium">{receipt.description}</p>
+                      <p className="text-muted text-sm">
+                        EUR {(receipt.amountCents / 100).toFixed(2)} · {receipt.paidAt.slice(0, 10)}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted text-sm">Nog geen receipts beschikbaar.</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Open verzoeken</p>
+                {[...snapshot.selfService.paymentMethodRequests, ...snapshot.selfService.pauseRequests]
+                  .slice(0, 4)
+                  .map((request) => (
+                    <div key={request.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 p-4">
+                      <div className="min-w-0">
+                        <p className="font-medium">{request.memberName}</p>
+                        <p className="text-muted text-sm">
+                          {"requestedMethodLabel" in request
+                            ? request.requestedMethodLabel
+                            : `${request.startsAt.slice(0, 10)} tot ${request.endsAt.slice(0, 10)}`}
+                        </p>
+                      </div>
+                      <Chip size="sm" variant="soft">
+                        {request.status}
+                      </Chip>
+                    </div>
+                  ))}
+                {snapshot.selfService.paymentMethodRequests.length === 0 &&
+                snapshot.selfService.pauseRequests.length === 0 ? (
+                  <p className="text-muted text-sm">Er staan nog geen open self-service verzoeken.</p>
+                ) : null}
+              </div>
+            </Card.Content>
+          </Card>
+        </section>
       ) : null}
     </div>
   );

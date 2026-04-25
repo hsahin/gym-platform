@@ -29,6 +29,7 @@ export async function GymDashboardShell({
   const snapshot = await services.getDashboardSnapshot(
     viewer.actor,
     viewer.tenantContext,
+    { page: currentPage },
   );
 
   return (

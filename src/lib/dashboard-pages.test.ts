@@ -8,6 +8,30 @@ import {
   resolveDashboardRouteKey,
 } from "@/lib/dashboard-pages";
 
+function createDashboardPagesInput(overrides?: Partial<Parameters<typeof getDashboardPages>[0]>) {
+  return {
+    locationsCount: 2,
+    membershipPlansCount: 3,
+    trainersCount: 4,
+    membersCount: 52,
+    classSessionsCount: 9,
+    bookingsCount: 17,
+    staffCount: 6,
+    healthAttentionCount: 0,
+    paymentsStatusLabel: "Mollie live",
+    remoteAccessStatusLabel: "Nuki gekoppeld",
+    canManagePayments: true,
+    canManageRemoteAccess: true,
+    canManageStaff: true,
+    coachingFeaturesEnabled: 2,
+    retentionFeaturesEnabled: 3,
+    mobileFeaturesEnabled: 1,
+    integrationFeaturesEnabled: 2,
+    canManageFeatureFlags: true,
+    ...overrides,
+  };
+}
+
 describe("dashboard pages", () => {
   it("exposes every full management page outside the launch flow", () => {
     expect(DASHBOARD_PAGE_KEYS).toEqual([
@@ -15,29 +39,20 @@ describe("dashboard pages", () => {
       "classes",
       "members",
       "contracts",
+      "coaching",
+      "retention",
       "access",
       "payments",
+      "mobile",
       "marketing",
+      "integrations",
       "settings",
+      "superadmin",
     ]);
   });
 
-  it("builds clear dashboard cards for owner settings and daily operations", () => {
-    const pages = getDashboardPages({
-      locationsCount: 2,
-      membershipPlansCount: 3,
-      trainersCount: 4,
-      membersCount: 52,
-      classSessionsCount: 9,
-      bookingsCount: 17,
-      staffCount: 6,
-      healthAttentionCount: 0,
-      paymentsStatusLabel: "Mollie live",
-      remoteAccessStatusLabel: "Nuki gekoppeld",
-      canManagePayments: true,
-      canManageRemoteAccess: true,
-      canManageStaff: true,
-    });
+  it("builds clear dashboard cards for the expanded owner workspace", () => {
+    const pages = getDashboardPages(createDashboardPagesInput());
 
     expect(pages.map((page) => page.key)).toEqual(DASHBOARD_PAGE_KEYS);
     expect(pages.map((page) => page.href)).toEqual([
@@ -45,10 +60,15 @@ describe("dashboard pages", () => {
       "/dashboard/classes",
       "/dashboard/members",
       "/dashboard/contracts",
+      "/dashboard/coaching",
+      "/dashboard/retention",
       "/dashboard/access",
       "/dashboard/payments",
+      "/dashboard/mobile",
       "/dashboard/marketing",
+      "/dashboard/integrations",
       "/dashboard/settings",
+      "/dashboard/superadmin",
     ]);
     expect(pages).toEqual(
       expect.arrayContaining([
@@ -58,39 +78,52 @@ describe("dashboard pages", () => {
           value: "3 contracten",
         }),
         expect.objectContaining({
-          key: "payments",
-          title: "Betalingen",
-          value: "Mollie live",
+          key: "coaching",
+          title: "Coaching",
+          value: "2 features live",
         }),
         expect.objectContaining({
-          key: "access",
-          title: "Smartdeurs",
-          value: "Nuki gekoppeld",
+          key: "retention",
+          title: "Retentie",
+          value: "3 features live",
         }),
         expect.objectContaining({
-          key: "settings",
-          value: "Alles gezond",
+          key: "mobile",
+          title: "Mobile app",
+          value: "1 module live",
+        }),
+        expect.objectContaining({
+          key: "integrations",
+          title: "Integraties",
+          value: "2 koppelingen live",
+        }),
+        expect.objectContaining({
+          key: "superadmin",
+          title: "Superadmin",
+          value: "Flags beheer",
         }),
       ]),
     );
   });
 
   it("marks protected owner pages without leaking implementation details", () => {
-    const pages = getDashboardPages({
-      locationsCount: 0,
-      membershipPlansCount: 0,
-      trainersCount: 0,
-      membersCount: 0,
-      classSessionsCount: 0,
-      bookingsCount: 0,
-      staffCount: 1,
-      healthAttentionCount: 2,
-      paymentsStatusLabel: "Niet gekoppeld",
-      remoteAccessStatusLabel: "Niet gekoppeld",
-      canManagePayments: false,
-      canManageRemoteAccess: false,
-      canManageStaff: false,
-    });
+    const pages = getDashboardPages(
+      createDashboardPagesInput({
+        membersCount: 0,
+        classSessionsCount: 0,
+        bookingsCount: 0,
+        healthAttentionCount: 2,
+        paymentsStatusLabel: "Niet gekoppeld",
+        remoteAccessStatusLabel: "Niet gekoppeld",
+        canManagePayments: false,
+        canManageRemoteAccess: false,
+        canManageFeatureFlags: false,
+        coachingFeaturesEnabled: 0,
+        retentionFeaturesEnabled: 0,
+        mobileFeaturesEnabled: 0,
+        integrationFeaturesEnabled: 0,
+      }),
+    );
 
     expect(pages.find((page) => page.key === "payments")).toMatchObject({
       value: "Owner-only",
@@ -99,6 +132,9 @@ describe("dashboard pages", () => {
     expect(pages.find((page) => page.key === "access")).toMatchObject({
       value: "Owner-only",
       helper: expect.not.stringContaining("Nuki API"),
+    });
+    expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
+      value: "Owner-only",
     });
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
       value: "2 checks",
@@ -109,26 +145,46 @@ describe("dashboard pages", () => {
     expect(pages.find((page) => page.key === "classes")).toMatchObject({
       value: "0 lessen",
     });
+    expect(pages.find((page) => page.key === "marketing")).toMatchObject({
+      value: "Eerste data nodig",
+    });
   });
 
-  it("maps launch actions to real owner pages instead of tab state", () => {
+  it("maps routes and workbench actions to the expanded page model", () => {
     expect(getDashboardPageHref("overview")).toBe("/dashboard");
+    expect(getDashboardPageHref("coaching")).toBe("/dashboard/coaching");
     expect(isDashboardPageKey("payments")).toBe(true);
+    expect(isDashboardPageKey("superadmin")).toBe(true);
     expect(isDashboardPageKey("platform")).toBe(false);
     expect(resolveDashboardRouteKey("overview")).toBe("overview");
     expect(resolveDashboardRouteKey("reservations")).toBe("classes");
     expect(resolveDashboardRouteKey("schedule")).toBe("classes");
     expect(resolveDashboardRouteKey("smartdoors")).toBe("access");
+    expect(resolveDashboardRouteKey("coaching")).toBe("coaching");
+    expect(resolveDashboardRouteKey("nutrition")).toBe("coaching");
+    expect(resolveDashboardRouteKey("retention")).toBe("retention");
+    expect(resolveDashboardRouteKey("community")).toBe("retention");
+    expect(resolveDashboardRouteKey("mobile")).toBe("mobile");
+    expect(resolveDashboardRouteKey("app")).toBe("mobile");
+    expect(resolveDashboardRouteKey("integrations")).toBe("integrations");
+    expect(resolveDashboardRouteKey("hardware")).toBe("integrations");
     expect(resolveDashboardRouteKey("locations")).toBe("settings");
     expect(resolveDashboardRouteKey("staff")).toBe("settings");
     expect(resolveDashboardRouteKey("imports")).toBe("settings");
     expect(resolveDashboardRouteKey("status")).toBe("settings");
+    expect(resolveDashboardRouteKey("feature-flags")).toBe("superadmin");
+    expect(resolveDashboardRouteKey("super-admin")).toBe("superadmin");
     expect(resolveDashboardRouteKey("unknown")).toBeNull();
     expect(getDashboardPageForWorkbenchStep("memberships")).toBe("contracts");
     expect(getDashboardPageForWorkbenchStep("remote-access")).toBe("access");
     expect(getDashboardPageForWorkbenchStep("classes")).toBe("classes");
     expect(getDashboardPageForWorkbenchStep("members")).toBe("members");
+    expect(getDashboardPageForWorkbenchStep("coaching")).toBe("coaching");
+    expect(getDashboardPageForWorkbenchStep("retention")).toBe("retention");
     expect(getDashboardPageForWorkbenchStep("payments")).toBe("payments");
+    expect(getDashboardPageForWorkbenchStep("mobile")).toBe("mobile");
+    expect(getDashboardPageForWorkbenchStep("integrations")).toBe("integrations");
+    expect(getDashboardPageForWorkbenchStep("feature-flags")).toBe("superadmin");
     expect(getDashboardPageForWorkbenchStep("locations")).toBe("settings");
     expect(getDashboardPageForWorkbenchStep("trainers")).toBe("settings");
     expect(getDashboardPageForWorkbenchStep("imports")).toBe("settings");
@@ -136,22 +192,24 @@ describe("dashboard pages", () => {
     expect(getDashboardPageForWorkbenchStep("unknown")).toBe("overview");
   });
 
-  it("uses singular labels and marketing readiness when data exists", () => {
-    const pages = getDashboardPages({
-      locationsCount: 1,
-      membershipPlansCount: 1,
-      trainersCount: 1,
-      membersCount: 1,
-      classSessionsCount: 1,
-      bookingsCount: 1,
-      staffCount: 1,
-      healthAttentionCount: 1,
-      paymentsStatusLabel: "Mollie live",
-      remoteAccessStatusLabel: "Nuki live",
-      canManagePayments: true,
-      canManageRemoteAccess: true,
-      canManageStaff: true,
-    });
+  it("uses singular labels when one module is live", () => {
+    const pages = getDashboardPages(
+      createDashboardPagesInput({
+        locationsCount: 1,
+        membershipPlansCount: 1,
+        trainersCount: 1,
+        membersCount: 1,
+        classSessionsCount: 1,
+        bookingsCount: 1,
+        staffCount: 1,
+        healthAttentionCount: 1,
+        remoteAccessStatusLabel: "Nuki live",
+        coachingFeaturesEnabled: 1,
+        retentionFeaturesEnabled: 1,
+        mobileFeaturesEnabled: 1,
+        integrationFeaturesEnabled: 1,
+      }),
+    );
 
     expect(pages.find((page) => page.key === "overview")).toMatchObject({
       value: "1 lid",
@@ -161,6 +219,18 @@ describe("dashboard pages", () => {
     });
     expect(pages.find((page) => page.key === "contracts")).toMatchObject({
       value: "1 contract",
+    });
+    expect(pages.find((page) => page.key === "coaching")).toMatchObject({
+      value: "1 feature live",
+    });
+    expect(pages.find((page) => page.key === "retention")).toMatchObject({
+      value: "1 feature live",
+    });
+    expect(pages.find((page) => page.key === "mobile")).toMatchObject({
+      value: "1 module live",
+    });
+    expect(pages.find((page) => page.key === "integrations")).toMatchObject({
+      value: "1 koppeling live",
     });
     expect(pages.find((page) => page.key === "marketing")).toMatchObject({
       value: "Segmenten klaar",

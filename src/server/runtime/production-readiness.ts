@@ -42,8 +42,16 @@ function hasConfiguredEnv(names: ReadonlyArray<string>) {
   return names.some((name) => isPresent(process.env[name]));
 }
 
-function getRuntimeDataStoresConfigurationIssue(): LiveInfrastructureConfigurationIssue | null {
+export function allowsRuntimeFallbacks() {
   if (process.env.NODE_ENV === "test") {
+    return true;
+  }
+
+  return !isProductionRuntime() && process.env.CLAIMTECH_DISABLE_RUNTIME_FALLBACKS !== "true";
+}
+
+function getRuntimeDataStoresConfigurationIssue(): LiveInfrastructureConfigurationIssue | null {
+  if (allowsRuntimeFallbacks()) {
     return null;
   }
 
@@ -120,11 +128,10 @@ export function isProductionRuntime() {
     return false;
   }
 
-  const environment = (process.env.NODE_ENV ?? "").toLowerCase();
   const appEnvironment = (process.env.APP_ENV ?? "").toLowerCase();
 
   return (
-    productionMarkers.includes(environment as never) ||
+    process.env.CLAIMTECH_FORCE_PRODUCTION_RUNTIME === "true" ||
     productionMarkers.includes(appEnvironment as never) ||
     isPresent(process.env.DIGITALOCEAN_APP_ID)
   );

@@ -11,10 +11,15 @@ export const DASHBOARD_PAGE_KEYS = [
   "classes",
   "members",
   "contracts",
+  "coaching",
+  "retention",
   "access",
   "payments",
+  "mobile",
   "marketing",
+  "integrations",
   "settings",
+  "superadmin",
 ] as const;
 
 export type DashboardPageKey = (typeof DASHBOARD_PAGE_KEYS)[number];
@@ -33,6 +38,11 @@ export interface DashboardPagesInput {
   readonly canManagePayments: boolean;
   readonly canManageRemoteAccess: boolean;
   readonly canManageStaff: boolean;
+  readonly coachingFeaturesEnabled: number;
+  readonly retentionFeaturesEnabled: number;
+  readonly mobileFeaturesEnabled: number;
+  readonly integrationFeaturesEnabled: number;
+  readonly canManageFeatureFlags: boolean;
 }
 
 export interface DashboardPageDefinition {
@@ -58,11 +68,22 @@ export function resolveDashboardRouteKey(input: string): DashboardPageKey | null
       return "classes";
     case "smartdoors":
       return "access";
+    case "nutrition":
+      return "coaching";
+    case "community":
+      return "retention";
+    case "app":
+      return "mobile";
+    case "hardware":
+      return "integrations";
     case "locations":
     case "staff":
     case "imports":
     case "status":
       return "settings";
+    case "feature-flags":
+    case "super-admin":
+      return "superadmin";
     default:
       return null;
   }
@@ -84,8 +105,18 @@ export function getDashboardPageForWorkbenchStep(
       return "members";
     case "remote-access":
       return "access";
+    case "coaching":
+      return "coaching";
+    case "retention":
+      return "retention";
     case "payments":
       return "payments";
+    case "mobile":
+      return "mobile";
+    case "integrations":
+      return "integrations";
+    case "feature-flags":
+      return "superadmin";
     case "locations":
     case "trainers":
     case "staff":
@@ -125,6 +156,26 @@ export function getDashboardPages(
       helper: "Maand, 6 maanden en jaarcontracten beheren voor memberships.",
     },
     {
+      key: "coaching",
+      title: "Coaching",
+      value: formatCountLabel(
+        input.coachingFeaturesEnabled,
+        "feature live",
+        "features live",
+      ),
+      helper: "Workout plans, nutrition, progress tracking en premium coaching-momenten.",
+    },
+    {
+      key: "retention",
+      title: "Retentie",
+      value: formatCountLabel(
+        input.retentionFeaturesEnabled,
+        "feature live",
+        "features live",
+      ),
+      helper: "Challenges, communities, questionnaires en membership-retentieflows.",
+    },
+    {
       key: "access",
       title: "Smartdeurs",
       value: input.canManageRemoteAccess
@@ -139,10 +190,30 @@ export function getDashboardPages(
       helper: "Mollie, incasso, eenmalige betalingen en betaalverzoeken per gym.",
     },
     {
+      key: "mobile",
+      title: "Mobile app",
+      value: formatCountLabel(
+        input.mobileFeaturesEnabled,
+        "module live",
+        "modules live",
+      ),
+      helper: "White-label, mobile check-in en app-ervaringen voor leden en coaching.",
+    },
+    {
       key: "marketing",
       title: "Marketing",
       value: input.bookingsCount > 0 ? "Segmenten klaar" : "Eerste data nodig",
       helper: "Campagnes, retentie-signalen en bookingmomenten zonder losse tooling.",
+    },
+    {
+      key: "integrations",
+      title: "Integraties",
+      value: formatCountLabel(
+        input.integrationFeaturesEnabled,
+        "koppeling live",
+        "koppelingen live",
+      ),
+      helper: "Hardware, software, equipment en migratiekoppelingen per gym.",
     },
     {
       key: "settings",
@@ -152,6 +223,12 @@ export function getDashboardPages(
           ? "Alles gezond"
           : formatCountLabel(input.healthAttentionCount, "check", "checks"),
       helper: "Vestigingen, personeel, imports, platformstatus en owner-instellingen.",
+    },
+    {
+      key: "superadmin",
+      title: "Superadmin",
+      value: input.canManageFeatureFlags ? "Flags beheer" : "Owner-only",
+      helper: "Feature flags, rolloutcontrole en tenant-level activatie van platformmodules.",
     },
   ];
 

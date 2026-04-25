@@ -13,6 +13,36 @@ export type RemoteAccessConnectionStatus = "not_configured" | "configured" | "at
 export type BillingProvider = "mollie";
 export type BillingPaymentMethod = "direct_debit" | "one_time" | "payment_request";
 export type BillingConnectionStatus = "not_configured" | "configured" | "attention";
+export type LeadSource =
+  | "website"
+  | "instagram"
+  | "referral"
+  | "walk_in"
+  | "meta_ads"
+  | "booking";
+export type LeadStage = "new" | "contacted" | "trial_scheduled" | "won" | "lost";
+export type CollectionCaseStatus = "open" | "retrying" | "resolved" | "cancelled";
+export type CollectionCasePaymentMethod = BillingPaymentMethod | "cash" | "bank_transfer";
+export type MemberSignupStatus = "pending_review" | "approved" | "rejected";
+export type BillingInvoiceStatus = "draft" | "open" | "paid" | "failed" | "refunded";
+export type BillingInvoiceSource =
+  | "membership"
+  | "signup_checkout"
+  | "appointment_pack"
+  | "late_fee"
+  | "manual";
+export type BillingRefundStatus = "pending" | "processed" | "failed";
+export type BillingWebhookEventStatus = "received" | "processed" | "failed";
+export type BillingReconciliationStatus = "balanced" | "attention";
+export type LeadTaskType = "nurture" | "abandoned_booking" | "follow_up";
+export type LeadTaskStatus = "open" | "done" | "cancelled";
+export type LeadAutomationTrigger = "manual" | "schedule" | "booking_cancellation";
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled";
+export type AppointmentRecurrence = "none" | "weekly";
+export type CommunityGroupStatus = "active" | "archived";
+export type ChallengeStatus = "draft" | "active" | "completed" | "archived";
+export type QuestionnaireStatus = "draft" | "live" | "closed";
+export type ReviewRequestStatus = "pending" | "approved" | "rejected";
 
 export interface VersionedEntity {
   readonly id: string;
@@ -112,11 +142,331 @@ export interface WaiverRecord extends TenantOwnedEntity {
   readonly expiresAt?: string;
 }
 
+export interface GymLead {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly fullName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly source: LeadSource;
+  readonly stage: LeadStage;
+  readonly interest: string;
+  readonly notes?: string;
+  readonly assignedStaffName?: string;
+  readonly expectedValueCents?: number;
+  readonly convertedMemberId?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CollectionCase {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId?: string;
+  readonly memberName: string;
+  readonly paymentMethod: CollectionCasePaymentMethod;
+  readonly status: CollectionCaseStatus;
+  readonly amountCents: number;
+  readonly reason: string;
+  readonly dueAt: string;
+  readonly notes?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MemberSignupRequest {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly fullName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly phoneCountry: SupportedPhoneCountryCode;
+  readonly membershipPlanId: string;
+  readonly preferredLocationId: string;
+  readonly paymentMethod: BillingPaymentMethod;
+  readonly contractAcceptedAt: string;
+  readonly waiverAcceptedAt: string;
+  readonly status: MemberSignupStatus;
+  readonly notes?: string;
+  readonly ownerNotes?: string;
+  readonly approvedMemberId?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface BillingInvoice {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId?: string;
+  readonly memberName: string;
+  readonly description: string;
+  readonly amountCents: number;
+  readonly currency: string;
+  readonly dueAt: string;
+  readonly issuedAt: string;
+  readonly status: BillingInvoiceStatus;
+  readonly source: BillingInvoiceSource;
+  readonly retryCount: number;
+  readonly paidAt?: string;
+  readonly refundedAt?: string;
+  readonly lastWebhookEventType?: string;
+  readonly externalReference?: string;
+}
+
+export interface BillingRefund {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly invoiceId: string;
+  readonly amountCents: number;
+  readonly reason: string;
+  readonly status: BillingRefundStatus;
+  readonly requestedAt: string;
+  readonly processedAt?: string;
+}
+
+export interface BillingWebhookEvent {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly invoiceId: string;
+  readonly eventType: string;
+  readonly status: BillingWebhookEventStatus;
+  readonly providerReference: string;
+  readonly payloadSummary: string;
+  readonly receivedAt: string;
+  readonly processedAt?: string;
+}
+
+export interface BillingReconciliationRun {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly note?: string;
+  readonly matchedInvoiceIds: ReadonlyArray<string>;
+  readonly unmatchedInvoiceIds: ReadonlyArray<string>;
+  readonly totalInvoices: number;
+  readonly status: BillingReconciliationStatus;
+  readonly createdAt: string;
+}
+
+export interface BillingBackofficeSummary {
+  readonly invoices: ReadonlyArray<BillingInvoice>;
+  readonly refunds: ReadonlyArray<BillingRefund>;
+  readonly webhooks: ReadonlyArray<BillingWebhookEvent>;
+  readonly reconciliationRuns: ReadonlyArray<BillingReconciliationRun>;
+}
+
+export interface LeadFollowUpTask {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly type: LeadTaskType;
+  readonly title: string;
+  readonly dueAt: string;
+  readonly status: LeadTaskStatus;
+  readonly source: LeadSource | "system";
+  readonly leadId?: string;
+  readonly memberId?: string;
+  readonly bookingId?: string;
+  readonly notes?: string;
+  readonly assignedStaffName?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface LeadAttributionRecord {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly leadId?: string;
+  readonly source: LeadSource;
+  readonly campaignLabel: string;
+  readonly medium: string;
+  readonly createdAt: string;
+}
+
+export interface LeadAutomationRun {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly trigger: LeadAutomationTrigger;
+  readonly createdTasks: number;
+  readonly createdAt: string;
+}
+
+export interface LeadAutomationSummary {
+  readonly tasks: ReadonlyArray<LeadFollowUpTask>;
+  readonly attributions: ReadonlyArray<LeadAttributionRecord>;
+  readonly runs: ReadonlyArray<LeadAutomationRun>;
+  readonly lastRunAt?: string;
+}
+
+export interface AppointmentCreditPack {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly trainerId: string;
+  readonly title: string;
+  readonly totalCredits: number;
+  readonly remainingCredits: number;
+  readonly validUntil: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CoachAppointment {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly trainerId: string;
+  readonly trainerName: string;
+  readonly memberId?: string;
+  readonly memberName?: string;
+  readonly locationId: string;
+  readonly startsAt: string;
+  readonly durationMinutes: number;
+  readonly status: AppointmentStatus;
+  readonly recurrence: AppointmentRecurrence;
+  readonly seriesId?: string;
+  readonly creditPackId?: string;
+  readonly notes?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface AppointmentSummary {
+  readonly creditPacks: ReadonlyArray<AppointmentCreditPack>;
+  readonly sessions: ReadonlyArray<CoachAppointment>;
+}
+
+export interface CommunityGroup {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly name: string;
+  readonly channel: string;
+  readonly description: string;
+  readonly memberIds: ReadonlyArray<string>;
+  readonly status: CommunityGroupStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MemberChallenge {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly title: string;
+  readonly rewardLabel: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly participantMemberIds: ReadonlyArray<string>;
+  readonly status: ChallengeStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface QuestionnaireRecord {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly title: string;
+  readonly trigger: string;
+  readonly questions: ReadonlyArray<string>;
+  readonly responseCount: number;
+  readonly status: QuestionnaireStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface QuestionnaireResponse {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly questionnaireId: string;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly answers: ReadonlyArray<string>;
+  readonly submittedAt: string;
+}
+
+export interface CommunitySummary {
+  readonly groups: ReadonlyArray<CommunityGroup>;
+  readonly challenges: ReadonlyArray<MemberChallenge>;
+  readonly questionnaires: ReadonlyArray<QuestionnaireRecord>;
+  readonly responses: ReadonlyArray<QuestionnaireResponse>;
+}
+
+export interface MobileReceipt {
+  readonly invoiceId: string;
+  readonly memberId?: string;
+  readonly memberName: string;
+  readonly description: string;
+  readonly amountCents: number;
+  readonly currency: string;
+  readonly paidAt: string;
+}
+
+export interface MobilePaymentMethodRequest {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly requestedMethodLabel: string;
+  readonly note?: string;
+  readonly ownerNotes?: string;
+  readonly status: ReviewRequestStatus;
+  readonly requestedAt: string;
+  readonly reviewedAt?: string;
+}
+
+export interface MembershipPauseRequest {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly reason: string;
+  readonly ownerNotes?: string;
+  readonly status: ReviewRequestStatus;
+  readonly requestedAt: string;
+  readonly reviewedAt?: string;
+}
+
+export interface MemberContractRecord {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly membershipPlanId: string;
+  readonly contractName: string;
+  readonly documentLabel: string;
+  readonly documentUrl: string;
+  readonly status: "active" | "archived";
+  readonly signedAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MobileSelfServiceSummary {
+  readonly receipts: ReadonlyArray<MobileReceipt>;
+  readonly paymentMethodRequests: ReadonlyArray<MobilePaymentMethodRequest>;
+  readonly pauseRequests: ReadonlyArray<MembershipPauseRequest>;
+  readonly contracts: ReadonlyArray<MemberContractRecord>;
+}
+
+export interface BookingPolicySummary {
+  readonly cancellationWindowHours: number;
+  readonly lateCancelFeeCents: number;
+  readonly noShowFeeCents: number;
+  readonly maxDailyBookingsPerMember: number;
+  readonly maxDailyWaitlistPerMember: number;
+  readonly autoPromoteWaitlist: boolean;
+  readonly lastUpdatedAt?: string;
+}
+
 export interface FeatureState {
   readonly key: string;
+  readonly title: string;
+  readonly categoryKey: string;
+  readonly categoryTitle: string;
+  readonly dashboardPage: string;
   readonly enabled: boolean;
   readonly reason: string;
   readonly description: string;
+  readonly statusLabel: "Live" | "Expanded" | "New";
+  readonly badgeLabel?: "NEW";
 }
 
 export interface DashboardMetric {
@@ -150,6 +500,7 @@ export interface DashboardUiCapabilities {
   readonly canManageStaff: boolean;
   readonly canManageRemoteAccess: boolean;
   readonly canManagePayments: boolean;
+  readonly canManageFeatureFlags: boolean;
 }
 
 export interface RemoteAccessSummary {
@@ -226,6 +577,72 @@ export interface LegalComplianceSummary {
   readonly lastValidatedAt?: string;
 }
 
+export interface BookingWorkspaceSummary {
+  readonly oneToOneSessionName: string;
+  readonly oneToOneDurationMinutes: number;
+  readonly trialBookingUrl: string;
+  readonly defaultCreditPackSize: number;
+  readonly schedulingWindowDays: number;
+  readonly lastUpdatedAt?: string;
+}
+
+export interface RevenueWorkspaceSummary {
+  readonly webshopCollectionName: string;
+  readonly pointOfSaleMode: "frontdesk" | "kiosk" | "hybrid";
+  readonly cardTerminalLabel: string;
+  readonly autocollectPolicy: string;
+  readonly directDebitLeadDays: number;
+  readonly lastUpdatedAt?: string;
+}
+
+export interface CoachingWorkspaceSummary {
+  readonly workoutPlanFocus: string;
+  readonly nutritionCadence: "weekly" | "biweekly" | "monthly";
+  readonly videoLibraryUrl: string;
+  readonly progressMetric: string;
+  readonly heartRateProvider: string;
+  readonly aiCoachMode: string;
+  readonly lastUpdatedAt?: string;
+}
+
+export interface RetentionWorkspaceSummary {
+  readonly retentionCadence: "weekly" | "biweekly" | "monthly";
+  readonly communityChannel: string;
+  readonly challengeTheme: string;
+  readonly questionnaireTrigger: string;
+  readonly proContentPath: string;
+  readonly fitZoneOffer: string;
+  readonly lastUpdatedAt?: string;
+}
+
+export interface MobileExperienceSummary {
+  readonly appDisplayName: string;
+  readonly onboardingHeadline: string;
+  readonly supportChannel: string;
+  readonly primaryAccent: string;
+  readonly checkInMode: "qr" | "frontdesk" | "hybrid";
+  readonly whiteLabelDomain: string;
+  readonly lastUpdatedAt?: string;
+}
+
+export interface MarketingWorkspaceSummary {
+  readonly emailSenderName: string;
+  readonly emailReplyTo: string;
+  readonly promotionHeadline: string;
+  readonly leadPipelineLabel: string;
+  readonly automationCadence: "weekly" | "biweekly" | "monthly";
+  readonly lastUpdatedAt?: string;
+}
+
+export interface IntegrationWorkspaceSummary {
+  readonly hardwareVendors: ReadonlyArray<string>;
+  readonly softwareIntegrations: ReadonlyArray<string>;
+  readonly equipmentIntegrations: ReadonlyArray<string>;
+  readonly migrationProvider: string;
+  readonly bodyCompositionProvider: string;
+  readonly lastUpdatedAt?: string;
+}
+
 export interface PublicReservationClassSummary {
   readonly id: string;
   readonly title: string;
@@ -251,6 +668,32 @@ export interface PublicReservationSnapshot {
   readonly classSessions: ReadonlyArray<PublicReservationClassSummary>;
 }
 
+export interface PublicMembershipSignupSnapshot {
+  readonly tenantName: string;
+  readonly tenantSlug: string | null;
+  readonly availableGyms: ReadonlyArray<{
+    readonly id: string;
+    readonly slug: string;
+    readonly name: string;
+  }>;
+  readonly membershipPlans: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly priceMonthly: number;
+    readonly billingCycle: MembershipPlan["billingCycle"];
+  }>;
+  readonly locations: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly city: string;
+  }>;
+  readonly legal: Pick<
+    LegalComplianceSummary,
+    "termsUrl" | "privacyUrl" | "sepaMandateText" | "contractPdfTemplateKey"
+  >;
+  readonly billingReady: boolean;
+}
+
 export interface MemberReservationSnapshot {
   readonly tenantName: string;
   readonly tenantSlug: string | null;
@@ -263,6 +706,7 @@ export interface MemberReservationSnapshot {
   readonly memberDisplayName: string;
   readonly memberEmail: string;
   readonly hasEligibleMembership: boolean;
+  readonly selfService: MobileSelfServiceSummary;
 }
 
 export interface GymDashboardSnapshot {
@@ -274,6 +718,14 @@ export interface GymDashboardSnapshot {
   readonly remoteAccess: RemoteAccessSummary;
   readonly payments: BillingSummary;
   readonly legal: LegalComplianceSummary;
+  readonly bookingWorkspace: BookingWorkspaceSummary;
+  readonly revenueWorkspace: RevenueWorkspaceSummary;
+  readonly coachingWorkspace: CoachingWorkspaceSummary;
+  readonly retentionWorkspace: RetentionWorkspaceSummary;
+  readonly mobileExperience: MobileExperienceSummary;
+  readonly marketingWorkspace: MarketingWorkspaceSummary;
+  readonly integrationWorkspace: IntegrationWorkspaceSummary;
+  readonly bookingPolicy: BookingPolicySummary;
   readonly metrics: ReadonlyArray<DashboardMetric>;
   readonly featureFlags: ReadonlyArray<FeatureState>;
   readonly locations: ReadonlyArray<GymLocation>;
@@ -285,6 +737,14 @@ export interface GymDashboardSnapshot {
   readonly bookings: ReadonlyArray<ClassBooking>;
   readonly attendance: ReadonlyArray<AttendanceRecord>;
   readonly waivers: ReadonlyArray<WaiverRecord>;
+  readonly leads: ReadonlyArray<GymLead>;
+  readonly collectionCases: ReadonlyArray<CollectionCase>;
+  readonly memberSignups: ReadonlyArray<MemberSignupRequest>;
+  readonly billingBackoffice: BillingBackofficeSummary;
+  readonly leadAutomation: LeadAutomationSummary;
+  readonly appointments: AppointmentSummary;
+  readonly communityHub: CommunitySummary;
+  readonly mobileSelfService: MobileSelfServiceSummary;
   readonly staff: ReadonlyArray<StaffSummary>;
   readonly auditEntries: ReadonlyArray<AuditEntry>;
   readonly healthReport: SystemHealthReport;

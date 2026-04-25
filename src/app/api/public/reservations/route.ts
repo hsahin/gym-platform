@@ -22,7 +22,13 @@ export async function POST(request: NextRequest) {
     request,
     async () => {
       const services = await getGymPlatformServices();
-      requireMutationSecurity(request);
+      requireMutationSecurity(request, {
+        rateLimit: {
+          scope: "public.reservations",
+          maxRequests: 8,
+          windowMs: 5 * 60_000,
+        },
+      });
       const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
       const viewer = await resolveViewerFromToken(token);
 

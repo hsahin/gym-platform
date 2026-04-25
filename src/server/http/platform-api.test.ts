@@ -56,6 +56,149 @@ describe("platform api helpers", () => {
     });
   });
 
+  it("rejects cross-origin mutation requests when the origin does not match", () => {
+    const request = new Request("http://localhost/api/public/member-signups", {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [IDEMPOTENCY_HEADER]: "signup-123",
+      },
+    });
+
+    expect(() =>
+      requireMutationSecurity(request, {
+        rateLimit: {
+          scope: "member-signups",
+          maxRequests: 3,
+          windowMs: 60_000,
+        },
+      }),
+    ).toThrowError("Deze mutatie mag alleen vanaf dezelfde applicatie-origin worden verstuurd.");
+  });
+
+  it("rate limits mutation requests when configured", () => {
+    const buildRequest = () =>
+      new Request("http://localhost/api/public/member-signups", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "x-forwarded-for": "127.0.0.1",
+          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
+        },
+      });
+
+    expect(() =>
+      requireMutationSecurity(buildRequest(), {
+        rateLimit: {
+          scope: "member-signups",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      requireMutationSecurity(buildRequest(), {
+        rateLimit: {
+          scope: "member-signups",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
+  });
+
+  it("accepts same-origin mutation requests that only send a referer header", () => {
+    const request = new Request("http://localhost/api/public/member-signups", {
+      method: "POST",
+      headers: {
+        referer: "http://localhost/join?gym=northside-athletics",
+        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [IDEMPOTENCY_HEADER]: "signup-referer-123",
+      },
+    });
+
+    expect(() => requireMutationSecurity(request)).not.toThrow();
+  });
+
+  it("ignores malformed referer values instead of blocking the mutation outright", () => {
+    const request = new Request("http://localhost/api/public/member-signups", {
+      method: "POST",
+      headers: {
+        referer: "not a valid url",
+        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [IDEMPOTENCY_HEADER]: "signup-malformed-referer",
+      },
+    });
+
+    expect(() => requireMutationSecurity(request)).not.toThrow();
+  });
+
+  it("uses cf-connecting-ip as the primary mutation rate limit identifier", () => {
+    const buildRequest = () =>
+      new Request("http://localhost/api/public/member-signups", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "cf-connecting-ip": "203.0.113.9",
+          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
+        },
+      });
+
+    expect(() =>
+      requireMutationSecurity(buildRequest(), {
+        rateLimit: {
+          scope: "member-signups-cf",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      requireMutationSecurity(buildRequest(), {
+        rateLimit: {
+          scope: "member-signups-cf",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
+  });
+
+  it("falls back to the request host when no client ip headers are present", () => {
+    const buildRequest = () =>
+      new Request("http://localhost/api/public/member-signups", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
+        },
+      });
+
+    expect(() =>
+      requireMutationSecurity(buildRequest(), {
+        rateLimit: {
+          scope: "member-signups-host",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      requireMutationSecurity(buildRequest(), {
+        rateLimit: {
+          scope: "member-signups-host",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
+  });
+
   it("uses request ids from headers or generates a fallback id", () => {
     expect(
       getRequestId(

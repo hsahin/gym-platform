@@ -45,6 +45,22 @@ const ContractsDashboardPage = dynamic<DashboardPageProps>(
   { loading: () => pageLoadingState("Contracts") },
 );
 
+const CoachingDashboardPage = dynamic<DashboardPageProps>(
+  () =>
+    import("@/components/dashboard/pages/CoachingDashboardPage").then(
+      (module) => module.CoachingDashboardPage,
+    ),
+  { loading: () => pageLoadingState("Coaching") },
+);
+
+const RetentionDashboardPage = dynamic<DashboardPageProps>(
+  () =>
+    import("@/components/dashboard/pages/RetentionDashboardPage").then(
+      (module) => module.RetentionDashboardPage,
+    ),
+  { loading: () => pageLoadingState("Retention") },
+);
+
 const AccessDashboardPage = dynamic<DashboardPageProps>(
   () =>
     import("@/components/dashboard/pages/AccessDashboardPage").then(
@@ -61,12 +77,28 @@ const PaymentsDashboardPage = dynamic<DashboardPageProps>(
   { loading: () => pageLoadingState("Payments") },
 );
 
+const MobileDashboardPage = dynamic<DashboardPageProps>(
+  () =>
+    import("@/components/dashboard/pages/MobileDashboardPage").then(
+      (module) => module.MobileDashboardPage,
+    ),
+  { loading: () => pageLoadingState("Mobile") },
+);
+
 const MarketingDashboardPage = dynamic<DashboardPageProps>(
   () =>
     import("@/components/dashboard/pages/MarketingDashboardPage").then(
       (module) => module.MarketingDashboardPage,
     ),
-  { loading: () => pageLoadingState("Growth") },
+  { loading: () => pageLoadingState("Marketing") },
+);
+
+const IntegrationsDashboardPage = dynamic<DashboardPageProps>(
+  () =>
+    import("@/components/dashboard/pages/IntegrationsDashboardPage").then(
+      (module) => module.IntegrationsDashboardPage,
+    ),
+  { loading: () => pageLoadingState("Integrations") },
 );
 
 const SettingsDashboardPage = dynamic<DashboardPageProps>(
@@ -77,15 +109,28 @@ const SettingsDashboardPage = dynamic<DashboardPageProps>(
   { loading: () => pageLoadingState("Settings") },
 );
 
+const SuperadminDashboardPage = dynamic<DashboardPageProps>(
+  () =>
+    import("@/components/dashboard/pages/SuperadminDashboardPage").then(
+      (module) => module.SuperadminDashboardPage,
+    ),
+  { loading: () => pageLoadingState("Superadmin") },
+);
+
 const pageComponents: Record<DashboardPageKey, ComponentType<DashboardPageProps>> = {
   overview: OverviewDashboardPage,
   classes: ClassesDashboardPage,
   members: MembersDashboardPage,
   contracts: ContractsDashboardPage,
+  coaching: CoachingDashboardPage,
+  retention: RetentionDashboardPage,
   access: AccessDashboardPage,
   payments: PaymentsDashboardPage,
+  mobile: MobileDashboardPage,
   marketing: MarketingDashboardPage,
+  integrations: IntegrationsDashboardPage,
   settings: SettingsDashboardPage,
+  superadmin: SuperadminDashboardPage,
 };
 
 export function GymDashboard({

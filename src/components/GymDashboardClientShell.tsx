@@ -7,9 +7,14 @@ import { AppLayout } from "@heroui-pro/react/app-layout";
 import { Navbar } from "@heroui-pro/react/navbar";
 import { Sidebar } from "@heroui-pro/react/sidebar";
 import {
+  AppWindow,
+  Dumbbell,
   CalendarDays,
+  Cog,
   CreditCard,
   DoorOpen,
+  HeartHandshake,
+  Link2,
   LayoutDashboard,
   Megaphone,
   Settings,
@@ -43,6 +48,14 @@ const pageCopy: Record<
     title: "Contracts",
     description: "Membership plans, pricing, and imports.",
   },
+  coaching: {
+    title: "Coaching",
+    description: "Workout plans, nutrition, progress tracking, and premium coach journeys.",
+  },
+  retention: {
+    title: "Retention",
+    description: "Community, rewards, questionnaires, and member loyalty programs.",
+  },
   access: {
     title: "Access",
     description: "Remote access state, device mapping, and owner actions.",
@@ -51,13 +64,25 @@ const pageCopy: Record<
     title: "Payments",
     description: "Billing profile, enabled payment flows, and preview state.",
   },
+  mobile: {
+    title: "Mobile",
+    description: "White-label app flows, check-in, and mobile-ready member experiences.",
+  },
   marketing: {
-    title: "Growth",
-    description: "Occupancy and member signals that can drive retention and conversion.",
+    title: "Marketing Tools",
+    description: "Email, promotions, leads, and conversion signals anchored in live gym data.",
+  },
+  integrations: {
+    title: "Integrations",
+    description: "Hardware, software, equipment, and migration bridges around the gym stack.",
   },
   settings: {
     title: "Settings",
     description: "Locations, staff, legal state, and runtime health.",
+  },
+  superadmin: {
+    title: "Superadmin",
+    description: "Toggle tenant-level feature flags and control module rollout from one place.",
   },
 };
 
@@ -66,10 +91,15 @@ const navigationItems = [
   { key: "classes", label: "Classes", href: "/dashboard/classes", icon: CalendarDays },
   { key: "members", label: "Members", href: "/dashboard/members", icon: Users },
   { key: "contracts", label: "Contracts", href: "/dashboard/contracts", icon: WalletCards },
+  { key: "coaching", label: "Coaching", href: "/dashboard/coaching", icon: Dumbbell },
+  { key: "retention", label: "Retention", href: "/dashboard/retention", icon: HeartHandshake },
   { key: "access", label: "Access", href: "/dashboard/access", icon: DoorOpen },
   { key: "payments", label: "Payments", href: "/dashboard/payments", icon: CreditCard },
-  { key: "marketing", label: "Growth", href: "/dashboard/marketing", icon: Megaphone },
+  { key: "mobile", label: "Mobile", href: "/dashboard/mobile", icon: AppWindow },
+  { key: "marketing", label: "Marketing", href: "/dashboard/marketing", icon: Megaphone },
+  { key: "integrations", label: "Integrations", href: "/dashboard/integrations", icon: Link2 },
   { key: "settings", label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { key: "superadmin", label: "Superadmin", href: "/dashboard/superadmin", icon: Cog },
 ] satisfies ReadonlyArray<{
   key: DashboardPageKey;
   label: string;
@@ -102,6 +132,9 @@ export function GymDashboardClientShell({
   const actorInitials = initials(snapshot.actorName) || "GO";
   const ctaHref =
     copy.ctaHref === "/reserve" ? `/reserve?gym=${tenantId}` : copy.ctaHref;
+  const visibleNavigationItems = navigationItems.filter(
+    (item) => item.key !== "superadmin" || snapshot.uiCapabilities.canManageFeatureFlags,
+  );
 
   return (
     <AppLayout
@@ -167,7 +200,7 @@ export function GymDashboardClientShell({
           <Sidebar.Content>
             <Sidebar.Group>
               <Sidebar.Menu aria-label="Dashboard navigation">
-                {navigationItems.map((item) => (
+                {visibleNavigationItems.map((item) => (
                   <Sidebar.MenuItem
                     key={item.key}
                     href={item.href}

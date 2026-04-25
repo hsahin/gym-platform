@@ -10,15 +10,20 @@ const pageFormTitles: Record<DashboardPageKey, ReadonlyArray<string>> = {
   classes: ["Les plannen"],
   members: ["Lid toevoegen"],
   contracts: ["Contract toevoegen", "Contracten en klanten importeren"],
+  coaching: ["Workout flow configureren"],
+  retention: ["Retentiecampagne starten"],
   access: ["Smartdeur koppelen"],
   payments: ["Mollie betalingen koppelen"],
+  mobile: ["Mobiele app configureren"],
   marketing: [],
+  integrations: ["Integratie koppelen"],
   settings: [
     "Vestiging toevoegen",
     "Trainer toevoegen",
     "Teamlid uitnodigen",
     "Contracten en klanten importeren",
   ],
+  superadmin: ["Feature flags beheren"],
 };
 
 export function getDashboardPageLayout(

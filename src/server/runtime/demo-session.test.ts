@@ -79,8 +79,14 @@ describe("demo session runtime", () => {
         id: toTenantId("northside-athletics"),
         name: "Northside Athletics",
         billing: {} as never,
+        bookingPolicy: {} as never,
+        collectionCases: [],
         legal: {} as never,
+        leads: [],
+        moduleData: {} as never,
+        moduleSettings: {} as never,
         remoteAccess: {} as never,
+        featureFlags: [],
         createdAt: "2026-04-24T00:00:00.000Z",
         updatedAt: "2026-04-24T00:00:00.000Z",
       },
@@ -115,8 +121,14 @@ describe("demo session runtime", () => {
           id: toTenantId("northside-athletics"),
           name: "Northside Athletics",
           billing: {} as never,
+          bookingPolicy: {} as never,
+          collectionCases: [],
           legal: {} as never,
+          leads: [],
+          moduleData: {} as never,
+          moduleSettings: {} as never,
           remoteAccess: {} as never,
+          featureFlags: [],
           createdAt: "2026-04-24T00:00:00.000Z",
           updatedAt: "2026-04-24T00:00:00.000Z",
         },
@@ -124,8 +136,14 @@ describe("demo session runtime", () => {
           id: toTenantId("atlas-forge-club"),
           name: "Atlas Forge Club",
           billing: {} as never,
+          bookingPolicy: {} as never,
+          collectionCases: [],
           legal: {} as never,
+          leads: [],
+          moduleData: {} as never,
+          moduleSettings: {} as never,
           remoteAccess: {} as never,
+          featureFlags: [],
           createdAt: "2026-04-24T00:00:00.000Z",
           updatedAt: "2026-04-24T00:00:00.000Z",
         },
@@ -151,6 +169,7 @@ describe("demo session runtime", () => {
 
   it("requires a real session secret before issuing production tokens", async () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
     vi.stubEnv("CLAIMTECH_SESSION_SECRET", "replace-me");
 
     await expect(

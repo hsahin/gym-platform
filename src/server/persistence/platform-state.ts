@@ -24,23 +24,80 @@ import type {
   PlatformRoleKey,
 } from "@/server/runtime/platform-roles";
 import {
+  allowsRuntimeFallbacks,
   assertProductionEnvironmentReady,
 } from "@/server/runtime/production-readiness";
 import type {
+  AppointmentRecurrence,
+  AppointmentSummary,
+  AppointmentStatus,
   BillingPaymentMethod,
   BillingProvider,
+  BillingBackofficeSummary,
+  BillingInvoiceSource,
+  BillingInvoiceStatus,
+  BillingReconciliationStatus,
+  BillingRefundStatus,
+  BillingWebhookEventStatus,
+  BookingPolicySummary,
+  BookingWorkspaceSummary,
+  CoachingWorkspaceSummary,
+  CollectionCase,
+  CollectionCasePaymentMethod,
+  CollectionCaseStatus,
+  CommunityGroupStatus,
+  CommunitySummary,
+  ChallengeStatus,
+  LeadAutomationSummary,
+  LeadAutomationTrigger,
+  LeadFollowUpTask,
+  LeadTaskStatus,
+  LeadTaskType,
+  MemberContractRecord,
+  GymLead,
+  IntegrationWorkspaceSummary,
   LegalComplianceSummary,
+  LeadSource,
+  LeadStage,
+  MarketingWorkspaceSummary,
+  MemberSignupRequest,
+  MemberSignupStatus,
+  MobileSelfServiceSummary,
+  MobileExperienceSummary,
+  QuestionnaireStatus,
   RemoteAccessBridgeType,
   RemoteAccessProvider,
+  ReviewRequestStatus,
+  RevenueWorkspaceSummary,
+  RetentionWorkspaceSummary,
 } from "@/server/types";
 import {
   createEmptyGymStoreState,
   type MemoryGymStoreState,
 } from "@/server/persistence/memory-gym-store";
 
-const stateVersion = 3;
+const stateVersion = 8;
 const accountIdGenerator = createPrefixedIdGenerator({ prefix: "staff" });
 const memberAccountIdGenerator = createPrefixedIdGenerator({ prefix: "member" });
+const leadIdGenerator = createPrefixedIdGenerator({ prefix: "lead" });
+const collectionCaseIdGenerator = createPrefixedIdGenerator({ prefix: "collection" });
+const signupIdGenerator = createPrefixedIdGenerator({ prefix: "signup" });
+const invoiceIdGenerator = createPrefixedIdGenerator({ prefix: "invoice" });
+const refundIdGenerator = createPrefixedIdGenerator({ prefix: "refund" });
+const webhookIdGenerator = createPrefixedIdGenerator({ prefix: "webhook" });
+const reconciliationIdGenerator = createPrefixedIdGenerator({ prefix: "reconcile" });
+const leadTaskIdGenerator = createPrefixedIdGenerator({ prefix: "leadtask" });
+const attributionIdGenerator = createPrefixedIdGenerator({ prefix: "attrib" });
+const leadRunIdGenerator = createPrefixedIdGenerator({ prefix: "leadrun" });
+const appointmentPackIdGenerator = createPrefixedIdGenerator({ prefix: "pack" });
+const coachAppointmentIdGenerator = createPrefixedIdGenerator({ prefix: "appointment" });
+const communityGroupIdGenerator = createPrefixedIdGenerator({ prefix: "community" });
+const challengeIdGenerator = createPrefixedIdGenerator({ prefix: "challenge" });
+const questionnaireIdGenerator = createPrefixedIdGenerator({ prefix: "questionnaire" });
+const questionnaireResponseIdGenerator = createPrefixedIdGenerator({ prefix: "qresponse" });
+const paymentMethodRequestIdGenerator = createPrefixedIdGenerator({ prefix: "pmrequest" });
+const pauseRequestIdGenerator = createPrefixedIdGenerator({ prefix: "pause" });
+const contractRecordIdGenerator = createPrefixedIdGenerator({ prefix: "contractrec" });
 const mongoPlatformStateCollection = "platform_state";
 const mongoPlatformStateDocumentId = "gym-platform-state";
 const productName = "gym-platform";
@@ -54,7 +111,13 @@ export interface LocalTenantProfile {
   readonly id: TenantId;
   readonly name: string;
   readonly billing: StoredBillingSettings;
+  readonly bookingPolicy: StoredBookingPolicySettings;
+  readonly collectionCases: ReadonlyArray<CollectionCase>;
+  readonly featureFlags: ReadonlyArray<StoredTenantFeatureFlagOverride>;
   readonly legal: StoredLegalComplianceSettings;
+  readonly leads: ReadonlyArray<GymLead>;
+  readonly moduleData: StoredTenantModuleData;
+  readonly moduleSettings: StoredTenantModuleSettings;
   readonly remoteAccess: StoredRemoteAccessSettings;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -145,6 +208,250 @@ export interface UpdateLocalTenantBillingSettingsInput {
   readonly notes?: string;
 }
 
+export interface StoredTenantFeatureFlagOverride {
+  readonly key: string;
+  readonly value: boolean;
+  readonly updatedAt: string;
+  readonly updatedBy?: string;
+}
+
+export interface UpdateLocalTenantFeatureFlagInput {
+  readonly key: string;
+  readonly value: boolean;
+  readonly updatedBy?: string;
+}
+
+export type StoredBookingPolicySettings = BookingPolicySummary;
+
+export type UpdateLocalTenantBookingPolicyInput = Omit<
+  StoredBookingPolicySettings,
+  "lastUpdatedAt"
+>;
+
+export interface CreateLocalTenantLeadInput {
+  readonly fullName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly source: LeadSource;
+  readonly stage: LeadStage;
+  readonly interest: string;
+  readonly notes?: string;
+  readonly assignedStaffName?: string;
+  readonly expectedValueCents?: number;
+}
+
+export interface UpdateLocalTenantLeadInput {
+  readonly id: string;
+  readonly stage: LeadStage;
+  readonly notes?: string;
+  readonly assignedStaffName?: string;
+  readonly convertedMemberId?: string;
+}
+
+export interface CreateLocalTenantCollectionCaseInput {
+  readonly memberId?: string;
+  readonly memberName: string;
+  readonly paymentMethod: CollectionCasePaymentMethod;
+  readonly status: CollectionCaseStatus;
+  readonly amountCents: number;
+  readonly reason: string;
+  readonly dueAt: string;
+  readonly notes?: string;
+}
+
+export interface UpdateLocalTenantCollectionCaseInput {
+  readonly id: string;
+  readonly status: CollectionCaseStatus;
+  readonly notes?: string;
+}
+
+export interface CreateLocalTenantMemberSignupInput {
+  readonly fullName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly phoneCountry: MemberSignupRequest["phoneCountry"];
+  readonly membershipPlanId: string;
+  readonly preferredLocationId: string;
+  readonly paymentMethod: MemberSignupRequest["paymentMethod"];
+  readonly contractAcceptedAt: string;
+  readonly waiverAcceptedAt: string;
+  readonly notes?: string;
+}
+
+export interface ReviewLocalTenantMemberSignupInput {
+  readonly id: string;
+  readonly status: Exclude<MemberSignupStatus, "pending_review">;
+  readonly ownerNotes?: string;
+  readonly approvedMemberId?: string;
+}
+
+export interface CreateLocalTenantBillingInvoiceInput {
+  readonly memberId?: string;
+  readonly memberName: string;
+  readonly description: string;
+  readonly amountCents: number;
+  readonly currency?: string;
+  readonly dueAt: string;
+  readonly source: BillingInvoiceSource;
+  readonly externalReference?: string;
+}
+
+export interface UpdateLocalTenantBillingInvoiceInput {
+  readonly id: string;
+  readonly status: BillingInvoiceStatus;
+  readonly retryCount?: number;
+  readonly paidAt?: string;
+  readonly refundedAt?: string;
+  readonly lastWebhookEventType?: string;
+}
+
+export interface CreateLocalTenantBillingRefundInput {
+  readonly invoiceId: string;
+  readonly amountCents: number;
+  readonly reason: string;
+  readonly status: BillingRefundStatus;
+}
+
+export interface CreateLocalTenantBillingWebhookInput {
+  readonly invoiceId: string;
+  readonly eventType: string;
+  readonly status: BillingWebhookEventStatus;
+  readonly providerReference: string;
+  readonly payloadSummary: string;
+}
+
+export interface CreateLocalTenantBillingReconciliationRunInput {
+  readonly note?: string;
+  readonly matchedInvoiceIds: ReadonlyArray<string>;
+  readonly unmatchedInvoiceIds: ReadonlyArray<string>;
+}
+
+export interface CreateLocalTenantLeadTaskInput {
+  readonly type: LeadTaskType;
+  readonly title: string;
+  readonly dueAt: string;
+  readonly source: LeadFollowUpTask["source"];
+  readonly leadId?: string;
+  readonly memberId?: string;
+  readonly bookingId?: string;
+  readonly notes?: string;
+  readonly assignedStaffName?: string;
+}
+
+export interface UpdateLocalTenantLeadTaskInput {
+  readonly id: string;
+  readonly status: LeadTaskStatus;
+  readonly notes?: string;
+}
+
+export interface CreateLocalTenantLeadAttributionInput {
+  readonly leadId?: string;
+  readonly source: LeadSource;
+  readonly campaignLabel: string;
+  readonly medium: string;
+}
+
+export interface CreateLocalTenantLeadAutomationRunInput {
+  readonly trigger: LeadAutomationTrigger;
+  readonly createdTasks: number;
+}
+
+export interface CreateLocalTenantAppointmentPackInput {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly trainerId: string;
+  readonly title: string;
+  readonly totalCredits: number;
+  readonly remainingCredits: number;
+  readonly validUntil: string;
+}
+
+export interface UpdateLocalTenantAppointmentPackInput {
+  readonly id: string;
+  readonly remainingCredits: number;
+}
+
+export interface CreateLocalTenantCoachAppointmentInput {
+  readonly trainerId: string;
+  readonly trainerName: string;
+  readonly memberId?: string;
+  readonly memberName?: string;
+  readonly locationId: string;
+  readonly startsAt: string;
+  readonly durationMinutes: number;
+  readonly status: AppointmentStatus;
+  readonly recurrence: AppointmentRecurrence;
+  readonly seriesId?: string;
+  readonly creditPackId?: string;
+  readonly notes?: string;
+}
+
+export interface CreateLocalTenantCommunityGroupInput {
+  readonly name: string;
+  readonly channel: string;
+  readonly description: string;
+  readonly memberIds: ReadonlyArray<string>;
+}
+
+export interface CreateLocalTenantChallengeInput {
+  readonly title: string;
+  readonly rewardLabel: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly participantMemberIds: ReadonlyArray<string>;
+}
+
+export interface CreateLocalTenantQuestionnaireInput {
+  readonly title: string;
+  readonly trigger: string;
+  readonly questions: ReadonlyArray<string>;
+}
+
+export interface CreateLocalTenantQuestionnaireResponseInput {
+  readonly questionnaireId: string;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly answers: ReadonlyArray<string>;
+}
+
+export interface CreateLocalTenantPaymentMethodRequestInput {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly requestedMethodLabel: string;
+  readonly note?: string;
+}
+
+export interface ReviewLocalTenantPaymentMethodRequestInput {
+  readonly id: string;
+  readonly status: Exclude<ReviewRequestStatus, "pending">;
+  readonly ownerNotes?: string;
+}
+
+export interface CreateLocalTenantPauseRequestInput {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly reason: string;
+}
+
+export interface ReviewLocalTenantPauseRequestInput {
+  readonly id: string;
+  readonly status: Exclude<ReviewRequestStatus, "pending">;
+  readonly ownerNotes?: string;
+}
+
+export interface CreateLocalTenantContractRecordInput {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly membershipPlanId: string;
+  readonly contractName: string;
+  readonly documentLabel: string;
+  readonly documentUrl: string;
+  readonly status: MemberContractRecord["status"];
+  readonly signedAt: string;
+}
+
 export type StoredLegalComplianceSettings = Pick<
   LegalComplianceSummary,
   | "termsUrl"
@@ -162,9 +469,98 @@ export type UpdateLocalTenantLegalSettingsInput = Omit<
   "lastValidatedAt"
 >;
 
+export type StoredCoachingWorkspaceSettings = CoachingWorkspaceSummary;
+
+export type UpdateLocalTenantCoachingSettingsInput = Omit<
+  StoredCoachingWorkspaceSettings,
+  "lastUpdatedAt"
+>;
+
+export type StoredBookingWorkspaceSettings = BookingWorkspaceSummary;
+
+export type UpdateLocalTenantBookingSettingsInput = Omit<
+  StoredBookingWorkspaceSettings,
+  "lastUpdatedAt"
+>;
+
+export type StoredRevenueWorkspaceSettings = RevenueWorkspaceSummary;
+
+export type UpdateLocalTenantRevenueSettingsInput = Omit<
+  StoredRevenueWorkspaceSettings,
+  "lastUpdatedAt"
+>;
+
+export type StoredRetentionWorkspaceSettings = RetentionWorkspaceSummary;
+
+export type UpdateLocalTenantRetentionSettingsInput = Omit<
+  StoredRetentionWorkspaceSettings,
+  "lastUpdatedAt"
+>;
+
+export type StoredMobileExperienceSettings = MobileExperienceSummary;
+
+export type UpdateLocalTenantMobileSettingsInput = Omit<
+  StoredMobileExperienceSettings,
+  "lastUpdatedAt"
+>;
+
+export type StoredMarketingWorkspaceSettings = MarketingWorkspaceSummary;
+
+export type UpdateLocalTenantMarketingSettingsInput = Omit<
+  StoredMarketingWorkspaceSettings,
+  "lastUpdatedAt"
+>;
+
+export type StoredIntegrationWorkspaceSettings = IntegrationWorkspaceSummary;
+
+export type UpdateLocalTenantIntegrationSettingsInput = Omit<
+  StoredIntegrationWorkspaceSettings,
+  "lastUpdatedAt"
+>;
+
+export interface StoredTenantModuleSettings {
+  readonly booking: StoredBookingWorkspaceSettings;
+  readonly revenue: StoredRevenueWorkspaceSettings;
+  readonly coaching: StoredCoachingWorkspaceSettings;
+  readonly retention: StoredRetentionWorkspaceSettings;
+  readonly mobile: StoredMobileExperienceSettings;
+  readonly marketing: StoredMarketingWorkspaceSettings;
+  readonly integrations: StoredIntegrationWorkspaceSettings;
+}
+
+export type StoredBillingBackofficeData = BillingBackofficeSummary;
+
+export type StoredLeadAutomationData = LeadAutomationSummary;
+
+export type StoredAppointmentData = AppointmentSummary;
+
+export type StoredCommunityData = CommunitySummary;
+
+export type StoredMobileSelfServiceData = MobileSelfServiceSummary;
+
+export interface StoredTenantModuleData {
+  readonly memberSignups: ReadonlyArray<MemberSignupRequest>;
+  readonly billingBackoffice: StoredBillingBackofficeData;
+  readonly leadAutomation: StoredLeadAutomationData;
+  readonly appointments: StoredAppointmentData;
+  readonly community: StoredCommunityData;
+  readonly mobileSelfService: StoredMobileSelfServiceData;
+}
+
 type LegacyLocalPlatformState = {
   readonly version: 1;
-  readonly tenant: Omit<LocalTenantProfile, "remoteAccess" | "billing">;
+  readonly tenant: Omit<
+    LocalTenantProfile,
+    | "remoteAccess"
+    | "billing"
+    | "bookingPolicy"
+    | "collectionCases"
+    | "featureFlags"
+    | "legal"
+    | "leads"
+    | "moduleData"
+    | "moduleSettings"
+  >;
   readonly accounts: ReadonlyArray<
     Omit<LocalPlatformAccount, "tenantId" | "linkedMemberId">
   >;
@@ -175,9 +571,31 @@ type LegacyVersion2LocalPlatformState = Omit<PersistedLocalPlatformState, "versi
   readonly version: number;
 };
 
-type PersistedLocalTenantProfile = Omit<LocalTenantProfile, "remoteAccess" | "billing" | "legal"> & {
+type PersistedLocalTenantProfile = Omit<
+  LocalTenantProfile,
+  | "remoteAccess"
+  | "billing"
+  | "bookingPolicy"
+  | "legal"
+  | "moduleSettings"
+  | "moduleData"
+> & {
   readonly billing?: Partial<StoredBillingSettings>;
+  readonly bookingPolicy?: Partial<StoredBookingPolicySettings>;
+  readonly collectionCases?: ReadonlyArray<CollectionCase>;
+  readonly featureFlags?: ReadonlyArray<StoredTenantFeatureFlagOverride>;
   readonly legal?: Partial<StoredLegalComplianceSettings>;
+  readonly leads?: ReadonlyArray<GymLead>;
+  readonly moduleData?: Partial<StoredTenantModuleData>;
+  readonly moduleSettings?: {
+    readonly booking?: Partial<StoredBookingWorkspaceSettings>;
+    readonly revenue?: Partial<StoredRevenueWorkspaceSettings>;
+    readonly coaching?: Partial<StoredCoachingWorkspaceSettings>;
+    readonly retention?: Partial<StoredRetentionWorkspaceSettings>;
+    readonly mobile?: Partial<StoredMobileExperienceSettings>;
+    readonly marketing?: Partial<StoredMarketingWorkspaceSettings>;
+    readonly integrations?: Partial<StoredIntegrationWorkspaceSettings>;
+  };
   readonly remoteAccess?: Partial<StoredRemoteAccessSettings>;
 };
 
@@ -196,12 +614,12 @@ function getStateFilePath() {
   );
 }
 
-function shouldUseTestFileFallback() {
-  return process.env.NODE_ENV === "test" && !process.env.MONGODB_URI;
+function shouldUseFileFallback() {
+  return allowsRuntimeFallbacks() && !process.env.MONGODB_URI;
 }
 
 async function resolveMongoStateCollection() {
-  if (shouldUseTestFileFallback()) {
+  if (shouldUseFileFallback()) {
     return null;
   }
 
@@ -265,6 +683,30 @@ function assertUniqueTenantEmail(
   }
 }
 
+function requireTenantForMutation(
+  current: LocalPlatformState | null,
+  tenantId: string,
+  setupMessage: string,
+  notFoundMessage: string,
+) {
+  if (!current || current.tenants.length === 0) {
+    throw new AppError(setupMessage, {
+      code: "FORBIDDEN",
+    });
+  }
+
+  const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+  if (!tenant) {
+    throw new AppError(notFoundMessage, {
+      code: "RESOURCE_NOT_FOUND",
+      details: { tenantId },
+    });
+  }
+
+  return tenant;
+}
+
 export function slugifyTenantName(input: string) {
   const base = input
     .trim()
@@ -314,6 +756,926 @@ function createDefaultLegalComplianceSettings(): StoredLegalComplianceSettings {
     waiverStorageKey: "",
     waiverRetentionMonths: 84,
   };
+}
+
+function createDefaultBookingPolicySettings(): StoredBookingPolicySettings {
+  return {
+    cancellationWindowHours: 12,
+    lateCancelFeeCents: 1500,
+    noShowFeeCents: 2500,
+    maxDailyBookingsPerMember: 3,
+    maxDailyWaitlistPerMember: 2,
+    autoPromoteWaitlist: true,
+  };
+}
+
+function createDefaultBookingWorkspaceSettings(): StoredBookingWorkspaceSettings {
+  return {
+    oneToOneSessionName: "PT intake",
+    oneToOneDurationMinutes: 60,
+    trialBookingUrl: "",
+    defaultCreditPackSize: 10,
+    schedulingWindowDays: 14,
+  };
+}
+
+function createDefaultRevenueWorkspaceSettings(): StoredRevenueWorkspaceSettings {
+  return {
+    webshopCollectionName: "Club essentials",
+    pointOfSaleMode: "frontdesk",
+    cardTerminalLabel: "Frontdesk terminal",
+    autocollectPolicy: "Incasso op de eerste werkdag van de maand",
+    directDebitLeadDays: 5,
+  };
+}
+
+function createDefaultCoachingWorkspaceSettings(): StoredCoachingWorkspaceSettings {
+  return {
+    workoutPlanFocus: "Strength and conditioning blocks",
+    nutritionCadence: "weekly",
+    videoLibraryUrl: "",
+    progressMetric: "Attendance and PR milestones",
+    heartRateProvider: "Polar / Myzone",
+    aiCoachMode: "Premium coach copilot",
+  };
+}
+
+function createDefaultRetentionWorkspaceSettings(): StoredRetentionWorkspaceSettings {
+  return {
+    retentionCadence: "weekly",
+    communityChannel: "WhatsApp community",
+    challengeTheme: "8-week consistency streak",
+    questionnaireTrigger: "After trial and after 30 days",
+    proContentPath: "",
+    fitZoneOffer: "Recovery and lifestyle corner",
+  };
+}
+
+function createDefaultMobileExperienceSettings(): StoredMobileExperienceSettings {
+  return {
+    appDisplayName: "GymOS Member App",
+    onboardingHeadline: "Welcome back to your club",
+    supportChannel: "support@gym.test",
+    primaryAccent: "#F97316",
+    checkInMode: "hybrid",
+    whiteLabelDomain: "",
+  };
+}
+
+function createDefaultMarketingWorkspaceSettings(): StoredMarketingWorkspaceSettings {
+  return {
+    emailSenderName: "Gym team",
+    emailReplyTo: "hello@gym.test",
+    promotionHeadline: "Nieuwe proefweek live",
+    leadPipelineLabel: "Trials naar members",
+    automationCadence: "weekly",
+  };
+}
+
+function normalizeStringArray(input?: ReadonlyArray<string>) {
+  const seen = new Set<string>();
+  const values: string[] = [];
+
+  for (const entry of input ?? []) {
+    const value = entry.trim();
+
+    if (!value || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    values.push(value);
+  }
+
+  return values;
+}
+
+function createDefaultIntegrationWorkspaceSettings(): StoredIntegrationWorkspaceSettings {
+  return {
+    hardwareVendors: ["Nuki", "QR scanners"],
+    softwareIntegrations: ["Mollie", "WhatsApp"],
+    equipmentIntegrations: [],
+    migrationProvider: "Virtuagym / CSV import",
+    bodyCompositionProvider: "",
+  };
+}
+
+function createDefaultBillingBackofficeData(): StoredBillingBackofficeData {
+  return {
+    invoices: [],
+    refunds: [],
+    webhooks: [],
+    reconciliationRuns: [],
+  };
+}
+
+function createDefaultLeadAutomationData(): StoredLeadAutomationData {
+  return {
+    tasks: [],
+    attributions: [],
+    runs: [],
+  };
+}
+
+function createDefaultAppointmentData(): StoredAppointmentData {
+  return {
+    creditPacks: [],
+    sessions: [],
+  };
+}
+
+function createDefaultCommunityData(): StoredCommunityData {
+  return {
+    groups: [],
+    challenges: [],
+    questionnaires: [],
+    responses: [],
+  };
+}
+
+function createDefaultMobileSelfServiceData(): StoredMobileSelfServiceData {
+  return {
+    receipts: [],
+    paymentMethodRequests: [],
+    pauseRequests: [],
+    contracts: [],
+  };
+}
+
+function createDefaultTenantModuleData(): StoredTenantModuleData {
+  return {
+    memberSignups: [],
+    billingBackoffice: createDefaultBillingBackofficeData(),
+    leadAutomation: createDefaultLeadAutomationData(),
+    appointments: createDefaultAppointmentData(),
+    community: createDefaultCommunityData(),
+    mobileSelfService: createDefaultMobileSelfServiceData(),
+  };
+}
+
+function normalizeBookingPolicySettings(
+  input?: Partial<StoredBookingPolicySettings>,
+): StoredBookingPolicySettings {
+  const base = createDefaultBookingPolicySettings();
+
+  return {
+    ...base,
+    ...input,
+    cancellationWindowHours: Math.max(
+      0,
+      Number(input?.cancellationWindowHours ?? base.cancellationWindowHours),
+    ),
+    lateCancelFeeCents: Math.max(0, Number(input?.lateCancelFeeCents ?? base.lateCancelFeeCents)),
+    noShowFeeCents: Math.max(0, Number(input?.noShowFeeCents ?? base.noShowFeeCents)),
+    maxDailyBookingsPerMember: Math.max(
+      1,
+      Number(input?.maxDailyBookingsPerMember ?? base.maxDailyBookingsPerMember),
+    ),
+    maxDailyWaitlistPerMember: Math.max(
+      1,
+      Number(input?.maxDailyWaitlistPerMember ?? base.maxDailyWaitlistPerMember),
+    ),
+    autoPromoteWaitlist: input?.autoPromoteWaitlist ?? base.autoPromoteWaitlist,
+  };
+}
+
+function normalizeBookingWorkspaceSettings(
+  input?: Partial<StoredBookingWorkspaceSettings>,
+): StoredBookingWorkspaceSettings {
+  const base = createDefaultBookingWorkspaceSettings();
+
+  return {
+    ...base,
+    ...input,
+    oneToOneSessionName: input?.oneToOneSessionName?.trim() || base.oneToOneSessionName,
+    oneToOneDurationMinutes: Math.max(
+      15,
+      Number(input?.oneToOneDurationMinutes ?? base.oneToOneDurationMinutes),
+    ),
+    trialBookingUrl: input?.trialBookingUrl?.trim() || "",
+    defaultCreditPackSize: Math.max(
+      1,
+      Number(input?.defaultCreditPackSize ?? base.defaultCreditPackSize),
+    ),
+    schedulingWindowDays: Math.max(
+      1,
+      Number(input?.schedulingWindowDays ?? base.schedulingWindowDays),
+    ),
+  };
+}
+
+function normalizeRevenueWorkspaceSettings(
+  input?: Partial<StoredRevenueWorkspaceSettings>,
+): StoredRevenueWorkspaceSettings {
+  const base = createDefaultRevenueWorkspaceSettings();
+
+  return {
+    ...base,
+    ...input,
+    webshopCollectionName: input?.webshopCollectionName?.trim() || base.webshopCollectionName,
+    cardTerminalLabel: input?.cardTerminalLabel?.trim() || base.cardTerminalLabel,
+    autocollectPolicy: input?.autocollectPolicy?.trim() || base.autocollectPolicy,
+    directDebitLeadDays: Math.max(
+      1,
+      Number(input?.directDebitLeadDays ?? base.directDebitLeadDays),
+    ),
+  };
+}
+
+function normalizeCoachingWorkspaceSettings(
+  input?: Partial<StoredCoachingWorkspaceSettings>,
+): StoredCoachingWorkspaceSettings {
+  const base = createDefaultCoachingWorkspaceSettings();
+
+  return {
+    ...base,
+    ...input,
+    workoutPlanFocus: input?.workoutPlanFocus?.trim() || base.workoutPlanFocus,
+    videoLibraryUrl: input?.videoLibraryUrl?.trim() || "",
+    progressMetric: input?.progressMetric?.trim() || base.progressMetric,
+    heartRateProvider: input?.heartRateProvider?.trim() || base.heartRateProvider,
+    aiCoachMode: input?.aiCoachMode?.trim() || base.aiCoachMode,
+  };
+}
+
+function normalizeRetentionWorkspaceSettings(
+  input?: Partial<StoredRetentionWorkspaceSettings>,
+): StoredRetentionWorkspaceSettings {
+  const base = createDefaultRetentionWorkspaceSettings();
+
+  return {
+    ...base,
+    ...input,
+    communityChannel: input?.communityChannel?.trim() || base.communityChannel,
+    challengeTheme: input?.challengeTheme?.trim() || base.challengeTheme,
+    questionnaireTrigger: input?.questionnaireTrigger?.trim() || base.questionnaireTrigger,
+    proContentPath: input?.proContentPath?.trim() || "",
+    fitZoneOffer: input?.fitZoneOffer?.trim() || base.fitZoneOffer,
+  };
+}
+
+function normalizeMobileExperienceSettings(
+  input?: Partial<StoredMobileExperienceSettings>,
+): StoredMobileExperienceSettings {
+  const base = createDefaultMobileExperienceSettings();
+
+  return {
+    ...base,
+    ...input,
+    appDisplayName: input?.appDisplayName?.trim() || base.appDisplayName,
+    onboardingHeadline: input?.onboardingHeadline?.trim() || base.onboardingHeadline,
+    supportChannel: input?.supportChannel?.trim() || base.supportChannel,
+    primaryAccent: input?.primaryAccent?.trim() || base.primaryAccent,
+    whiteLabelDomain: input?.whiteLabelDomain?.trim() || "",
+  };
+}
+
+function normalizeMarketingWorkspaceSettings(
+  input?: Partial<StoredMarketingWorkspaceSettings>,
+): StoredMarketingWorkspaceSettings {
+  const base = createDefaultMarketingWorkspaceSettings();
+
+  return {
+    ...base,
+    ...input,
+    emailSenderName: input?.emailSenderName?.trim() || base.emailSenderName,
+    emailReplyTo: input?.emailReplyTo?.trim() || base.emailReplyTo,
+    promotionHeadline: input?.promotionHeadline?.trim() || base.promotionHeadline,
+    leadPipelineLabel: input?.leadPipelineLabel?.trim() || base.leadPipelineLabel,
+  };
+}
+
+function normalizeIntegrationWorkspaceSettings(
+  input?: Partial<StoredIntegrationWorkspaceSettings>,
+): StoredIntegrationWorkspaceSettings {
+  const base = createDefaultIntegrationWorkspaceSettings();
+
+  return {
+    ...base,
+    ...input,
+    hardwareVendors: normalizeStringArray(input?.hardwareVendors ?? base.hardwareVendors),
+    softwareIntegrations: normalizeStringArray(
+      input?.softwareIntegrations ?? base.softwareIntegrations,
+    ),
+    equipmentIntegrations: normalizeStringArray(
+      input?.equipmentIntegrations ?? base.equipmentIntegrations,
+    ),
+    migrationProvider: input?.migrationProvider?.trim() || base.migrationProvider,
+    bodyCompositionProvider: input?.bodyCompositionProvider?.trim() || "",
+  };
+}
+
+function normalizeReviewStatus(value?: string): ReviewRequestStatus {
+  switch (value) {
+    case "approved":
+    case "rejected":
+      return value;
+    default:
+      return "pending";
+  }
+}
+
+function normalizeMemberSignupStatus(value?: string): MemberSignupStatus {
+  switch (value) {
+    case "approved":
+    case "rejected":
+      return value;
+    default:
+      return "pending_review";
+  }
+}
+
+function normalizeBillingInvoiceStatus(value?: string): BillingInvoiceStatus {
+  switch (value) {
+    case "draft":
+    case "paid":
+    case "failed":
+    case "refunded":
+      return value;
+    default:
+      return "open";
+  }
+}
+
+function normalizeBillingRefundStatus(value?: string): BillingRefundStatus {
+  switch (value) {
+    case "processed":
+    case "failed":
+      return value;
+    default:
+      return "pending";
+  }
+}
+
+function normalizeBillingWebhookStatus(value?: string): BillingWebhookEventStatus {
+  switch (value) {
+    case "processed":
+    case "failed":
+      return value;
+    default:
+      return "received";
+  }
+}
+
+function normalizeBillingInvoiceSource(value?: string): BillingInvoiceSource {
+  switch (value) {
+    case "signup_checkout":
+    case "appointment_pack":
+    case "late_fee":
+    case "manual":
+      return value;
+    default:
+      return "membership";
+  }
+}
+
+function normalizeBillingReconciliationStatus(value?: string): BillingReconciliationStatus {
+  return value === "balanced" ? "balanced" : "attention";
+}
+
+function normalizeLeadTaskType(value?: string): LeadTaskType {
+  switch (value) {
+    case "abandoned_booking":
+    case "follow_up":
+      return value;
+    default:
+      return "nurture";
+  }
+}
+
+function normalizeLeadTaskStatus(value?: string): LeadTaskStatus {
+  switch (value) {
+    case "done":
+    case "cancelled":
+      return value;
+    default:
+      return "open";
+  }
+}
+
+function normalizeLeadAutomationTrigger(value?: string): LeadAutomationTrigger {
+  switch (value) {
+    case "schedule":
+    case "booking_cancellation":
+      return value;
+    default:
+      return "manual";
+  }
+}
+
+function normalizeAppointmentStatus(value?: string): AppointmentStatus {
+  switch (value) {
+    case "completed":
+    case "cancelled":
+      return value;
+    default:
+      return "scheduled";
+  }
+}
+
+function normalizeAppointmentRecurrence(value?: string): AppointmentRecurrence {
+  return value === "weekly" ? "weekly" : "none";
+}
+
+function normalizeCommunityGroupStatus(value?: string): CommunityGroupStatus {
+  return value === "archived" ? "archived" : "active";
+}
+
+function normalizeChallengeStatus(value?: string): ChallengeStatus {
+  switch (value) {
+    case "draft":
+    case "completed":
+    case "archived":
+      return value;
+    default:
+      return "active";
+  }
+}
+
+function normalizeQuestionnaireStatus(value?: string): QuestionnaireStatus {
+  switch (value) {
+    case "draft":
+    case "closed":
+      return value;
+    default:
+      return "live";
+  }
+}
+
+function normalizeTenantMemberSignups(
+  tenantId: TenantId,
+  input?: ReadonlyArray<MemberSignupRequest>,
+): ReadonlyArray<MemberSignupRequest> {
+  return (input ?? [])
+    .map((signup) => ({
+      ...signup,
+      tenantId,
+      fullName: signup.fullName.trim(),
+      email: normalizeEmail(signup.email),
+      phone: signup.phone.trim(),
+      membershipPlanId: signup.membershipPlanId.trim(),
+      preferredLocationId: signup.preferredLocationId.trim(),
+      paymentMethod: normalizeBillingPaymentMethod(signup.paymentMethod),
+      status: normalizeMemberSignupStatus(signup.status),
+      notes: signup.notes?.trim() || undefined,
+      ownerNotes: signup.ownerNotes?.trim() || undefined,
+      approvedMemberId: signup.approvedMemberId?.trim() || undefined,
+      contractAcceptedAt: new Date(signup.contractAcceptedAt).toISOString(),
+      waiverAcceptedAt: new Date(signup.waiverAcceptedAt).toISOString(),
+    }))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function normalizeBillingBackofficeData(
+  tenantId: TenantId,
+  input?: Partial<StoredBillingBackofficeData>,
+): StoredBillingBackofficeData {
+  const base = createDefaultBillingBackofficeData();
+
+  return {
+    invoices: (input?.invoices ?? base.invoices)
+      .map((invoice) => ({
+        ...invoice,
+        tenantId,
+        memberId: invoice.memberId?.trim() || undefined,
+        memberName: invoice.memberName.trim(),
+        description: invoice.description.trim(),
+        amountCents: Math.max(0, Math.round(invoice.amountCents)),
+        currency: invoice.currency.trim().toUpperCase() || "EUR",
+        dueAt: new Date(invoice.dueAt).toISOString(),
+        issuedAt: new Date(invoice.issuedAt).toISOString(),
+        status: normalizeBillingInvoiceStatus(invoice.status),
+        source: normalizeBillingInvoiceSource(invoice.source),
+        retryCount: Math.max(0, Math.round(invoice.retryCount)),
+        paidAt: invoice.paidAt ? new Date(invoice.paidAt).toISOString() : undefined,
+        refundedAt: invoice.refundedAt ? new Date(invoice.refundedAt).toISOString() : undefined,
+        lastWebhookEventType: invoice.lastWebhookEventType?.trim() || undefined,
+        externalReference: invoice.externalReference?.trim() || undefined,
+      }))
+      .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt)),
+    refunds: (input?.refunds ?? base.refunds)
+      .map((refund) => ({
+        ...refund,
+        tenantId,
+        invoiceId: refund.invoiceId.trim(),
+        amountCents: Math.max(0, Math.round(refund.amountCents)),
+        reason: refund.reason.trim(),
+        status: normalizeBillingRefundStatus(refund.status),
+        requestedAt: new Date(refund.requestedAt).toISOString(),
+        processedAt: refund.processedAt ? new Date(refund.processedAt).toISOString() : undefined,
+      }))
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)),
+    webhooks: (input?.webhooks ?? base.webhooks)
+      .map((webhook) => ({
+        ...webhook,
+        tenantId,
+        invoiceId: webhook.invoiceId.trim(),
+        eventType: webhook.eventType.trim(),
+        status: normalizeBillingWebhookStatus(webhook.status),
+        providerReference: webhook.providerReference.trim(),
+        payloadSummary: webhook.payloadSummary.trim(),
+        receivedAt: new Date(webhook.receivedAt).toISOString(),
+        processedAt: webhook.processedAt ? new Date(webhook.processedAt).toISOString() : undefined,
+      }))
+      .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)),
+    reconciliationRuns: (input?.reconciliationRuns ?? base.reconciliationRuns)
+      .map((run) => ({
+        ...run,
+        tenantId,
+        note: run.note?.trim() || undefined,
+        matchedInvoiceIds: normalizeStringArray(run.matchedInvoiceIds),
+        unmatchedInvoiceIds: normalizeStringArray(run.unmatchedInvoiceIds),
+        totalInvoices: Math.max(0, Math.round(run.totalInvoices)),
+        status: normalizeBillingReconciliationStatus(run.status),
+        createdAt: new Date(run.createdAt).toISOString(),
+      }))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+  };
+}
+
+function normalizeLeadAutomationData(
+  tenantId: TenantId,
+  input?: Partial<StoredLeadAutomationData>,
+): StoredLeadAutomationData {
+  const base = createDefaultLeadAutomationData();
+
+  return {
+    tasks: (input?.tasks ?? base.tasks)
+      .map((task) => ({
+        ...task,
+        tenantId,
+        type: normalizeLeadTaskType(task.type),
+        title: task.title.trim(),
+        dueAt: new Date(task.dueAt).toISOString(),
+        status: normalizeLeadTaskStatus(task.status),
+        source: (task.source === "system"
+          ? "system"
+          : normalizeLeadSource(task.source)) as LeadSource | "system",
+        leadId: task.leadId?.trim() || undefined,
+        memberId: task.memberId?.trim() || undefined,
+        bookingId: task.bookingId?.trim() || undefined,
+        notes: task.notes?.trim() || undefined,
+        assignedStaffName: task.assignedStaffName?.trim() || undefined,
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    attributions: (input?.attributions ?? base.attributions)
+      .map((attribution) => ({
+        ...attribution,
+        tenantId,
+        leadId: attribution.leadId?.trim() || undefined,
+        source: normalizeLeadSource(attribution.source),
+        campaignLabel: attribution.campaignLabel.trim(),
+        medium: attribution.medium.trim(),
+        createdAt: new Date(attribution.createdAt).toISOString(),
+      }))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    runs: (input?.runs ?? base.runs)
+      .map((run) => ({
+        ...run,
+        tenantId,
+        trigger: normalizeLeadAutomationTrigger(run.trigger),
+        createdTasks: Math.max(0, Math.round(run.createdTasks)),
+        createdAt: new Date(run.createdAt).toISOString(),
+      }))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    lastRunAt: input?.lastRunAt ? new Date(input.lastRunAt).toISOString() : undefined,
+  };
+}
+
+function normalizeAppointmentData(
+  tenantId: TenantId,
+  input?: Partial<StoredAppointmentData>,
+): StoredAppointmentData {
+  const base = createDefaultAppointmentData();
+
+  return {
+    creditPacks: (input?.creditPacks ?? base.creditPacks)
+      .map((pack) => ({
+        ...pack,
+        tenantId,
+        memberId: pack.memberId.trim(),
+        memberName: pack.memberName.trim(),
+        trainerId: pack.trainerId.trim(),
+        title: pack.title.trim(),
+        totalCredits: Math.max(0, Math.round(pack.totalCredits)),
+        remainingCredits: Math.max(0, Math.round(pack.remainingCredits)),
+        validUntil: new Date(pack.validUntil).toISOString(),
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    sessions: (input?.sessions ?? base.sessions)
+      .map((session) => ({
+        ...session,
+        tenantId,
+        trainerId: session.trainerId.trim(),
+        trainerName: session.trainerName.trim(),
+        memberId: session.memberId?.trim() || undefined,
+        memberName: session.memberName?.trim() || undefined,
+        locationId: session.locationId.trim(),
+        startsAt: new Date(session.startsAt).toISOString(),
+        durationMinutes: Math.max(15, Math.round(session.durationMinutes)),
+        status: normalizeAppointmentStatus(session.status),
+        recurrence: normalizeAppointmentRecurrence(session.recurrence),
+        seriesId: session.seriesId?.trim() || undefined,
+        creditPackId: session.creditPackId?.trim() || undefined,
+        notes: session.notes?.trim() || undefined,
+      }))
+      .sort((left, right) => left.startsAt.localeCompare(right.startsAt)),
+  };
+}
+
+function normalizeCommunityData(
+  tenantId: TenantId,
+  input?: Partial<StoredCommunityData>,
+): StoredCommunityData {
+  const base = createDefaultCommunityData();
+  const responses = (input?.responses ?? base.responses)
+    .map((response) => ({
+      ...response,
+      tenantId,
+      questionnaireId: response.questionnaireId.trim(),
+      memberId: response.memberId.trim(),
+      memberName: response.memberName.trim(),
+      answers: normalizeStringArray(response.answers),
+      submittedAt: new Date(response.submittedAt).toISOString(),
+    }))
+    .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt));
+  const responseCountByQuestionnaire = new Map<string, number>();
+
+  for (const response of responses) {
+    responseCountByQuestionnaire.set(
+      response.questionnaireId,
+      (responseCountByQuestionnaire.get(response.questionnaireId) ?? 0) + 1,
+    );
+  }
+
+  return {
+    groups: (input?.groups ?? base.groups)
+      .map((group) => ({
+        ...group,
+        tenantId,
+        name: group.name.trim(),
+        channel: group.channel.trim(),
+        description: group.description.trim(),
+        memberIds: normalizeStringArray(group.memberIds),
+        status: normalizeCommunityGroupStatus(group.status),
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    challenges: (input?.challenges ?? base.challenges)
+      .map((challenge) => ({
+        ...challenge,
+        tenantId,
+        title: challenge.title.trim(),
+        rewardLabel: challenge.rewardLabel.trim(),
+        startsAt: new Date(challenge.startsAt).toISOString(),
+        endsAt: new Date(challenge.endsAt).toISOString(),
+        participantMemberIds: normalizeStringArray(challenge.participantMemberIds),
+        status: normalizeChallengeStatus(challenge.status),
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    questionnaires: (input?.questionnaires ?? base.questionnaires)
+      .map((questionnaire) => ({
+        ...questionnaire,
+        tenantId,
+        title: questionnaire.title.trim(),
+        trigger: questionnaire.trigger.trim(),
+        questions: normalizeStringArray(questionnaire.questions),
+        responseCount:
+          responseCountByQuestionnaire.get(questionnaire.id) ??
+          Math.max(0, Math.round(questionnaire.responseCount)),
+        status: normalizeQuestionnaireStatus(questionnaire.status),
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    responses,
+  };
+}
+
+function normalizeMobileSelfServiceData(
+  tenantId: TenantId,
+  input?: Partial<StoredMobileSelfServiceData>,
+): StoredMobileSelfServiceData {
+  const base = createDefaultMobileSelfServiceData();
+
+  return {
+    receipts: (input?.receipts ?? base.receipts)
+      .map((receipt) => ({
+        ...receipt,
+        memberId: receipt.memberId?.trim() || undefined,
+        memberName: receipt.memberName.trim(),
+        description: receipt.description.trim(),
+        amountCents: Math.max(0, Math.round(receipt.amountCents)),
+        currency: receipt.currency.trim().toUpperCase() || "EUR",
+        paidAt: new Date(receipt.paidAt).toISOString(),
+      }))
+      .sort((left, right) => right.paidAt.localeCompare(left.paidAt)),
+    paymentMethodRequests: (input?.paymentMethodRequests ?? base.paymentMethodRequests)
+      .map((request) => ({
+        ...request,
+        tenantId,
+        memberId: request.memberId.trim(),
+        memberName: request.memberName.trim(),
+        requestedMethodLabel: request.requestedMethodLabel.trim(),
+        note: request.note?.trim() || undefined,
+        ownerNotes: request.ownerNotes?.trim() || undefined,
+        status: normalizeReviewStatus(request.status),
+        requestedAt: new Date(request.requestedAt).toISOString(),
+        reviewedAt: request.reviewedAt ? new Date(request.reviewedAt).toISOString() : undefined,
+      }))
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)),
+    pauseRequests: (input?.pauseRequests ?? base.pauseRequests)
+      .map((request) => ({
+        ...request,
+        tenantId,
+        memberId: request.memberId.trim(),
+        memberName: request.memberName.trim(),
+        startsAt: new Date(request.startsAt).toISOString(),
+        endsAt: new Date(request.endsAt).toISOString(),
+        reason: request.reason.trim(),
+        ownerNotes: request.ownerNotes?.trim() || undefined,
+        status: normalizeReviewStatus(request.status),
+        requestedAt: new Date(request.requestedAt).toISOString(),
+        reviewedAt: request.reviewedAt ? new Date(request.reviewedAt).toISOString() : undefined,
+      }))
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)),
+    contracts: (input?.contracts ?? base.contracts)
+      .map((contract) => ({
+        ...contract,
+        tenantId,
+        memberId: contract.memberId.trim(),
+        memberName: contract.memberName.trim(),
+        membershipPlanId: contract.membershipPlanId.trim(),
+        contractName: contract.contractName.trim(),
+        documentLabel: contract.documentLabel.trim(),
+        documentUrl: contract.documentUrl.trim(),
+        signedAt: new Date(contract.signedAt).toISOString(),
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+  };
+}
+
+function normalizeTenantModuleData(
+  tenantId: TenantId,
+  input?: Partial<StoredTenantModuleData>,
+): StoredTenantModuleData {
+  return {
+    memberSignups: normalizeTenantMemberSignups(tenantId, input?.memberSignups),
+    billingBackoffice: normalizeBillingBackofficeData(tenantId, input?.billingBackoffice),
+    leadAutomation: normalizeLeadAutomationData(tenantId, input?.leadAutomation),
+    appointments: normalizeAppointmentData(tenantId, input?.appointments),
+    community: normalizeCommunityData(tenantId, input?.community),
+    mobileSelfService: normalizeMobileSelfServiceData(tenantId, input?.mobileSelfService),
+  };
+}
+
+function createDefaultTenantModuleSettings(): StoredTenantModuleSettings {
+  return {
+    booking: createDefaultBookingWorkspaceSettings(),
+    revenue: createDefaultRevenueWorkspaceSettings(),
+    coaching: createDefaultCoachingWorkspaceSettings(),
+    retention: createDefaultRetentionWorkspaceSettings(),
+    mobile: createDefaultMobileExperienceSettings(),
+    marketing: createDefaultMarketingWorkspaceSettings(),
+    integrations: createDefaultIntegrationWorkspaceSettings(),
+  };
+}
+
+function normalizeTenantModuleSettings(
+  input?: PersistedLocalTenantProfile["moduleSettings"],
+): StoredTenantModuleSettings {
+  return {
+    booking: normalizeBookingWorkspaceSettings(input?.booking),
+    revenue: normalizeRevenueWorkspaceSettings(input?.revenue),
+    coaching: normalizeCoachingWorkspaceSettings(input?.coaching),
+    retention: normalizeRetentionWorkspaceSettings(input?.retention),
+    mobile: normalizeMobileExperienceSettings(input?.mobile),
+    marketing: normalizeMarketingWorkspaceSettings(input?.marketing),
+    integrations: normalizeIntegrationWorkspaceSettings(input?.integrations),
+  };
+}
+
+function normalizeTenantFeatureFlagOverrides(
+  input?: ReadonlyArray<StoredTenantFeatureFlagOverride>,
+) {
+  const overrides = new Map<string, StoredTenantFeatureFlagOverride>();
+
+  for (const entry of input ?? []) {
+    const key = entry.key.trim();
+
+    if (!key) {
+      continue;
+    }
+
+    overrides.set(key, {
+      key,
+      value: Boolean(entry.value),
+      updatedAt: entry.updatedAt,
+      updatedBy: entry.updatedBy?.trim() || undefined,
+    });
+  }
+
+  return [...overrides.values()].sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function normalizeLeadSource(value?: string): LeadSource {
+  switch (value) {
+    case "instagram":
+    case "referral":
+    case "walk_in":
+    case "meta_ads":
+    case "booking":
+      return value;
+    default:
+      return "website";
+  }
+}
+
+function normalizeLeadStage(value?: string): LeadStage {
+  switch (value) {
+    case "contacted":
+    case "trial_scheduled":
+    case "won":
+    case "lost":
+      return value;
+    default:
+      return "new";
+  }
+}
+
+function normalizeCollectionCaseStatus(value?: string): CollectionCaseStatus {
+  switch (value) {
+    case "retrying":
+    case "resolved":
+    case "cancelled":
+      return value;
+    default:
+      return "open";
+  }
+}
+
+function normalizeCollectionCasePaymentMethod(value?: string): CollectionCasePaymentMethod {
+  switch (value) {
+    case "direct_debit":
+    case "payment_request":
+    case "cash":
+    case "bank_transfer":
+      return value;
+    default:
+      return "one_time";
+  }
+}
+
+function normalizeBillingPaymentMethod(value?: string): BillingPaymentMethod {
+  switch (value) {
+    case "direct_debit":
+    case "payment_request":
+      return value;
+    default:
+      return "one_time";
+  }
+}
+
+function normalizeTenantLeads(
+  tenantId: TenantId,
+  input?: ReadonlyArray<GymLead>,
+): ReadonlyArray<GymLead> {
+  return (input ?? [])
+    .map((lead) => ({
+      ...lead,
+      tenantId,
+      fullName: lead.fullName.trim(),
+      email: normalizeEmail(lead.email),
+      phone: lead.phone.trim(),
+      source: normalizeLeadSource(lead.source),
+      stage: normalizeLeadStage(lead.stage),
+      interest: lead.interest.trim(),
+      notes: lead.notes?.trim() || undefined,
+      assignedStaffName: lead.assignedStaffName?.trim() || undefined,
+      expectedValueCents:
+        typeof lead.expectedValueCents === "number"
+          ? Math.max(0, Math.round(lead.expectedValueCents))
+          : undefined,
+      convertedMemberId: lead.convertedMemberId?.trim() || undefined,
+    }))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function normalizeTenantCollectionCases(
+  tenantId: TenantId,
+  input?: ReadonlyArray<CollectionCase>,
+): ReadonlyArray<CollectionCase> {
+  return (input ?? [])
+    .map((collectionCase) => ({
+      ...collectionCase,
+      tenantId,
+      memberId: collectionCase.memberId?.trim() || undefined,
+      memberName: collectionCase.memberName.trim(),
+      paymentMethod: normalizeCollectionCasePaymentMethod(collectionCase.paymentMethod),
+      status: normalizeCollectionCaseStatus(collectionCase.status),
+      amountCents: Math.max(0, Math.round(collectionCase.amountCents)),
+      reason: collectionCase.reason.trim(),
+      dueAt: new Date(collectionCase.dueAt).toISOString(),
+      notes: collectionCase.notes?.trim() || undefined,
+    }))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 function normalizeLegalComplianceSettings(
@@ -386,7 +1748,13 @@ function normalizeTenantProfile(
   return {
     ...tenant,
     billing: normalizeStoredBillingSettings(tenant.billing),
+    bookingPolicy: normalizeBookingPolicySettings(tenant.bookingPolicy),
+    collectionCases: normalizeTenantCollectionCases(tenant.id, tenant.collectionCases),
+    featureFlags: normalizeTenantFeatureFlagOverrides(tenant.featureFlags),
     legal: normalizeLegalComplianceSettings(tenant.legal),
+    leads: normalizeTenantLeads(tenant.id, tenant.leads),
+    moduleData: normalizeTenantModuleData(tenant.id, tenant.moduleData),
+    moduleSettings: normalizeTenantModuleSettings(tenant.moduleSettings),
     remoteAccess: normalizeStoredRemoteAccessSettings(tenant.remoteAccess),
   };
 }
@@ -411,7 +1779,29 @@ function normalizeState(
   const tenants = state.tenants.map((tenant) => {
     const normalized = normalizeTenantProfile(tenant);
 
-    if (!tenant.remoteAccess || !tenant.billing || !tenant.legal) {
+    if (
+      !tenant.remoteAccess ||
+      !tenant.billing ||
+      !tenant.bookingPolicy ||
+      !tenant.collectionCases ||
+      !tenant.legal ||
+      !tenant.featureFlags ||
+      !tenant.leads ||
+      !tenant.moduleData ||
+      !tenant.moduleData.billingBackoffice ||
+      !tenant.moduleData.leadAutomation ||
+      !tenant.moduleData.appointments ||
+      !tenant.moduleData.community ||
+      !tenant.moduleData.mobileSelfService ||
+      !tenant.moduleSettings ||
+      !tenant.moduleSettings.booking ||
+      !tenant.moduleSettings.revenue ||
+      !tenant.moduleSettings.coaching ||
+      !tenant.moduleSettings.retention ||
+      !tenant.moduleSettings.mobile ||
+      !tenant.moduleSettings.marketing ||
+      !tenant.moduleSettings.integrations
+    ) {
       changed = true;
     }
 
@@ -447,7 +1837,13 @@ function migrateLegacyState(parsed: LegacyLocalPlatformState): LocalPlatformStat
       {
         ...parsed.tenant,
         billing: createDefaultBillingSettings(),
+        bookingPolicy: createDefaultBookingPolicySettings(),
+        collectionCases: [],
+        featureFlags: [],
         legal: createDefaultLegalComplianceSettings(),
+        leads: [],
+        moduleData: createDefaultTenantModuleData(),
+        moduleSettings: createDefaultTenantModuleSettings(),
         remoteAccess: createDefaultRemoteAccessSettings(),
       },
     ],
@@ -503,7 +1899,7 @@ async function persistState(state: LocalPlatformState) {
     return;
   }
 
-  if (!shouldUseTestFileFallback()) {
+  if (!shouldUseFileFallback()) {
     throw new AppError(
       "Platformstate kan niet lokaal worden opgeslagen. Configureer MongoDB voor runtime data.",
       {
@@ -545,7 +1941,13 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
       return null;
     }
 
-    if (document.version === 2 && "tenants" in document) {
+    if (
+      (document.version === 2 ||
+        document.version === 3 ||
+        document.version === 4 ||
+        document.version === 5) &&
+      "tenants" in document
+    ) {
       const migrated = migrateVersion2State(document);
       await persistState(migrated);
       return migrated;
@@ -567,7 +1969,7 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
     return normalized.state;
   }
 
-  if (!shouldUseTestFileFallback()) {
+  if (!shouldUseFileFallback()) {
     throw new AppError(
       "Platformstate kan niet lokaal worden gelezen. Configureer MONGODB_URI voor deze app.",
       {
@@ -594,7 +1996,13 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
       return migrated;
     }
 
-    if (parsed.version === 2 && "tenants" in parsed) {
+    if (
+      (parsed.version === 2 ||
+        parsed.version === 3 ||
+        parsed.version === 4 ||
+        parsed.version === 5) &&
+      "tenants" in parsed
+    ) {
       const migrated = migrateVersion2State(parsed);
       await persistState(migrated);
       return migrated;
@@ -655,7 +2063,13 @@ export async function bootstrapLocalPlatform(input: BootstrapPlatformInput) {
       id: tenantId,
       name: input.tenantName.trim(),
       billing: createDefaultBillingSettings(),
+      bookingPolicy: createDefaultBookingPolicySettings(),
+      collectionCases: [],
+      featureFlags: [],
       legal: createDefaultLegalComplianceSettings(),
+      leads: [],
+      moduleData: createDefaultTenantModuleData(),
+      moduleSettings: createDefaultTenantModuleSettings(),
       remoteAccess: createDefaultRemoteAccessSettings(),
       createdAt: now,
       updatedAt: now,
@@ -1264,6 +2678,1982 @@ export async function updateLocalTenantBillingSettings(
               ...entry,
               updatedAt: now,
               billing: nextBilling,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantFeatureFlag(
+  tenantId: string,
+  input: UpdateLocalTenantFeatureFlagInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je feature flags instelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor feature flags.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const key = input.key.trim();
+
+    if (!key) {
+      throw new AppError("Feature flag key ontbreekt.", {
+        code: "INVALID_INPUT",
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextFeatureFlag = {
+      key,
+      value: input.value,
+      updatedAt: now,
+      updatedBy: input.updatedBy?.trim() || undefined,
+    } satisfies StoredTenantFeatureFlagOverride;
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              featureFlags: normalizeTenantFeatureFlagOverrides([
+                ...entry.featureFlags.filter((feature) => feature.key !== key),
+                nextFeatureFlag,
+              ]),
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function createLocalTenantLead(
+  tenantId: string,
+  input: CreateLocalTenantLeadInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je leads toevoegt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor leadbeheer.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextLead = normalizeTenantLeads(tenant.id, [
+      {
+        id: leadIdGenerator.next(),
+        tenantId: tenant.id,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        source: input.source,
+        stage: input.stage,
+        interest: input.interest,
+        notes: input.notes,
+        assignedStaffName: input.assignedStaffName,
+        expectedValueCents: input.expectedValueCents,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])[0]!;
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              leads: normalizeTenantLeads(entry.id, [...entry.leads, nextLead]),
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextLead;
+  });
+}
+
+export async function updateLocalTenantLead(
+  tenantId: string,
+  input: UpdateLocalTenantLeadInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je leads bijwerkt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor leadbeheer.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const lead = tenant.leads.find((entry) => entry.id === input.id);
+
+    if (!lead) {
+      throw new AppError("Lead niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, leadId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextLead = normalizeTenantLeads(tenant.id, [
+      {
+        ...lead,
+        stage: input.stage,
+        notes: input.notes ?? lead.notes,
+        assignedStaffName: input.assignedStaffName ?? lead.assignedStaffName,
+        convertedMemberId: input.convertedMemberId ?? lead.convertedMemberId,
+        updatedAt: now,
+      },
+    ])[0]!;
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              leads: normalizeTenantLeads(
+                entry.id,
+                entry.leads.map((existing) => (existing.id === input.id ? nextLead : existing)),
+              ),
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextLead;
+  });
+}
+
+export async function createLocalTenantCollectionCase(
+  tenantId: string,
+  input: CreateLocalTenantCollectionCaseInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je collections toevoegt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor collections.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextCollectionCase = normalizeTenantCollectionCases(tenant.id, [
+      {
+        id: collectionCaseIdGenerator.next(),
+        tenantId: tenant.id,
+        memberId: input.memberId,
+        memberName: input.memberName,
+        paymentMethod: input.paymentMethod,
+        status: input.status,
+        amountCents: input.amountCents,
+        reason: input.reason,
+        dueAt: input.dueAt,
+        notes: input.notes,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])[0]!;
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              collectionCases: normalizeTenantCollectionCases(entry.id, [
+                ...entry.collectionCases,
+                nextCollectionCase,
+              ]),
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextCollectionCase;
+  });
+}
+
+export async function updateLocalTenantCollectionCase(
+  tenantId: string,
+  input: UpdateLocalTenantCollectionCaseInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je collections bijwerkt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor collections.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const collectionCase = tenant.collectionCases.find((entry) => entry.id === input.id);
+
+    if (!collectionCase) {
+      throw new AppError("Collection case niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, collectionCaseId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextCollectionCase = normalizeTenantCollectionCases(tenant.id, [
+      {
+        ...collectionCase,
+        status: input.status,
+        notes: input.notes ?? collectionCase.notes,
+        updatedAt: now,
+      },
+    ])[0]!;
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              collectionCases: normalizeTenantCollectionCases(
+                entry.id,
+                entry.collectionCases.map((existing) =>
+                  existing.id === input.id ? nextCollectionCase : existing,
+                ),
+              ),
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextCollectionCase;
+  });
+}
+
+export async function createLocalTenantMemberSignup(
+  tenantId: string,
+  input: CreateLocalTenantMemberSignupInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je member signups toevoegt.",
+      "Gym niet gevonden voor member signups.",
+    );
+    const now = new Date().toISOString();
+    const signup = normalizeTenantMemberSignups(tenant.id, [
+      {
+        id: signupIdGenerator.next(),
+        tenantId: tenant.id,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        phoneCountry: input.phoneCountry,
+        membershipPlanId: input.membershipPlanId,
+        preferredLocationId: input.preferredLocationId,
+        paymentMethod: input.paymentMethod,
+        contractAcceptedAt: input.contractAcceptedAt,
+        waiverAcceptedAt: input.waiverAcceptedAt,
+        status: "pending_review",
+        notes: input.notes,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                memberSignups: normalizeTenantMemberSignups(entry.id, [
+                  ...entry.moduleData.memberSignups,
+                  signup,
+                ]),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return signup;
+  });
+}
+
+export async function reviewLocalTenantMemberSignup(
+  tenantId: string,
+  input: ReviewLocalTenantMemberSignupInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je member signups beoordeelt.",
+      "Gym niet gevonden voor member signups.",
+    );
+    const existing = tenant.moduleData.memberSignups.find((entry) => entry.id === input.id);
+
+    if (!existing) {
+      throw new AppError("Member signup niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, signupId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const state = current ?? createEmptyState();
+    const nextSignup = normalizeTenantMemberSignups(tenant.id, [
+      {
+        ...existing,
+        status: input.status,
+        ownerNotes: input.ownerNotes ?? existing.ownerNotes,
+        approvedMemberId: input.approvedMemberId ?? existing.approvedMemberId,
+        updatedAt: now,
+      },
+    ])[0]!;
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                memberSignups: normalizeTenantMemberSignups(
+                  entry.id,
+                  entry.moduleData.memberSignups.map((signup) =>
+                    signup.id === input.id ? nextSignup : signup,
+                  ),
+                ),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextSignup;
+  });
+}
+
+export async function createLocalTenantBillingInvoice(
+  tenantId: string,
+  input: CreateLocalTenantBillingInvoiceInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je invoices toevoegt.",
+      "Gym niet gevonden voor billing backoffice.",
+    );
+    const now = new Date().toISOString();
+    const invoice = normalizeBillingBackofficeData(tenant.id, {
+      invoices: [
+        {
+          id: invoiceIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          description: input.description,
+          amountCents: input.amountCents,
+          currency: input.currency ?? "EUR",
+          dueAt: input.dueAt,
+          issuedAt: now,
+          status: "open",
+          source: input.source,
+          retryCount: 0,
+          externalReference: input.externalReference,
+        },
+      ],
+    }).invoices[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                billingBackoffice: normalizeBillingBackofficeData(entry.id, {
+                  ...entry.moduleData.billingBackoffice,
+                  invoices: [...entry.moduleData.billingBackoffice.invoices, invoice],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return invoice;
+  });
+}
+
+export async function updateLocalTenantBillingInvoice(
+  tenantId: string,
+  input: UpdateLocalTenantBillingInvoiceInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je invoices bijwerkt.",
+      "Gym niet gevonden voor billing backoffice.",
+    );
+    const existing = tenant.moduleData.billingBackoffice.invoices.find(
+      (entry) => entry.id === input.id,
+    );
+
+    if (!existing) {
+      throw new AppError("Invoice niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, invoiceId: input.id },
+      });
+    }
+
+    const nextInvoice = normalizeBillingBackofficeData(tenant.id, {
+      invoices: [
+        {
+          ...existing,
+          status: input.status,
+          retryCount: input.retryCount ?? existing.retryCount,
+          paidAt: input.paidAt ?? existing.paidAt,
+          refundedAt: input.refundedAt ?? existing.refundedAt,
+          lastWebhookEventType: input.lastWebhookEventType ?? existing.lastWebhookEventType,
+        },
+      ],
+    }).invoices[0]!;
+    const paidReceipt =
+      nextInvoice.status === "paid" && nextInvoice.paidAt
+        ? {
+            invoiceId: nextInvoice.id,
+            memberId: nextInvoice.memberId,
+            memberName: nextInvoice.memberName,
+            description: nextInvoice.description,
+            amountCents: nextInvoice.amountCents,
+            currency: nextInvoice.currency,
+            paidAt: nextInvoice.paidAt,
+          }
+        : null;
+    const now = new Date().toISOString();
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) => {
+        if (entry.id !== tenantId) {
+          return entry;
+        }
+
+        const receipts = paidReceipt
+          ? normalizeMobileSelfServiceData(entry.id, {
+              ...entry.moduleData.mobileSelfService,
+              receipts: [
+                ...entry.moduleData.mobileSelfService.receipts.filter(
+                  (receipt) => receipt.invoiceId !== nextInvoice.id,
+                ),
+                paidReceipt,
+              ],
+            }).receipts
+          : entry.moduleData.mobileSelfService.receipts;
+
+        return {
+          ...entry,
+          updatedAt: now,
+          moduleData: {
+            ...entry.moduleData,
+            billingBackoffice: normalizeBillingBackofficeData(entry.id, {
+              ...entry.moduleData.billingBackoffice,
+              invoices: entry.moduleData.billingBackoffice.invoices.map((invoice) =>
+                invoice.id === input.id ? nextInvoice : invoice,
+              ),
+            }),
+            mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+              ...entry.moduleData.mobileSelfService,
+              receipts,
+            }),
+          },
+        };
+      }),
+    };
+
+    await persistState(nextState);
+    return nextInvoice;
+  });
+}
+
+export async function createLocalTenantBillingRefund(
+  tenantId: string,
+  input: CreateLocalTenantBillingRefundInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je refunds toevoegt.",
+      "Gym niet gevonden voor billing backoffice.",
+    );
+    const now = new Date().toISOString();
+    const refund = normalizeBillingBackofficeData(tenant.id, {
+      refunds: [
+        {
+          id: refundIdGenerator.next(),
+          tenantId: tenant.id,
+          invoiceId: input.invoiceId,
+          amountCents: input.amountCents,
+          reason: input.reason,
+          status: input.status,
+          requestedAt: now,
+          processedAt: input.status === "processed" ? now : undefined,
+        },
+      ],
+    }).refunds[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                billingBackoffice: normalizeBillingBackofficeData(entry.id, {
+                  ...entry.moduleData.billingBackoffice,
+                  refunds: [...entry.moduleData.billingBackoffice.refunds, refund],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return refund;
+  });
+}
+
+export async function createLocalTenantBillingWebhook(
+  tenantId: string,
+  input: CreateLocalTenantBillingWebhookInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je webhooks toevoegt.",
+      "Gym niet gevonden voor billing backoffice.",
+    );
+    const now = new Date().toISOString();
+    const webhook = normalizeBillingBackofficeData(tenant.id, {
+      webhooks: [
+        {
+          id: webhookIdGenerator.next(),
+          tenantId: tenant.id,
+          invoiceId: input.invoiceId,
+          eventType: input.eventType,
+          status: input.status,
+          providerReference: input.providerReference,
+          payloadSummary: input.payloadSummary,
+          receivedAt: now,
+          processedAt: input.status === "processed" ? now : undefined,
+        },
+      ],
+    }).webhooks[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                billingBackoffice: normalizeBillingBackofficeData(entry.id, {
+                  ...entry.moduleData.billingBackoffice,
+                  webhooks: [...entry.moduleData.billingBackoffice.webhooks, webhook],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return webhook;
+  });
+}
+
+export async function createLocalTenantBillingReconciliationRun(
+  tenantId: string,
+  input: CreateLocalTenantBillingReconciliationRunInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je reconciliatie draait.",
+      "Gym niet gevonden voor billing backoffice.",
+    );
+    const now = new Date().toISOString();
+    const run = normalizeBillingBackofficeData(tenant.id, {
+      reconciliationRuns: [
+        {
+          id: reconciliationIdGenerator.next(),
+          tenantId: tenant.id,
+          note: input.note,
+          matchedInvoiceIds: input.matchedInvoiceIds,
+          unmatchedInvoiceIds: input.unmatchedInvoiceIds,
+          totalInvoices: input.matchedInvoiceIds.length + input.unmatchedInvoiceIds.length,
+          status: input.unmatchedInvoiceIds.length === 0 ? "balanced" : "attention",
+          createdAt: now,
+        },
+      ],
+    }).reconciliationRuns[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                billingBackoffice: normalizeBillingBackofficeData(entry.id, {
+                  ...entry.moduleData.billingBackoffice,
+                  reconciliationRuns: [
+                    ...entry.moduleData.billingBackoffice.reconciliationRuns,
+                    run,
+                  ],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return run;
+  });
+}
+
+export async function createLocalTenantLeadTask(
+  tenantId: string,
+  input: CreateLocalTenantLeadTaskInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je lead taken toevoegt.",
+      "Gym niet gevonden voor lead automation.",
+    );
+    const now = new Date().toISOString();
+    const task = normalizeLeadAutomationData(tenant.id, {
+      tasks: [
+        {
+          id: leadTaskIdGenerator.next(),
+          tenantId: tenant.id,
+          type: input.type,
+          title: input.title,
+          dueAt: input.dueAt,
+          status: "open",
+          source: input.source,
+          leadId: input.leadId,
+          memberId: input.memberId,
+          bookingId: input.bookingId,
+          notes: input.notes,
+          assignedStaffName: input.assignedStaffName,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    }).tasks[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                leadAutomation: normalizeLeadAutomationData(entry.id, {
+                  ...entry.moduleData.leadAutomation,
+                  tasks: [...entry.moduleData.leadAutomation.tasks, task],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return task;
+  });
+}
+
+export async function updateLocalTenantLeadTask(
+  tenantId: string,
+  input: UpdateLocalTenantLeadTaskInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je lead taken bijwerkt.",
+      "Gym niet gevonden voor lead automation.",
+    );
+    const existing = tenant.moduleData.leadAutomation.tasks.find((entry) => entry.id === input.id);
+
+    if (!existing) {
+      throw new AppError("Lead taak niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, taskId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const state = current ?? createEmptyState();
+    const task = normalizeLeadAutomationData(tenant.id, {
+      tasks: [
+        {
+          ...existing,
+          status: input.status,
+          notes: input.notes ?? existing.notes,
+          updatedAt: now,
+        },
+      ],
+    }).tasks[0]!;
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                leadAutomation: normalizeLeadAutomationData(entry.id, {
+                  ...entry.moduleData.leadAutomation,
+                  tasks: entry.moduleData.leadAutomation.tasks.map((item) =>
+                    item.id === input.id ? task : item,
+                  ),
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return task;
+  });
+}
+
+export async function createLocalTenantLeadAttribution(
+  tenantId: string,
+  input: CreateLocalTenantLeadAttributionInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je attributie toevoegt.",
+      "Gym niet gevonden voor lead automation.",
+    );
+    const now = new Date().toISOString();
+    const attribution = normalizeLeadAutomationData(tenant.id, {
+      attributions: [
+        {
+          id: attributionIdGenerator.next(),
+          tenantId: tenant.id,
+          leadId: input.leadId,
+          source: input.source,
+          campaignLabel: input.campaignLabel,
+          medium: input.medium,
+          createdAt: now,
+        },
+      ],
+    }).attributions[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                leadAutomation: normalizeLeadAutomationData(entry.id, {
+                  ...entry.moduleData.leadAutomation,
+                  attributions: [...entry.moduleData.leadAutomation.attributions, attribution],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return attribution;
+  });
+}
+
+export async function createLocalTenantLeadAutomationRun(
+  tenantId: string,
+  input: CreateLocalTenantLeadAutomationRunInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je automations draait.",
+      "Gym niet gevonden voor lead automation.",
+    );
+    const now = new Date().toISOString();
+    const run = normalizeLeadAutomationData(tenant.id, {
+      runs: [
+        {
+          id: leadRunIdGenerator.next(),
+          tenantId: tenant.id,
+          trigger: input.trigger,
+          createdTasks: input.createdTasks,
+          createdAt: now,
+        },
+      ],
+      lastRunAt: now,
+    }).runs[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                leadAutomation: normalizeLeadAutomationData(entry.id, {
+                  ...entry.moduleData.leadAutomation,
+                  runs: [...entry.moduleData.leadAutomation.runs, run],
+                  lastRunAt: now,
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return run;
+  });
+}
+
+export async function createLocalTenantAppointmentPack(
+  tenantId: string,
+  input: CreateLocalTenantAppointmentPackInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je credit packs toevoegt.",
+      "Gym niet gevonden voor appointments.",
+    );
+    const now = new Date().toISOString();
+    const pack = normalizeAppointmentData(tenant.id, {
+      creditPacks: [
+        {
+          id: appointmentPackIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          trainerId: input.trainerId,
+          title: input.title,
+          totalCredits: input.totalCredits,
+          remainingCredits: input.remainingCredits,
+          validUntil: input.validUntil,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    }).creditPacks[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                appointments: normalizeAppointmentData(entry.id, {
+                  ...entry.moduleData.appointments,
+                  creditPacks: [...entry.moduleData.appointments.creditPacks, pack],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return pack;
+  });
+}
+
+export async function updateLocalTenantAppointmentPack(
+  tenantId: string,
+  input: UpdateLocalTenantAppointmentPackInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je credit packs bijwerkt.",
+      "Gym niet gevonden voor appointments.",
+    );
+    const existing = tenant.moduleData.appointments.creditPacks.find((entry) => entry.id === input.id);
+
+    if (!existing) {
+      throw new AppError("Credit pack niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, packId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const state = current ?? createEmptyState();
+    const pack = normalizeAppointmentData(tenant.id, {
+      creditPacks: [
+        {
+          ...existing,
+          remainingCredits: input.remainingCredits,
+          updatedAt: now,
+        },
+      ],
+    }).creditPacks[0]!;
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                appointments: normalizeAppointmentData(entry.id, {
+                  ...entry.moduleData.appointments,
+                  creditPacks: entry.moduleData.appointments.creditPacks.map((item) =>
+                    item.id === input.id ? pack : item,
+                  ),
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return pack;
+  });
+}
+
+export async function createLocalTenantCoachAppointments(
+  tenantId: string,
+  input: ReadonlyArray<CreateLocalTenantCoachAppointmentInput>,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je appointments toevoegt.",
+      "Gym niet gevonden voor appointments.",
+    );
+    const now = new Date().toISOString();
+    const appointments = normalizeAppointmentData(tenant.id, {
+      sessions: input.map((appointment) => ({
+        id: coachAppointmentIdGenerator.next(),
+        tenantId: tenant.id,
+        trainerId: appointment.trainerId,
+        trainerName: appointment.trainerName,
+        memberId: appointment.memberId,
+        memberName: appointment.memberName,
+        locationId: appointment.locationId,
+        startsAt: appointment.startsAt,
+        durationMinutes: appointment.durationMinutes,
+        status: appointment.status,
+        recurrence: appointment.recurrence,
+        seriesId: appointment.seriesId,
+        creditPackId: appointment.creditPackId,
+        notes: appointment.notes,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    }).sessions;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                appointments: normalizeAppointmentData(entry.id, {
+                  ...entry.moduleData.appointments,
+                  sessions: [...entry.moduleData.appointments.sessions, ...appointments],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return appointments;
+  });
+}
+
+export async function createLocalTenantCommunityGroup(
+  tenantId: string,
+  input: CreateLocalTenantCommunityGroupInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je community groups toevoegt.",
+      "Gym niet gevonden voor community data.",
+    );
+    const now = new Date().toISOString();
+    const group = normalizeCommunityData(tenant.id, {
+      groups: [
+        {
+          id: communityGroupIdGenerator.next(),
+          tenantId: tenant.id,
+          name: input.name,
+          channel: input.channel,
+          description: input.description,
+          memberIds: input.memberIds,
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    }).groups[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                community: normalizeCommunityData(entry.id, {
+                  ...entry.moduleData.community,
+                  groups: [...entry.moduleData.community.groups, group],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return group;
+  });
+}
+
+export async function createLocalTenantChallenge(
+  tenantId: string,
+  input: CreateLocalTenantChallengeInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je challenges toevoegt.",
+      "Gym niet gevonden voor community data.",
+    );
+    const now = new Date().toISOString();
+    const challenge = normalizeCommunityData(tenant.id, {
+      challenges: [
+        {
+          id: challengeIdGenerator.next(),
+          tenantId: tenant.id,
+          title: input.title,
+          rewardLabel: input.rewardLabel,
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          participantMemberIds: input.participantMemberIds,
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    }).challenges[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                community: normalizeCommunityData(entry.id, {
+                  ...entry.moduleData.community,
+                  challenges: [...entry.moduleData.community.challenges, challenge],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return challenge;
+  });
+}
+
+export async function createLocalTenantQuestionnaire(
+  tenantId: string,
+  input: CreateLocalTenantQuestionnaireInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je questionnaires toevoegt.",
+      "Gym niet gevonden voor community data.",
+    );
+    const now = new Date().toISOString();
+    const questionnaire = normalizeCommunityData(tenant.id, {
+      questionnaires: [
+        {
+          id: questionnaireIdGenerator.next(),
+          tenantId: tenant.id,
+          title: input.title,
+          trigger: input.trigger,
+          questions: input.questions,
+          responseCount: 0,
+          status: "live",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    }).questionnaires[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                community: normalizeCommunityData(entry.id, {
+                  ...entry.moduleData.community,
+                  questionnaires: [...entry.moduleData.community.questionnaires, questionnaire],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return questionnaire;
+  });
+}
+
+export async function createLocalTenantQuestionnaireResponse(
+  tenantId: string,
+  input: CreateLocalTenantQuestionnaireResponseInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je questionnaire responses toevoegt.",
+      "Gym niet gevonden voor community data.",
+    );
+    const now = new Date().toISOString();
+    const response = normalizeCommunityData(tenant.id, {
+      responses: [
+        {
+          id: questionnaireResponseIdGenerator.next(),
+          tenantId: tenant.id,
+          questionnaireId: input.questionnaireId,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          answers: input.answers,
+          submittedAt: now,
+        },
+      ],
+      questionnaires: tenant.moduleData.community.questionnaires,
+    }).responses[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                community: normalizeCommunityData(entry.id, {
+                  ...entry.moduleData.community,
+                  responses: [...entry.moduleData.community.responses, response],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return response;
+  });
+}
+
+export async function createLocalTenantPaymentMethodRequest(
+  tenantId: string,
+  input: CreateLocalTenantPaymentMethodRequestInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je payment method requests toevoegt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const now = new Date().toISOString();
+    const request = normalizeMobileSelfServiceData(tenant.id, {
+      paymentMethodRequests: [
+        {
+          id: paymentMethodRequestIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          requestedMethodLabel: input.requestedMethodLabel,
+          note: input.note,
+          status: "pending",
+          requestedAt: now,
+        },
+      ],
+    }).paymentMethodRequests[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  paymentMethodRequests: [
+                    ...entry.moduleData.mobileSelfService.paymentMethodRequests,
+                    request,
+                  ],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return request;
+  });
+}
+
+export async function reviewLocalTenantPaymentMethodRequest(
+  tenantId: string,
+  input: ReviewLocalTenantPaymentMethodRequestInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je payment method requests beoordeelt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const existing = tenant.moduleData.mobileSelfService.paymentMethodRequests.find(
+      (entry) => entry.id === input.id,
+    );
+
+    if (!existing) {
+      throw new AppError("Payment method request niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, requestId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const state = current ?? createEmptyState();
+    const request = normalizeMobileSelfServiceData(tenant.id, {
+      paymentMethodRequests: [
+        {
+          ...existing,
+          status: input.status,
+          ownerNotes: input.ownerNotes ?? existing.ownerNotes,
+          reviewedAt: now,
+        },
+      ],
+    }).paymentMethodRequests[0]!;
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  paymentMethodRequests: entry.moduleData.mobileSelfService.paymentMethodRequests.map(
+                    (item) => (item.id === input.id ? request : item),
+                  ),
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return request;
+  });
+}
+
+export async function createLocalTenantPauseRequest(
+  tenantId: string,
+  input: CreateLocalTenantPauseRequestInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je pause requests toevoegt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const now = new Date().toISOString();
+    const request = normalizeMobileSelfServiceData(tenant.id, {
+      pauseRequests: [
+        {
+          id: pauseRequestIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          reason: input.reason,
+          status: "pending",
+          requestedAt: now,
+        },
+      ],
+    }).pauseRequests[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  pauseRequests: [...entry.moduleData.mobileSelfService.pauseRequests, request],
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return request;
+  });
+}
+
+export async function reviewLocalTenantPauseRequest(
+  tenantId: string,
+  input: ReviewLocalTenantPauseRequestInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je pause requests beoordeelt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const existing = tenant.moduleData.mobileSelfService.pauseRequests.find(
+      (entry) => entry.id === input.id,
+    );
+
+    if (!existing) {
+      throw new AppError("Pause request niet gevonden.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId, requestId: input.id },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const state = current ?? createEmptyState();
+    const request = normalizeMobileSelfServiceData(tenant.id, {
+      pauseRequests: [
+        {
+          ...existing,
+          status: input.status,
+          ownerNotes: input.ownerNotes ?? existing.ownerNotes,
+          reviewedAt: now,
+        },
+      ],
+    }).pauseRequests[0]!;
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  pauseRequests: entry.moduleData.mobileSelfService.pauseRequests.map((item) =>
+                    item.id === input.id ? request : item,
+                  ),
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return request;
+  });
+}
+
+export async function createLocalTenantContractRecord(
+  tenantId: string,
+  input: CreateLocalTenantContractRecordInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je contractrecords toevoegt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const now = new Date().toISOString();
+    const contract = normalizeMobileSelfServiceData(tenant.id, {
+      contracts: [
+        {
+          id: contractRecordIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          membershipPlanId: input.membershipPlanId,
+          contractName: input.contractName,
+          documentLabel: input.documentLabel,
+          documentUrl: input.documentUrl,
+          status: input.status,
+          signedAt: input.signedAt,
+          updatedAt: now,
+        },
+      ],
+    }).contracts[0]!;
+    const nextContracts = normalizeMobileSelfServiceData(tenant.id, {
+      ...tenant.moduleData.mobileSelfService,
+      contracts: [
+        ...tenant.moduleData.mobileSelfService.contracts.filter(
+          (entry) => entry.memberId !== input.memberId,
+        ),
+        contract,
+      ],
+    }).contracts;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  contracts: nextContracts,
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return contract;
+  });
+}
+
+export async function updateLocalTenantBookingPolicy(
+  tenantId: string,
+  input: UpdateLocalTenantBookingPolicyInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je bookingbeleid opslaat.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor bookingbeleid.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextBookingPolicy = normalizeBookingPolicySettings({
+      ...tenant.bookingPolicy,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              bookingPolicy: nextBookingPolicy,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantBookingSettings(
+  tenantId: string,
+  input: UpdateLocalTenantBookingSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je bookinginstellingen opslaat.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor bookinginstellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextBooking = normalizeBookingWorkspaceSettings({
+      ...tenant.moduleSettings.booking,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                booking: nextBooking,
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantRevenueSettings(
+  tenantId: string,
+  input: UpdateLocalTenantRevenueSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je omzetinstellingen opslaat.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor omzetinstellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextRevenue = normalizeRevenueWorkspaceSettings({
+      ...tenant.moduleSettings.revenue,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                revenue: nextRevenue,
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantCoachingSettings(
+  tenantId: string,
+  input: UpdateLocalTenantCoachingSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je coaching instelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor coachinginstellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextCoaching = normalizeCoachingWorkspaceSettings({
+      ...tenant.moduleSettings.coaching,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                coaching: nextCoaching,
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantRetentionSettings(
+  tenantId: string,
+  input: UpdateLocalTenantRetentionSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je retentie instelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor retentie-instellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextRetention = normalizeRetentionWorkspaceSettings({
+      ...tenant.moduleSettings.retention,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                retention: nextRetention,
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantMobileSettings(
+  tenantId: string,
+  input: UpdateLocalTenantMobileSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je mobile instelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor mobile-instellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextMobile = normalizeMobileExperienceSettings({
+      ...tenant.moduleSettings.mobile,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                mobile: nextMobile,
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantMarketingSettings(
+  tenantId: string,
+  input: UpdateLocalTenantMarketingSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je marketing instelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor marketinginstellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextMarketing = normalizeMarketingWorkspaceSettings({
+      ...tenant.moduleSettings.marketing,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                marketing: nextMarketing,
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function updateLocalTenantIntegrationSettings(
+  tenantId: string,
+  input: UpdateLocalTenantIntegrationSettingsInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je integraties instelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor integratie-instellingen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextIntegrations = normalizeIntegrationWorkspaceSettings({
+      ...tenant.moduleSettings.integrations,
+      ...input,
+      lastUpdatedAt: now,
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleSettings: {
+                ...entry.moduleSettings,
+                integrations: nextIntegrations,
+              },
             }
           : entry,
       ),

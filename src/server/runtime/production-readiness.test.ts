@@ -30,8 +30,18 @@ describe("production readiness", () => {
     expect(() => assertProductionEnvironmentReady()).not.toThrow();
   });
 
+  it("treats a local production start without live app markers as fallback-capable", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "");
+    delete process.env.DIGITALOCEAN_APP_ID;
+
+    expect(isProductionRuntime()).toBe(false);
+    expect(() => assertLiveInfrastructureConfiguration()).not.toThrow();
+  });
+
   it("requires Mongo and a strong session secret in production", () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
     delete process.env.MONGODB_URI;
     delete process.env.MONGODB_DB_NAME;
     delete process.env.REDIS_URL;
@@ -51,6 +61,7 @@ describe("production readiness", () => {
 
   it("marks backups and monitoring as recommended readiness checks", () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
     vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017");
     vi.stubEnv("MONGODB_DB_NAME", "gym-platform");
     vi.stubEnv("REDIS_URL", "redis://localhost:6379");
@@ -115,6 +126,20 @@ describe("production readiness", () => {
 
   it("fails fast when runtime datastores are not configured", () => {
     vi.stubEnv("NODE_ENV", "development");
+
+    expect(() => assertLiveInfrastructureConfiguration()).not.toThrow();
+    expect(
+      getLiveInfrastructureConfigurationIssues().some(
+        (issue) => issue.key === "runtime-datastores",
+      ),
+    ).toBe(false);
+  });
+
+  it("still requires runtime datastores in a live production runtime", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
+    delete process.env.MONGODB_URI;
+    delete process.env.REDIS_URL;
 
     expect(() => assertLiveInfrastructureConfiguration()).toThrow(
       "Live infrastructuurconfiguratie mist onderdelen: MongoDB en Redis.",
