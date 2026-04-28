@@ -30,13 +30,15 @@ describe("production readiness", () => {
     expect(() => assertProductionEnvironmentReady()).not.toThrow();
   });
 
-  it("treats a local production start without live app markers as fallback-capable", () => {
+  it("treats a production start without extra app markers as live runtime", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("APP_ENV", "");
     delete process.env.DIGITALOCEAN_APP_ID;
 
-    expect(isProductionRuntime()).toBe(false);
-    expect(() => assertLiveInfrastructureConfiguration()).not.toThrow();
+    expect(isProductionRuntime()).toBe(true);
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen",
+    );
   });
 
   it("requires Mongo and a strong session secret in production", () => {

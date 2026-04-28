@@ -265,8 +265,37 @@ const dashboardFeatureDefinitionMap = new Map(
   DASHBOARD_FEATURE_CATALOG.map((feature) => [feature.key, feature]),
 );
 
+const defaultCacheOperationTimeoutMs = 750;
+const defaultCacheCircuitBreakerMs = 30_000;
+
 function shouldUseRuntimeFallbacks() {
   return allowsRuntimeFallbacks();
+}
+
+function getPositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function withOperationTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  label: string,
+) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 class MemoryCacheClient implements KeyValueCacheClient {
@@ -362,6 +391,139 @@ class MemoryCacheClient implements KeyValueCacheClient {
   async quit() {
     this.entries.clear();
   }
+}
+
+class ResilientCacheClient implements KeyValueCacheClient {
+  private readonly fallback = new MemoryCacheClient();
+  private disabledUntil = 0;
+  private lastFailureMessage = "";
+
+  constructor(
+    private readonly primary: KeyValueCacheClient,
+    private readonly operationTimeoutMs = getPositiveIntegerEnv(
+      "CLAIMTECH_CACHE_OPERATION_TIMEOUT_MS",
+      defaultCacheOperationTimeoutMs,
+    ),
+    private readonly circuitBreakerMs = getPositiveIntegerEnv(
+      "CLAIMTECH_CACHE_CIRCUIT_BREAKER_MS",
+      defaultCacheCircuitBreakerMs,
+    ),
+  ) {}
+
+  isPrimaryAvailable() {
+    return Date.now() >= this.disabledUntil;
+  }
+
+  getLastFailureMessage() {
+    return this.lastFailureMessage;
+  }
+
+  private markPrimaryFailure(operation: string, error: unknown) {
+    this.disabledUntil = Date.now() + this.circuitBreakerMs;
+    this.lastFailureMessage =
+      error instanceof Error ? error.message : "Onbekende cachefout";
+
+    console.warn("Redis cache tijdelijk overgeslagen", {
+      operation,
+      reason: this.lastFailureMessage,
+      retryAfterMs: this.circuitBreakerMs,
+    });
+  }
+
+  private async withFallback<T>(
+    operation: string,
+    primary: () => Promise<T>,
+    fallback: () => Promise<T>,
+  ) {
+    if (!this.isPrimaryAvailable()) {
+      return fallback();
+    }
+
+    try {
+      return await withOperationTimeout(
+        primary(),
+        this.operationTimeoutMs,
+        `Redis cache ${operation}`,
+      );
+    } catch (error) {
+      this.markPrimaryFailure(operation, error);
+      return fallback();
+    }
+  }
+
+  async get(key: string) {
+    return this.withFallback(
+      "get",
+      async () => (await this.primary.get(key)) ?? (await this.fallback.get(key)),
+      () => this.fallback.get(key),
+    );
+  }
+
+  async set(
+    key: string,
+    value: string,
+    options?: { ttlSeconds?: number; ttlMilliseconds?: number; onlyIfAbsent?: boolean },
+  ) {
+    return this.withFallback(
+      "set",
+      async () => {
+        const stored = await this.primary.set(key, value, options);
+        await this.fallback.set(key, value, options);
+        return stored;
+      },
+      () => this.fallback.set(key, value, options),
+    );
+  }
+
+  async del(key: string) {
+    await this.fallback.del(key);
+    return this.withFallback("del", () => this.primary.del(key), async () => 1);
+  }
+
+  async incrBy(key: string, amount: number) {
+    return this.withFallback(
+      "incrBy",
+      () => this.primary.incrBy(key, amount),
+      () => this.fallback.incrBy(key, amount),
+    );
+  }
+
+  async expire(key: string, ttlSeconds: number) {
+    await this.fallback.expire(key, ttlSeconds);
+    return this.withFallback(
+      "expire",
+      () => this.primary.expire(key, ttlSeconds),
+      () => this.fallback.expire(key, ttlSeconds),
+    );
+  }
+
+  async eval(script: string, keys: string[], args: string[]) {
+    return this.withFallback(
+      "eval",
+      () => this.primary.eval(script, keys, args),
+      () => this.fallback.eval(script, keys, args),
+    );
+  }
+
+  async quit() {
+    await Promise.allSettled([this.primary.quit(), this.fallback.quit()]);
+  }
+}
+
+function attachRedisErrorHandler(cacheClient: KeyValueCacheClient) {
+  const redisClient = (
+    cacheClient as unknown as {
+      readonly client?: {
+        on?: (event: string, listener: (error: Error) => void) => void;
+      };
+    }
+  ).client;
+
+  redisClient?.on?.("error", (error) => {
+    console.warn("Redis cache connectie meldde een fout", {
+      reason: error.message,
+    });
+  });
 }
 
 class NotConfiguredMessagingProvider implements MessagingProvider {
@@ -519,8 +681,18 @@ async function resolveCacheClient(): Promise<
   }
 
   try {
+    const redisClient = await createValkeyClient({
+      url: process.env.REDIS_URL,
+      name: PRODUCT_NAME,
+      socket: {
+        connectTimeout: getPositiveIntegerEnv("CLAIMTECH_REDIS_CONNECT_TIMEOUT_MS", 1500),
+        reconnectStrategy: (retries) => Math.min(retries * 100, 1000),
+      },
+    });
+    attachRedisErrorHandler(redisClient);
+
     return {
-      cacheClient: await createValkeyClient({ url: process.env.REDIS_URL }),
+      cacheClient: new ResilientCacheClient(redisClient),
       cacheMode: "redis",
     };
   } catch (error) {
@@ -630,16 +802,26 @@ async function createRuntime(): Promise<GymPlatformRuntime> {
     })
     .register({
       name: "Snelheid",
-      run: () => ({
-        status:
-          cacheConfig.cacheMode === "memory" && !localFallbackMode ? "degraded" : "healthy",
-        summary:
-          cacheConfig.cacheMode === "redis"
-            ? "De app gebruikt Redis voor tenant-cache en snelle runtime state."
-            : localFallbackMode
-              ? "De lokale memory cache is actief voor ontwikkeling; productie gebruikt Redis."
-              : "Memory cache actief terwijl live runtime Redis vereist.",
-      }),
+      run: () => {
+        const redisFallbackActive =
+          cacheConfig.cacheClient instanceof ResilientCacheClient &&
+          !cacheConfig.cacheClient.isPrimaryAvailable();
+
+        return {
+          status:
+            redisFallbackActive ||
+            (cacheConfig.cacheMode === "memory" && !localFallbackMode)
+              ? "degraded"
+              : "healthy",
+          summary: redisFallbackActive
+            ? `Redis reageerde niet snel genoeg; dashboard gebruikt tijdelijk een veilige memory fallback. Laatste fout: ${cacheConfig.cacheClient.getLastFailureMessage()}`
+            : cacheConfig.cacheMode === "redis"
+              ? "De app gebruikt Redis voor tenant-cache en snelle runtime state."
+              : localFallbackMode
+                ? "De lokale memory cache is actief voor ontwikkeling; productie gebruikt Redis."
+                : "Memory cache actief terwijl live runtime Redis vereist.",
+        };
+      },
     })
     .register({
       name: "Berichten",

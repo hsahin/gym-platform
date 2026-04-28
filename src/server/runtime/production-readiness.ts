@@ -137,6 +137,7 @@ export function isProductionRuntime() {
 
   return (
     process.env.CLAIMTECH_FORCE_PRODUCTION_RUNTIME === "true" ||
+    process.env.NODE_ENV === "production" ||
     productionMarkers.includes(appEnvironment as never) ||
     isPresent(process.env.DIGITALOCEAN_APP_ID)
   );

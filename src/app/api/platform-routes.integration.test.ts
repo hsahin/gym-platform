@@ -22,6 +22,7 @@ import {
 import {
   SESSION_COOKIE_NAME,
   buildPlatformActor,
+  resolveViewerFromToken,
 } from "@/server/runtime/demo-session";
 import {
   createGymPlatformServices,
@@ -138,6 +139,42 @@ describe("owner platform route integrations", () => {
     expect(response.headers.get("set-cookie")).toContain(SESSION_COOKIE_NAME);
     expect(authenticated?.tenant.name).toBe("Atlas Forge Club");
     expect(authenticated?.account.roleKey).toBe("owner");
+  });
+
+  it("issues the setup session for the newly created gym owner when multiple gyms exist", async () => {
+    await bootstrapLocalPlatform({
+      tenantName: "Existing Gym",
+      ownerName: "First Owner",
+      ownerEmail: "owner@existing.test",
+      password: "ExistingPass123!",
+    });
+
+    const formData = new FormData();
+    formData.set("tenantName", "Second Performance Gym");
+    formData.set("ownerName", "Second Owner");
+    formData.set("ownerEmail", "owner@second-performance.test");
+    formData.set("password", "SecondPass123!");
+
+    const response = await setupRoute(
+      new Request("http://localhost/api/auth/setup", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+    const token = response.headers
+      .get("set-cookie")
+      ?.match(new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`))?.[1];
+    const authenticated = await authenticateLocalAccount(
+      "owner@second-performance.test",
+      "SecondPass123!",
+      "second-performance-gym",
+    );
+    const viewer = await resolveViewerFromToken(token);
+
+    expect(token).toBeTruthy();
+    expect(authenticated?.tenant.name).toBe("Second Performance Gym");
+    expect(viewer?.actor.email).toBe("owner@second-performance.test");
+    expect(viewer?.tenantContext.tenantId).toBe(authenticated?.tenant.id);
   });
 
   it("redirects back to login when setup input is invalid", async () => {

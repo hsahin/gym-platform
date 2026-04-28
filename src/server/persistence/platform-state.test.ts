@@ -83,21 +83,14 @@ describe("platform state", () => {
     expect(slugifyTenantName("!!!")).toBe("gym-platform");
   });
 
-  it("keeps file fallback available for local production-like runs without live markers", async () => {
+  it("blocks file fallback during production starts without live datastores", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("APP_ENV", "");
     delete process.env.DIGITALOCEAN_APP_ID;
 
-    await expect(readLocalPlatformState()).resolves.toBeNull();
-
-    await bootstrapLocalPlatform({
-      tenantName: "Northside Athletics",
-      ownerName: "Amina Hassan",
-      ownerEmail: "owner@northside.test",
-      password: "strong-pass-123",
-    });
-
-    await expect(hasLocalPlatformSetup()).resolves.toBe(true);
+    await expect(readLocalPlatformState()).rejects.toThrow(
+      "Productieconfiguratie mist verplichte onderdelen",
+    );
   });
 
   it("can store multiple gyms next to each other", async () => {
