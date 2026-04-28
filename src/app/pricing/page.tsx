@@ -3,16 +3,21 @@ import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 
 const plans = [
   {
-    name: "Launch",
+    name: "Start",
     price: "€49",
     helper: "Voor één gym die snel live wil.",
-    features: ["Ledenbeheer", "Rooster en reserveringen", "Contracten", "Owner dashboard"],
+    features: ["Ledenbeheer", "Rooster en reserveringen", "Contracten", "Ownerdashboard"],
   },
   {
-    name: "Growth",
+    name: "Groei",
     price: "€99",
     helper: "Voor gyms met teamrollen en automatisering.",
-    features: ["Alles uit Launch", "Mollie betalingen", "Smartdeurs", "Import van leden en contracten"],
+    features: [
+      "Alles uit Start",
+      "Mollie-betalingen",
+      "Slimme deuren",
+      "Import van leden en contracten",
+    ],
     highlighted: true,
   },
   {
@@ -29,7 +34,7 @@ export default function PricingPage() {
       <header className="app-header">
         <div className="app-header__brand-copy">
           <p className="text-sm font-semibold">GymOS</p>
-          <p className="text-muted text-sm">Pricing kept deliberately simple.</p>
+          <p className="text-muted text-sm">Prijzen bewust eenvoudig.</p>
         </div>
 
         <div className="app-header__actions">
@@ -59,11 +64,11 @@ export default function PricingPage() {
         </span>
         <div className="max-w-3xl space-y-3">
           <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
-            Choose the setup that matches your gym footprint.
+            Kies de setup die past bij je sportschool.
           </h1>
           <p className="text-muted text-base leading-7">
-            The product value sits in operations, not packaging. These plans track how much
-            workflow you want active from day one.
+            De waarde zit in dagelijkse operatie, niet in ingewikkelde pakketten.
+            Deze plannen volgen hoeveel workflow je vanaf dag één live wilt hebben.
           </p>
         </div>
       </section>

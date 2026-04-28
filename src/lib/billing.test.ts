@@ -12,7 +12,7 @@ import {
 } from "@/lib/billing";
 
 describe("billing helpers", () => {
-  it("starts with a safe Mollie preview default", () => {
+  it("starts with a safe Mollie default", () => {
     expect(createDefaultBillingSettings()).toEqual({
       enabled: false,
       provider: "mollie",
@@ -94,11 +94,17 @@ describe("billing helpers", () => {
     expect(getBillingStatusLabel(createDefaultBillingSettings())).toBe("Niet gekoppeld");
     expect(getBillingStatusLabel(attention)).toBe("Aandacht nodig");
     expect(getBillingStatusLabel(configuredDisabled)).toBe("Klaar om te activeren");
-    expect(getBillingStatusLabel(configuredEnabled)).toBe("Live preview");
+    expect(getBillingStatusLabel(configuredEnabled)).toBe("Live credentials nodig");
+    expect(getBillingStatusLabel(configuredEnabled, { liveProviderConfigured: true })).toBe(
+      "Live",
+    );
     expect(getBillingHelpText(createDefaultBillingSettings())).toContain("Koppel Mollie");
     expect(getBillingHelpText(attention)).toContain("Vul profielnaam");
     expect(getBillingHelpText(configuredDisabled)).toContain("is ingevuld");
     expect(getBillingHelpText(configuredEnabled)).toContain(
+      "live API-key en publieke webhook-url",
+    );
+    expect(getBillingHelpText(configuredEnabled, { liveProviderConfigured: true })).toContain(
       "Automatische incasso, Eenmalige betaling en Betaalverzoek",
     );
     expect(getBillingHelpText(configuredWithoutMethods)).toContain("Vul profielnaam");

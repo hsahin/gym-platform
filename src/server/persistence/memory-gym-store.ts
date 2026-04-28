@@ -59,6 +59,18 @@ function cloneRecord<T>(record: T): T {
   return { ...record };
 }
 
+function buildWaiverFileName(fullName: string) {
+  return `${fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-waiver.pdf`;
+}
+
+function buildWaiverStorageKey(storagePrefix: string | undefined, fileName: string | undefined) {
+  if (!storagePrefix?.trim() || !fileName) {
+    return undefined;
+  }
+
+  return `${storagePrefix.trim().replace(/\/+$/g, "")}/${fileName}`;
+}
+
 function cloneState(state: MemoryGymStoreState): MemoryGymStoreState {
   const normalized = normalizeGymStoreState(state);
 
@@ -647,6 +659,9 @@ export function createMemoryGymStore(
         };
       }
 
+      const waiverFileName =
+        input.waiverStatus === "complete" ? buildWaiverFileName(member.fullName) : undefined;
+
       state.waivers.unshift({
         tenantId: tenantContext.tenantId,
         id: waiverIdGenerator.next(),
@@ -657,10 +672,8 @@ export function createMemoryGymStore(
         memberName: member.fullName,
         status: input.waiverStatus === "complete" ? "signed" : "requested",
         uploadedAt: input.waiverStatus === "complete" ? now : undefined,
-        fileName:
-          input.waiverStatus === "complete"
-            ? `${member.fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-waiver.pdf`
-            : undefined,
+        fileName: waiverFileName,
+        storageKey: buildWaiverStorageKey(input.waiverStorageKey, waiverFileName),
       });
 
       await persistState();
@@ -737,6 +750,10 @@ export function createMemoryGymStore(
 
       if (waiverIndex >= 0) {
         const waiver = state.waivers[waiverIndex]!;
+        const waiverFileName =
+          input.waiverStatus === "complete"
+            ? waiver.fileName ?? buildWaiverFileName(updatedMember.fullName)
+            : undefined;
         state.waivers[waiverIndex] = {
           ...waiver,
           version: waiver.version + 1,
@@ -744,11 +761,10 @@ export function createMemoryGymStore(
           memberName: updatedMember.fullName,
           status: input.waiverStatus === "complete" ? "signed" : "requested",
           uploadedAt: input.waiverStatus === "complete" ? waiver.uploadedAt ?? now : undefined,
-          fileName:
-            input.waiverStatus === "complete"
-              ? waiver.fileName ??
-                `${updatedMember.fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-waiver.pdf`
-              : undefined,
+          fileName: waiverFileName,
+          storageKey:
+            buildWaiverStorageKey(input.waiverStorageKey, waiverFileName) ??
+            (input.waiverStatus === "complete" ? waiver.storageKey : undefined),
         };
       }
 

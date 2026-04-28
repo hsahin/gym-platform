@@ -18,6 +18,10 @@ export interface StoredBillingSettings {
   readonly lastPaymentActionBy?: string;
 }
 
+export interface BillingRuntimeOptions {
+  readonly liveProviderConfigured?: boolean;
+}
+
 export const BILLING_PROVIDER_OPTIONS: ReadonlyArray<{
   key: BillingProvider;
   label: string;
@@ -130,11 +134,14 @@ export function isBillingReady(settings: StoredBillingSettings) {
   return settings.enabled && getBillingConnectionStatus(settings) === "configured";
 }
 
-export function getBillingStatusLabel(settings: StoredBillingSettings) {
+export function getBillingStatusLabel(
+  settings: StoredBillingSettings,
+  options?: BillingRuntimeOptions,
+) {
   const status = getBillingConnectionStatus(settings);
 
   if (status === "configured" && settings.enabled) {
-    return "Live preview";
+    return options?.liveProviderConfigured ? "Live" : "Live credentials nodig";
   }
 
   if (status === "configured") {
@@ -148,7 +155,10 @@ export function getBillingStatusLabel(settings: StoredBillingSettings) {
   return "Niet gekoppeld";
 }
 
-export function getBillingHelpText(settings: StoredBillingSettings) {
+export function getBillingHelpText(
+  settings: StoredBillingSettings,
+  options?: BillingRuntimeOptions,
+) {
   const providerLabel = getBillingProviderLabel(settings.provider);
   const methods = settings.paymentMethods.map(getBillingPaymentMethodLabel);
   const methodLabel =
@@ -160,7 +170,11 @@ export function getBillingHelpText(settings: StoredBillingSettings) {
   const status = getBillingConnectionStatus(settings);
 
   if (status === "configured" && settings.enabled) {
-    return `${providerLabel} staat klaar voor ${methodLabel}. Deze koppeling draait nu in preview totdat live credentials en webhooks worden aangesloten.`;
+    if (options?.liveProviderConfigured) {
+      return `${providerLabel} verwerkt nu ${methodLabel}. Facturen, refunds, webhooks en reconciliatie lopen via de live providerkoppeling.`;
+    }
+
+    return `${providerLabel} is ingesteld voor ${methodLabel}, maar de live API-key en publieke webhook-url ontbreken nog in de omgeving.`;
   }
 
   if (status === "configured") {

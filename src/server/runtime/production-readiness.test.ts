@@ -83,6 +83,31 @@ describe("production readiness", () => {
     });
   });
 
+  it("keeps local fallback readiness neutral while production env is absent", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("APP_ENV", "");
+    delete process.env.DIGITALOCEAN_APP_ID;
+    delete process.env.MONGODB_URI;
+    delete process.env.MONGODB_DB_NAME;
+    delete process.env.REDIS_URL;
+    delete process.env.CLAIMTECH_SESSION_SECRET;
+
+    const checks = getProductionReadinessChecks();
+
+    expect(checks.find((check) => check.key === "mongo")).toMatchObject({
+      ready: true,
+      helpText: expect.stringContaining("Lokale fallback"),
+    });
+    expect(checks.find((check) => check.key === "session-secret")).toMatchObject({
+      ready: true,
+      helpText: expect.stringContaining("Lokale fallback"),
+    });
+    expect(checks.find((check) => check.key === "cache")).toMatchObject({
+      ready: true,
+      helpText: expect.stringContaining("Lokale fallback"),
+    });
+  });
+
   it("fails fast on incomplete live messaging configuration", () => {
     vi.stubEnv("ENABLE_REAL_MESSAGES", "true");
     vi.stubEnv("WAHA_BASE_URL", "https://waha.example");
@@ -98,6 +123,14 @@ describe("production readiness", () => {
           missingEnv: ["WAHA_API_KEY"],
         }),
       ]),
+    );
+  });
+
+  it("fails fast on partially configured messaging even without the legacy enable flag", () => {
+    vi.stubEnv("WAHA_BASE_URL", "https://waha.example");
+
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen: Live berichten.",
     );
   });
 
@@ -121,6 +154,14 @@ describe("production readiness", () => {
           ]),
         }),
       ]),
+    );
+  });
+
+  it("fails fast on partially configured cloud uploads even without the legacy enable flag", () => {
+    vi.stubEnv("SPACES_BUCKET", "gym-files");
+
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen: Cloudopslag.",
     );
   });
 

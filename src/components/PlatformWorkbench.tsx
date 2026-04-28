@@ -353,7 +353,7 @@ export function PlatformWorkbench({
   >(snapshot.payments.paymentMethods[0] ?? "one_time");
   const [billingPreviewAmount, setBillingPreviewAmount] = useState("2495");
   const [billingPreviewDescription, setBillingPreviewDescription] = useState(
-    "Intake bundle",
+    "Intakepakket",
   );
   const [billingPreviewMemberName, setBillingPreviewMemberName] = useState("");
 
@@ -559,7 +559,7 @@ export function PlatformWorkbench({
   );
   const launchStats = [
     { label: "Vestigingen", value: snapshot.locations.length },
-    { label: "Memberships", value: snapshot.membershipPlans.length },
+    { label: "Lidmaatschappen", value: snapshot.membershipPlans.length },
     { label: "Trainers", value: snapshot.trainers.length },
     { label: "Leden", value: snapshot.members.length },
     { label: "Lessen", value: snapshot.classSessions.length },
@@ -570,7 +570,7 @@ export function PlatformWorkbench({
       <Card className="rounded-[28px] border-border/80">
         <Card.Content>
           <p className="text-muted text-sm">
-            Alleen accounts met beheerrechten kunnen locaties, memberships,
+            Alleen accounts met beheerrechten kunnen locaties, lidmaatschappen,
             teamleden, betalingen en lessen toevoegen.
           </p>
         </Card.Content>
@@ -585,12 +585,12 @@ export function PlatformWorkbench({
           <Card className="rounded-[32px] border-border/80">
             <Card.Header className="space-y-3">
               <Chip size="sm" variant="soft">
-                Launch board
+                Livegang
               </Chip>
-              <Card.Title>Build the live dataset before you scale the team.</Card.Title>
+              <Card.Title>Bouw eerst de live dataset voordat je het team opschaalt.</Card.Title>
               <Card.Description>
-                Locations, memberships, trainers, classes, members, and staff all write
-                directly into the operational workspace.
+                Vestigingen, lidmaatschappen, trainers, lessen, leden en teamaccounts
+                schrijven direct naar de operationele werkruimte.
               </Card.Description>
             </Card.Header>
             <Card.Content className="section-stack">
@@ -650,7 +650,7 @@ export function PlatformWorkbench({
         {shouldShowSection("locations") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.locations.length, "vestiging", "vestigingen")}
-            description="Add the location, its manager, capacity, and amenities. This unlocks trainers, members, and class scheduling."
+            description="Voeg de vestiging, manager, capaciteit en faciliteiten toe. Daarna kun je trainers, leden en lessen koppelen."
             highlighted={isHighlighted("locations")}
             statusLabel={snapshot.locations.length > 0 ? "Klaar" : "Nu"}
             statusTone={snapshot.locations.length > 0 ? "complete" : "current"}
@@ -707,12 +707,12 @@ export function PlatformWorkbench({
 
         {shouldShowSection("contracts") ? (
           <SectionCard
-            countLabel={formatCountLabel(snapshot.membershipPlans.length, "membership", "memberships")}
-            description="Define the membership types you actually sell: billing cadence, monthly value, and core perks."
+            countLabel={formatCountLabel(snapshot.membershipPlans.length, "lidmaatschap", "lidmaatschappen")}
+            description="Leg vast welke lidmaatschappen je verkoopt: contractduur, maandwaarde en belangrijkste voordelen."
             highlighted={isHighlighted("memberships", "contracts")}
             statusLabel={snapshot.membershipPlans.length > 0 ? "Klaar" : "Nu"}
             statusTone={snapshot.membershipPlans.length > 0 ? "complete" : "current"}
-            title="Membership toevoegen"
+            title="Lidmaatschap toevoegen"
           >
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Naam">
@@ -730,8 +730,8 @@ export function PlatformWorkbench({
                 value={planBillingCycle}
                 onChange={(value) => setPlanBillingCycle(value as typeof planBillingCycle)}
               />
-              <Field label="Perks">
-                <TextArea fullWidth rows={4} placeholder="open gym, priority booking" value={planPerks} onChange={(event) => setPlanPerks(event.target.value)} />
+              <Field label="Voordelen">
+                <TextArea fullWidth rows={4} placeholder="open gym, voorrang bij boeken" value={planPerks} onChange={(event) => setPlanPerks(event.target.value)} />
               </Field>
             </div>
             <div className="flex justify-end">
@@ -745,7 +745,7 @@ export function PlatformWorkbench({
                       billingCycle: planBillingCycle,
                       perks: parseList(planPerks),
                     });
-                    toast.success("Membership toegevoegd.");
+                    toast.success("Lidmaatschap toegevoegd.");
                     setPlanName("");
                     setPlanPrice("99");
                     setPlanBillingCycle("monthly");
@@ -753,7 +753,7 @@ export function PlatformWorkbench({
                   })
                 }
               >
-                {isPending ? "Opslaan..." : "Membership toevoegen"}
+                {isPending ? "Opslaan..." : "Lidmaatschap toevoegen"}
               </Button>
             </div>
           </SectionCard>
@@ -762,7 +762,7 @@ export function PlatformWorkbench({
         {shouldShowSection("trainers") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.trainers.length, "trainer", "trainers")}
-            description="Add the coaches who make the schedule credible, together with their home location and expertise."
+            description="Voeg de coaches toe die het rooster dragen, inclusief thuisvestiging en expertise."
             disabled={snapshot.locations.length === 0}
             highlighted={isHighlighted("trainers")}
             statusLabel={snapshot.trainers.length > 0 ? "Klaar" : "Daarna"}
@@ -822,7 +822,7 @@ export function PlatformWorkbench({
         {shouldShowSection("classes") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.classSessions.length, "les", "lessen")}
-            description="Schedule one-off sessions or a weekly class series with trainer, location, level, and capacity."
+            description="Plan een losse les of een wekelijkse reeks met trainer, vestiging, niveau en capaciteit."
             disabled={snapshot.locations.length === 0 || snapshot.trainers.length === 0}
             highlighted={isHighlighted("classes")}
             statusLabel={snapshot.classSessions.length > 0 ? "Klaar" : "Nu"}
@@ -931,8 +931,8 @@ export function PlatformWorkbench({
                     label="Niveau"
                     options={[
                       { value: "beginner", label: "Beginner" },
-                      { value: "mixed", label: "Mixed" },
-                      { value: "advanced", label: "Advanced" },
+                      { value: "mixed", label: "Gemengd" },
+                      { value: "advanced", label: "Gevorderd" },
                     ]}
                     value={classLevel}
                     onChange={(value) => setClassLevel(value as typeof classLevel)}
@@ -1005,7 +1005,7 @@ export function PlatformWorkbench({
         {shouldShowSection("members") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.members.length, "lid", "leden")}
-            description="Add members manually when needed, or leave this until the offer is live and import them later."
+            description="Voeg leden handmatig toe wanneer nodig, of importeer ze later zodra je aanbod live staat."
             disabled={snapshot.locations.length === 0 || snapshot.membershipPlans.length === 0}
             highlighted={isHighlighted("members")}
             statusLabel={snapshot.members.length > 0 ? "Klaar" : "Later"}
@@ -1026,7 +1026,7 @@ export function PlatformWorkbench({
                     <Input fullWidth placeholder="lid@voorbeeld.nl" type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
                   </Field>
                   <SelectField
-                    label="Membership"
+                    label="Lidmaatschap"
                     options={snapshot.membershipPlans.map((plan) => ({
                       value: plan.id,
                       label: plan.name,
@@ -1191,7 +1191,7 @@ export function PlatformWorkbench({
         {shouldShowSection("imports") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.members.length, "lid live", "leden live")}
-            description="Paste existing member and contract data. The system creates missing memberships automatically."
+            description="Plak bestaande leden- en contractdata. Ontbrekende lidmaatschappen worden automatisch aangemaakt."
             disabled={snapshot.locations.length === 0}
             highlighted={isHighlighted("imports")}
             statusLabel={snapshot.locations.length > 0 ? "Import klaar" : "Eerst vestiging"}
@@ -1261,10 +1261,10 @@ export function PlatformWorkbench({
         {shouldShowSection("staff") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.staff.length, "account live", "accounts live")}
-            description="Invite owner, manager, trainer, or frontdesk accounts with the correct workspace role."
+            description="Nodig owner-, manager-, trainer- of frontdeskaccounts uit met de juiste rol."
             disabled={!snapshot.uiCapabilities.canManageStaff}
             highlighted={isHighlighted("staff")}
-            statusLabel={snapshot.uiCapabilities.canManageStaff ? "Owner" : "Owner-only"}
+            statusLabel={snapshot.uiCapabilities.canManageStaff ? "Owner" : "Alleen owner"}
             statusTone={snapshot.uiCapabilities.canManageStaff ? "current" : "locked"}
             title="Teamlid uitnodigen"
           >
@@ -1326,7 +1326,7 @@ export function PlatformWorkbench({
         {shouldShowSection("remote-access") ? (
           <SectionCard
             countLabel={snapshot.remoteAccess.deviceLabel || "Geen slot gekoppeld"}
-            description="Connect the smart lock, assign it to a location, and keep remote open as an owner-only action."
+            description="Koppel het slimme slot, wijs het toe aan een vestiging en houd openen op afstand owner-only."
             disabled={!snapshot.uiCapabilities.canManageRemoteAccess}
             highlighted={isHighlighted("remote-access")}
             statusLabel={snapshot.remoteAccess.statusLabel}
@@ -1372,7 +1372,7 @@ export function PlatformWorkbench({
               >
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Content className="space-y-2">
-                    <p className="font-medium">Remote access status</p>
+                    <p className="font-medium">Smartdeurstatus</p>
                     <p className="text-muted text-sm leading-6">
                       {snapshot.remoteAccess.helpText}
                     </p>
@@ -1479,7 +1479,7 @@ export function PlatformWorkbench({
                   )
                 : "Nog niet gekoppeld"
             }
-            description="Connect Mollie and decide which payment flows are live for this workspace."
+            description="Koppel Mollie en bepaal welke betaalflows live zijn voor deze gym."
             disabled={!snapshot.uiCapabilities.canManagePayments}
             highlighted={isHighlighted("payments")}
             statusLabel={snapshot.payments.statusLabel}
@@ -1497,7 +1497,7 @@ export function PlatformWorkbench({
           >
             {!snapshot.uiCapabilities.canManagePayments ? (
               <p className="text-muted text-sm">
-                Alleen de eigenaar kan betaalproviders koppelen of betaalflows previewen.
+                Alleen de eigenaar kan betaalproviders koppelen of live betaalflows starten.
               </p>
             ) : (
               <form
@@ -1595,14 +1595,14 @@ export function PlatformWorkbench({
                 </div>
 
                 <Field label="Notities">
-                  <TextArea fullWidth rows={4} placeholder="eerst memberships via incasso, intro via betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
+                  <TextArea fullWidth rows={4} placeholder="eerst lidmaatschappen via incasso, intro via betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
                 </Field>
 
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Header>
-                    <Card.Title>Preview betaalflow</Card.Title>
+                    <Card.Title>Live betaalflow testen</Card.Title>
                     <Card.Description>
-                      Test one flow before it reaches live members.
+                      Maak een echte Mollie betaallink aan en controleer de checkout voordat leden deze gebruiken.
                     </Card.Description>
                   </Card.Header>
                   <Card.Content className="grid gap-4 md:grid-cols-2">
@@ -1622,7 +1622,7 @@ export function PlatformWorkbench({
                       <Input fullWidth min={100} step={5} type="number" value={billingPreviewAmount} onChange={(event) => setBillingPreviewAmount(event.target.value)} />
                     </Field>
                     <Field label="Omschrijving">
-                      <Input fullWidth placeholder="Intake bundle" value={billingPreviewDescription} onChange={(event) => setBillingPreviewDescription(event.target.value)} />
+                      <Input fullWidth placeholder="Intakepakket" value={billingPreviewDescription} onChange={(event) => setBillingPreviewDescription(event.target.value)} />
                     </Field>
                     <Field label="Lidnaam">
                       <Input fullWidth placeholder="Optioneel" value={billingPreviewMemberName} onChange={(event) => setBillingPreviewMemberName(event.target.value)} />
@@ -1648,7 +1648,10 @@ export function PlatformWorkbench({
                     variant="outline"
                     onPress={() =>
                       runAction(async () => {
-                        const receipt = await submitJson<{ summary: string }>(
+                        const receipt = await submitJson<{
+                          summary: string;
+                          checkoutUrl?: string;
+                        }>(
                           "/api/platform/billing/preview",
                           {
                             paymentMethod: billingPreviewMethod,
@@ -1660,10 +1663,13 @@ export function PlatformWorkbench({
                         );
 
                         toast.success(receipt.summary);
+                        if (receipt.checkoutUrl) {
+                          window.open(receipt.checkoutUrl, "_blank", "noopener,noreferrer");
+                        }
                       })
                     }
                   >
-                    Preview betaalflow
+                    Live link maken
                   </Button>
                 </div>
               </form>

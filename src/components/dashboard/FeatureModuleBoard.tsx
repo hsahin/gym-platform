@@ -5,23 +5,17 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Chip, Switch } from "@heroui/react";
 import { toast } from "sonner";
+import {
+  getDashboardFeatureCategoryLabel,
+  getDashboardFeatureFlagStateLabel,
+  getDashboardFeatureReasonLabel,
+  getDashboardFeatureStatusLabel,
+  getDashboardFeatureUiCopy,
+} from "@/features/dashboard-feature-copy";
 import { buildFeaturePresenceSummary } from "@/features/dashboard-feature-presence";
 import { getDashboardPageHref, type DashboardPageKey } from "@/lib/dashboard-pages";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type { FeatureState, GymDashboardSnapshot } from "@/server/types";
-
-function getReasonLabel(reason: string) {
-  switch (reason) {
-    case "tenant_override":
-      return "Tenant override";
-    case "actor_override":
-      return "Actor override";
-    case "rollout":
-      return "Rollout";
-    default:
-      return "Default";
-  }
-}
 
 export function FeatureModuleBoard({
   features,
@@ -56,6 +50,7 @@ export function FeatureModuleBoard({
     <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
       {normalizedFeatures.map((feature) => {
         const isSaving = isPending && pendingKey === feature.key;
+        const featureCopy = getDashboardFeatureUiCopy(feature);
 
         return (
           <Card
@@ -67,16 +62,16 @@ export function FeatureModuleBoard({
             <Card.Header className="items-start justify-between gap-3">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Card.Title className="text-lg">{feature.title}</Card.Title>
+                  <Card.Title className="text-lg">{featureCopy.title}</Card.Title>
                   <Chip
                     size="sm"
                     variant={feature.enabled ? "soft" : "tertiary"}
                     color={feature.enabled ? "success" : "default"}
                   >
-                    {feature.enabled ? "Enabled" : "Disabled"}
+                    {getDashboardFeatureFlagStateLabel(feature.enabled)}
                   </Chip>
                   <Chip size="sm" variant="tertiary">
-                    {feature.statusLabel}
+                    {getDashboardFeatureStatusLabel(feature.statusLabel)}
                   </Chip>
                   {feature.badgeLabel ? (
                     <Chip size="sm" color="accent" variant="soft">
@@ -85,7 +80,7 @@ export function FeatureModuleBoard({
                   ) : null}
                 </div>
                 <Card.Description className="text-sm leading-6">
-                  {feature.description}
+                  {featureCopy.description}
                 </Card.Description>
                 {snapshot ? (
                   <p className="text-muted text-sm leading-6">
@@ -98,10 +93,10 @@ export function FeatureModuleBoard({
             <Card.Content className="space-y-4">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Chip size="sm" variant="tertiary">
-                  {feature.categoryTitle}
+                  {getDashboardFeatureCategoryLabel(feature)}
                 </Chip>
                 <Chip size="sm" variant="tertiary">
-                  {getReasonLabel(feature.reason)}
+                  {getDashboardFeatureReasonLabel(feature.reason)}
                 </Chip>
               </div>
 
@@ -111,7 +106,7 @@ export function FeatureModuleBoard({
                   prefetch={false}
                   className="rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium"
                 >
-                  Open module
+                  Module openen
                 </Link>
 
                 {editable ? (
@@ -153,7 +148,7 @@ export function FeatureModuleBoard({
                           }
 
                           toast.success(
-                            `${feature.title} ${nextValue ? "ingeschakeld" : "uitgeschakeld"}.`,
+                            `${featureCopy.title} ${nextValue ? "ingeschakeld" : "uitgeschakeld"}.`,
                           );
                           router.refresh();
                         } catch (error) {

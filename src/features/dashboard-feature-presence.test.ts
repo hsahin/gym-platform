@@ -16,7 +16,7 @@ function createSnapshotFixture() {
     runtime: {
       storeMode: "mongo",
       cacheMode: "redis",
-      messagingMode: "preview",
+      messagingMode: "not_configured",
       storageMode: "spaces",
     },
     uiCapabilities: {

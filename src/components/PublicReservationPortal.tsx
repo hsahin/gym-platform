@@ -5,11 +5,18 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button, Card, Chip, Input, Label, TextArea } from "@heroui/react";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
+import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
-import type { MemberReservationSnapshot } from "@/server/types";
+import type {
+  MemberReservationSnapshot,
+  PublicReservationSnapshot,
+} from "@/server/types";
 
 type BookingStep = "club" | "classes" | "confirm" | "done";
+type ReservationPortalSnapshot =
+  | MemberReservationSnapshot
+  | PublicReservationSnapshot;
 
 function formatSessionMoment(startsAt: string) {
   return new Intl.DateTimeFormat("nl-NL", {
@@ -26,16 +33,54 @@ function formatClubCount(count: number) {
   return `${count} club${count === 1 ? "" : "s"}`;
 }
 
+function getRequestStatusLabel(status: string) {
+  switch (status) {
+    case "approved":
+      return "Goedgekeurd";
+    case "rejected":
+      return "Afgewezen";
+    case "pending":
+      return "Open";
+    default:
+      return status;
+  }
+}
+
+function getBookingStatusLabel(status: string) {
+  switch (status) {
+    case "waitlisted":
+      return "Wachtlijst";
+    case "confirmed":
+      return "Bevestigd";
+    default:
+      return status;
+  }
+}
+
+function isMemberReservationSnapshot(
+  snapshot: ReservationPortalSnapshot,
+): snapshot is MemberReservationSnapshot {
+  return "hasEligibleMembership" in snapshot;
+}
+
 export function PublicReservationPortal({
   snapshot,
 }: {
-  snapshot: MemberReservationSnapshot;
+  snapshot: ReservationPortalSnapshot;
 }) {
+  const isMemberFlow = isMemberReservationSnapshot(snapshot);
+  const availableClubs = isMemberFlow ? snapshot.availableClubs : snapshot.availableGyms;
+  const canReserve = !isMemberFlow || snapshot.hasEligibleMembership;
+  const selfService = isMemberFlow ? snapshot.selfService : null;
   const [bookingStep, setBookingStep] = useState<BookingStep>(
     snapshot.tenantSlug ? "classes" : "club",
   );
   const [isSelfServicePending, startSelfServiceTransition] = useTransition();
   const [notes, setNotes] = useState("");
+  const [publicFullName, setPublicFullName] = useState("");
+  const [publicEmail, setPublicEmail] = useState("");
+  const [publicPhoneCountry, setPublicPhoneCountry] = useState("NL");
+  const [publicPhone, setPublicPhone] = useState("");
   const [selectedClassSessionId, setSelectedClassSessionId] = useState(
     snapshot.classSessions[0]?.id ?? "",
   );
@@ -57,6 +102,10 @@ export function PublicReservationPortal({
     setSelectedClassSessionId(snapshot.classSessions[0]?.id ?? "");
     setLastResult(null);
     setNotes("");
+    setPublicFullName("");
+    setPublicEmail("");
+    setPublicPhoneCountry("NL");
+    setPublicPhone("");
     setRequestedMethodLabel("Nieuwe SEPA IBAN");
     setPaymentMethodNote("");
     setPauseStartsAt("");
@@ -85,12 +134,27 @@ export function PublicReservationPortal({
   const remainingSpots = selectedClass
     ? Math.max(selectedClass.capacity - selectedClass.bookedCount, 0)
     : 0;
+  const primaryContract = selfService?.contracts[0] ?? null;
+  const paymentMethodRequestReady = Boolean(
+    primaryContract && requestedMethodLabel.trim(),
+  );
+  const pauseRequestReady = Boolean(
+    primaryContract && pauseStartsAt && pauseEndsAt && pauseReason.trim(),
+  );
+  const publicReservationReady =
+    isMemberFlow ||
+    Boolean(publicFullName.trim() && publicEmail.trim() && publicPhone.trim());
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!selectedClassSessionId) {
       toast.error("Kies eerst een les.");
+      return;
+    }
+
+    if (!publicReservationReady) {
+      toast.error("Vul naam, e-mail en telefoonnummer in voordat je reserveert.");
       return;
     }
 
@@ -106,6 +170,10 @@ export function PublicReservationPortal({
           body: JSON.stringify({
             tenantSlug: snapshot.tenantSlug ?? undefined,
             classSessionId: selectedClassSessionId,
+            fullName: isMemberFlow ? undefined : publicFullName,
+            email: isMemberFlow ? undefined : publicEmail,
+            phone: isMemberFlow ? undefined : publicPhone,
+            phoneCountry: isMemberFlow ? undefined : publicPhoneCountry,
             notes: notes || undefined,
           }),
         });
@@ -181,7 +249,7 @@ export function PublicReservationPortal({
         };
 
         if (!response.ok || !payload.ok) {
-          throw new Error(payload.error?.message ?? "Self-service aanvraag mislukt.");
+          throw new Error(payload.error?.message ?? "Zelfserviceaanvraag mislukt.");
         }
 
         if (input.operation === "request_payment_method_update") {
@@ -196,7 +264,7 @@ export function PublicReservationPortal({
         toast.success(input.successMessage);
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "Self-service aanvraag mislukt.",
+          error instanceof Error ? error.message : "Zelfserviceaanvraag mislukt.",
         );
       }
     });
@@ -206,39 +274,39 @@ export function PublicReservationPortal({
     <div className="section-stack py-6 md:py-8">
       <header className="app-header">
         <div className="app-header__brand-copy">
-          <p className="text-sm font-semibold">Club reservations</p>
+          <p className="text-sm font-semibold">Lesreserveringen</p>
           <p className="text-muted text-sm">
             {snapshot.tenantSlug
               ? snapshot.tenantName
-              : snapshot.hasEligibleMembership
+              : canReserve
                 ? "Kies een club"
-                : "Alleen voor bestaande leden"}
+                : "Alleen voor gekoppelde leden"}
           </p>
         </div>
 
         <div className="app-header__actions">
-          {snapshot.hasEligibleMembership ? (
+          {availableClubs.length > 0 ? (
             <Chip size="sm" variant="soft">
-              {formatClubCount(snapshot.availableClubs.length)}
+              {formatClubCount(availableClubs.length)}
             </Chip>
           ) : null}
           <nav className="app-header__nav text-sm">
             <Link href="/" prefetch={false} className="text-muted transition hover:text-foreground">
-              Home
+              Start
             </Link>
             <Link
-              href="/dashboard"
+              href="/login"
               prefetch={false}
               className="text-muted transition hover:text-foreground"
             >
-              Dashboard
+              Team login
             </Link>
           </nav>
           <LazyThemeModeSwitch />
         </div>
       </header>
 
-      {!snapshot.hasEligibleMembership ? (
+      {isMemberFlow && !snapshot.hasEligibleMembership ? (
         <Card className="rounded-[28px] border-border/80">
           <Card.Header className="space-y-3">
             <Card.Title>Geen actief lidmaatschap gevonden</Card.Title>
@@ -259,31 +327,31 @@ export function PublicReservationPortal({
               ) : null}
             </div>
             <p className="text-muted text-sm leading-6">
-              Laat je club je memberprofiel koppelen aan dit e-mailadres of log in
+              Laat je club je lidprofiel koppelen aan dit e-mailadres of log in
               met het account dat al op je lidmaatschap staat.
             </p>
           </Card.Content>
         </Card>
       ) : null}
 
-      {snapshot.hasEligibleMembership && snapshot.tenantSlug ? (
+      {canReserve && snapshot.tenantSlug ? (
         <Segment selectedKey={bookingStep === "done" ? "confirm" : bookingStep} size="sm">
           <Segment.Item id="classes">Lessen</Segment.Item>
           <Segment.Item id="confirm">Bevestigen</Segment.Item>
         </Segment>
       ) : null}
 
-      {snapshot.hasEligibleMembership && bookingStep === "club" ? (
+      {canReserve && bookingStep === "club" ? (
         <section className="section-stack">
           <div className="max-w-2xl space-y-3">
             <h1 className="text-4xl font-semibold leading-tight">Kies je club</h1>
             <p className="text-muted text-base leading-7">
-              Je ziet alleen clubs waar dit account al als lid bekend is.
+              Kies de sportschool waar je een les wilt boeken.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {snapshot.availableClubs.map((club) => (
+            {availableClubs.map((club) => (
               <Link key={club.id} href={`/reserve?gym=${club.slug}`}>
                 <Card className="h-full rounded-[28px] border-border/80 transition hover:border-accent/30">
                   <Card.Header>
@@ -294,7 +362,7 @@ export function PublicReservationPortal({
                   </Card.Header>
                   <Card.Content>
                     <Chip size="sm" variant="tertiary">
-                      Alleen voor leden
+                      Open rooster
                     </Chip>
                   </Card.Content>
                 </Card>
@@ -304,7 +372,7 @@ export function PublicReservationPortal({
         </section>
       ) : null}
 
-      {snapshot.hasEligibleMembership && bookingStep === "classes" ? (
+      {canReserve && bookingStep === "classes" ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="section-stack">
             <div className="grid gap-4 sm:grid-cols-3">
@@ -386,22 +454,30 @@ export function PublicReservationPortal({
             )}
           </div>
 
-          <Card className="rounded-[28px] border-border/80">
-            <Card.Header className="space-y-3">
-              <Card.Title>Jouw reservering</Card.Title>
-              <Card.Description>
-                Je boekt als bestaand lid van {snapshot.tenantName}.
-              </Card.Description>
+            <Card className="rounded-[28px] border-border/80">
+              <Card.Header className="space-y-3">
+                <Card.Title>Kies je les</Card.Title>
+                <Card.Description>
+                  {isMemberFlow
+                    ? `Je boekt als bestaand lid van ${snapshot.tenantName}.`
+                    : `Je reserveert direct bij ${snapshot.tenantName}.`}
+                </Card.Description>
             </Card.Header>
             <Card.Content className="section-stack">
-              <div className="flex flex-wrap gap-2">
-                <Chip size="sm" variant="soft">
-                  {snapshot.memberDisplayName}
-                </Chip>
-                <Chip size="sm" variant="tertiary">
-                  {snapshot.memberEmail}
-                </Chip>
-              </div>
+              {isMemberFlow ? (
+                <div className="flex flex-wrap gap-2">
+                  <Chip size="sm" variant="soft">
+                    {snapshot.memberDisplayName}
+                  </Chip>
+                  <Chip size="sm" variant="tertiary">
+                    {snapshot.memberEmail}
+                  </Chip>
+                </div>
+              ) : (
+                <p className="text-muted text-sm leading-6">
+                  Je vult je gegevens in bij de bevestiging. De club ziet je reservering direct.
+                </p>
+              )}
 
               {selectedClass ? (
                 <>
@@ -437,31 +513,70 @@ export function PublicReservationPortal({
         </section>
       ) : null}
 
-      {snapshot.hasEligibleMembership && bookingStep === "confirm" ? (
+      {canReserve && bookingStep === "confirm" ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
               <Card.Title>Bevestig je plek</Card.Title>
               <Card.Description>
-                Je membergegevens komen uit je bestaande clubprofiel.
+                {isMemberFlow
+                  ? "Je lidgegevens komen uit je bestaande clubprofiel."
+                  : "Laat je gegevens achter zodat de club je reservering kan bevestigen."}
               </Card.Description>
             </Card.Header>
             <Card.Content>
               <form className="section-stack" onSubmit={handleSubmit}>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="field-stack">
-                    <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                      Lid
-                    </p>
-                    <p className="text-sm font-medium">{snapshot.memberDisplayName}</p>
+                {isMemberFlow ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="field-stack">
+                      <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
+                        Lid
+                      </p>
+                      <p className="text-sm font-medium">{snapshot.memberDisplayName}</p>
+                    </div>
+                    <div className="field-stack">
+                      <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
+                        Account
+                      </p>
+                      <p className="text-sm font-medium">{snapshot.memberEmail}</p>
+                    </div>
                   </div>
-                  <div className="field-stack">
+                ) : (
+                  <div className="section-stack">
                     <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                      Account
+                      Je gegevens
                     </p>
-                    <p className="text-sm font-medium">{snapshot.memberEmail}</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="field-stack">
+                        <Label>Naam</Label>
+                        <Input
+                          fullWidth
+                          autoComplete="name"
+                          value={publicFullName}
+                          onChange={(event) => setPublicFullName(event.target.value)}
+                        />
+                      </div>
+                      <div className="field-stack">
+                        <Label>E-mail</Label>
+                        <Input
+                          fullWidth
+                          autoComplete="email"
+                          inputMode="email"
+                          type="email"
+                          value={publicEmail}
+                          onChange={(event) => setPublicEmail(event.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <HeroPhoneNumberField
+                      country={publicPhoneCountry}
+                      onCountryChange={setPublicPhoneCountry}
+                      phone={publicPhone}
+                      onPhoneChange={setPublicPhone}
+                      phoneLabel="Mobiel nummer"
+                    />
                   </div>
-                </div>
+                )}
 
                 <div className="field-stack">
                   <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
@@ -480,10 +595,20 @@ export function PublicReservationPortal({
                   <Button variant="secondary" onPress={() => setBookingStep("classes")}>
                     Terug
                   </Button>
-                  <Button isDisabled={isPending || !selectedClassSessionId} type="submit">
+                  <Button
+                    isDisabled={
+                      isPending || !selectedClassSessionId || !publicReservationReady
+                    }
+                    type="submit"
+                  >
                     {isPending ? "Verwerken..." : "Reserveer"}
                   </Button>
                 </div>
+                {!publicReservationReady ? (
+                  <p className="text-muted text-sm">
+                    Vul eerst alle velden in voordat je reserveert.
+                  </p>
+                ) : null}
               </form>
             </Card.Content>
           </Card>
@@ -530,7 +655,7 @@ export function PublicReservationPortal({
                 size="sm"
                 variant="soft"
               >
-                {lastResult.status}
+                 {getBookingStatusLabel(lastResult.status)}
               </Chip>
               {lastResult.alreadyExisted ? (
                 <Chip size="sm" variant="tertiary">
@@ -546,20 +671,20 @@ export function PublicReservationPortal({
               Nog een les kiezen
             </Button>
             <Link
-              href="/dashboard"
+              href="/login"
               className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
             >
-              Naar dashboard
+              Team login
             </Link>
           </Card.Content>
         </Card>
       ) : null}
 
-      {snapshot.hasEligibleMembership && snapshot.tenantSlug ? (
+      {isMemberFlow && snapshot.hasEligibleMembership && snapshot.tenantSlug && selfService ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <Card className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
-              <Card.Title>Member self-service</Card.Title>
+              <Card.Title>Ledenservice</Card.Title>
               <Card.Description>
                 Dien hier zelf een betaalmethode-update of pauzeverzoek in. Je club ziet de
                 aanvraag direct in het dashboard.
@@ -571,7 +696,7 @@ export function PublicReservationPortal({
                 onSubmit={(event) => {
                   event.preventDefault();
 
-                  const contract = snapshot.selfService.contracts[0];
+                    const contract = primaryContract;
 
                   if (!contract) {
                     toast.error("Er is nog geen contract gekoppeld aan dit lidprofiel.");
@@ -613,9 +738,14 @@ export function PublicReservationPortal({
                     onChange={(event) => setPaymentMethodNote(event.target.value)}
                   />
                 </div>
-                <Button isDisabled={isSelfServicePending} type="submit">
-                  {isSelfServicePending ? "Versturen..." : "Vraag update aan"}
-                </Button>
+                 {!paymentMethodRequestReady ? (
+                   <p className="text-muted text-sm">
+                     Vul eerst alle velden in voordat je het verzoek verstuurt.
+                   </p>
+                 ) : null}
+                 <Button isDisabled={isSelfServicePending || !paymentMethodRequestReady} type="submit">
+                   {isSelfServicePending ? "Versturen..." : "Vraag update aan"}
+                 </Button>
               </form>
 
               <form
@@ -623,7 +753,7 @@ export function PublicReservationPortal({
                 onSubmit={(event) => {
                   event.preventDefault();
 
-                  const contract = snapshot.selfService.contracts[0];
+                    const contract = primaryContract;
 
                   if (!contract) {
                     toast.error("Er is nog geen contract gekoppeld aan dit lidprofiel.");
@@ -676,9 +806,14 @@ export function PublicReservationPortal({
                     onChange={(event) => setPauseReason(event.target.value)}
                   />
                 </div>
-                <Button isDisabled={isSelfServicePending} type="submit" variant="secondary">
-                  {isSelfServicePending ? "Versturen..." : "Vraag pauze aan"}
-                </Button>
+                 {!pauseRequestReady ? (
+                   <p className="text-muted text-sm">
+                     Vul eerst alle velden in voordat je het verzoek verstuurt.
+                   </p>
+                 ) : null}
+                 <Button isDisabled={isSelfServicePending || !pauseRequestReady} type="submit" variant="secondary">
+                   {isSelfServicePending ? "Versturen..." : "Vraag pauze aan"}
+                 </Button>
               </form>
             </Card.Content>
           </Card>
@@ -687,14 +822,14 @@ export function PublicReservationPortal({
             <Card.Header className="space-y-3">
               <Card.Title>Jouw contracten en betalingen</Card.Title>
               <Card.Description>
-                Bekijk contractdocumenten, recente receipts en de status van open verzoeken.
+                 Bekijk contractdocumenten, recente betalingsbewijzen en de status van open verzoeken.
               </Card.Description>
             </Card.Header>
             <Card.Content className="section-stack">
               <div className="space-y-3">
                 <p className="text-sm font-medium">Contracten</p>
-                {snapshot.selfService.contracts.length > 0 ? (
-                  snapshot.selfService.contracts.map((contract) => (
+                {selfService.contracts.length > 0 ? (
+                  selfService.contracts.map((contract) => (
                     <div key={contract.id} className="rounded-2xl border border-border/70 p-4">
                       <p className="font-medium">{contract.contractName}</p>
                       <p className="text-muted text-sm">{contract.documentLabel}</p>
@@ -704,7 +839,7 @@ export function PublicReservationPortal({
                         rel="noreferrer"
                         className="mt-2 inline-flex text-sm font-medium text-accent"
                       >
-                        Open document
+                         Document openen
                       </a>
                     </div>
                   ))
@@ -714,9 +849,9 @@ export function PublicReservationPortal({
               </div>
 
               <div className="space-y-3">
-                <p className="text-sm font-medium">Receipts</p>
-                {snapshot.selfService.receipts.length > 0 ? (
-                  snapshot.selfService.receipts.map((receipt) => (
+                 <p className="text-sm font-medium">Betalingsbewijzen</p>
+                {selfService.receipts.length > 0 ? (
+                  selfService.receipts.map((receipt) => (
                     <div key={receipt.invoiceId} className="rounded-2xl border border-border/70 p-4">
                       <p className="font-medium">{receipt.description}</p>
                       <p className="text-muted text-sm">
@@ -725,13 +860,13 @@ export function PublicReservationPortal({
                     </div>
                   ))
                 ) : (
-                  <p className="text-muted text-sm">Nog geen receipts beschikbaar.</p>
+                   <p className="text-muted text-sm">Nog geen betalingsbewijzen beschikbaar.</p>
                 )}
               </div>
 
               <div className="space-y-3">
                 <p className="text-sm font-medium">Open verzoeken</p>
-                {[...snapshot.selfService.paymentMethodRequests, ...snapshot.selfService.pauseRequests]
+                {[...selfService.paymentMethodRequests, ...selfService.pauseRequests]
                   .slice(0, 4)
                   .map((request) => (
                     <div key={request.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 p-4">
@@ -744,13 +879,13 @@ export function PublicReservationPortal({
                         </p>
                       </div>
                       <Chip size="sm" variant="soft">
-                        {request.status}
+                         {getRequestStatusLabel(request.status)}
                       </Chip>
                     </div>
                   ))}
-                {snapshot.selfService.paymentMethodRequests.length === 0 &&
-                snapshot.selfService.pauseRequests.length === 0 ? (
-                  <p className="text-muted text-sm">Er staan nog geen open self-service verzoeken.</p>
+                {selfService.paymentMethodRequests.length === 0 &&
+                selfService.pauseRequests.length === 0 ? (
+                   <p className="text-muted text-sm">Er staan nog geen open zelfserviceverzoeken.</p>
                 ) : null}
               </div>
             </Card.Content>

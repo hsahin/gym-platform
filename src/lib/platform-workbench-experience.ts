@@ -41,12 +41,12 @@ export function getPlatformWorkbenchExperience(
     {
       key: "memberships" as const,
       order: 2,
-      title: "Memberships klaar",
+      title: "Lidmaatschappen klaar",
       count: input.membershipPlansCount,
       countLabel: formatCountLabel(
         input.membershipPlansCount,
-        "membership",
-        "memberships",
+        "lidmaatschap",
+        "lidmaatschappen",
       ),
       helper: "Actieve plannen maken omzet, renewals en member-context direct geloofwaardig.",
     },
@@ -130,7 +130,7 @@ export function getPlatformWorkbenchExperience(
         title: "Teamrollen activeren",
         countLabel: staffCountLabel,
         helper: "Operations kan de vloer runnen, maar alleen de eigenaar opent of wijzigt teamaccounts.",
-        statusLabel: "Owner-only",
+        statusLabel: "Alleen owner",
         statusTone: "locked",
       }
     : input.staffCount > 1

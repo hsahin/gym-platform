@@ -3,12 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Chip, Input, Label } from "@heroui/react";
-import { ListView } from "@heroui-pro/react/list-view";
+import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
+import { DashboardEntityActions } from "@/components/DashboardEntityActions";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
+import { filterManagementRecords } from "@/lib/dashboard-management";
 import {
   EmptyPanel,
   PageSection,
@@ -21,6 +23,8 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [membersView, setMembersView] = useState<"members" | "waivers">("members");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState("all");
   const [signupDrafts, setSignupDrafts] = useState<
     Record<string, { ownerNotes: string; portalPassword: string }>
   >({});
@@ -33,6 +37,12 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
   const locationsById = new Map(
     snapshot.locations.map((location) => [location.id, location.name]),
   );
+  const filteredMembers = filterManagementRecords(snapshot.members, {
+    query: memberSearch,
+    searchKeys: ["fullName", "email", "phone", "tags"],
+    filterKey: "status",
+    filterValue: memberStatusFilter,
+  });
 
   function updateSignupDraft(signupId: string, patch: Partial<(typeof signupDrafts)[string]>) {
     setSignupDrafts((current) => ({
@@ -48,7 +58,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Member operations"
+        title="Ledenbeheer"
         description="Ledenbeheer, intake en membership lifecycle blijven zichtbaar als afzonderlijke modules."
       >
         <FeatureModuleBoard features={memberFeatures} snapshot={snapshot} />
@@ -56,7 +66,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <div className="section-stack">
-        <PageSection title="Members" description="Review member state and waiver completion.">
+        <PageSection title="Leden" description="Bekijk lidstatus, intake en waiverstatus.">
           <div className="grid content-start gap-3">
             <Segment
               className="w-full max-w-[22rem]"
@@ -64,13 +74,40 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
             size="sm"
             onSelectionChange={(key) => setMembersView(String(key) as typeof membersView)}
           >
-            <Segment.Item id="members">Members</Segment.Item>
+            <Segment.Item id="members">Leden</Segment.Item>
             <Segment.Item id="waivers">Waivers</Segment.Item>
           </Segment>
 
           {membersView === "members" ? (
             snapshot.members.length > 0 ? (
-              <ListView aria-label="Members" items={snapshot.members}>
+              <>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="field-stack">
+                  <Label>Zoeken</Label>
+                  <Input
+                    fullWidth
+                    placeholder="Zoek op naam, e-mail, telefoon of tag"
+                    value={memberSearch}
+                    onChange={(event) => setMemberSearch(event.target.value)}
+                  />
+                </div>
+                <label className="field-stack">
+                  <span className="text-sm font-medium">Filter</span>
+                  <select
+                    className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                    value={memberStatusFilter}
+                    onChange={(event) => setMemberStatusFilter(event.target.value)}
+                  >
+                    <option value="all">Alle statussen</option>
+                    <option value="active">Actief</option>
+                    <option value="trial">Trial</option>
+                    <option value="paused">Gepauzeerd</option>
+                    <option value="archived">Gearchiveerd</option>
+                  </select>
+                </label>
+              </div>
+              {filteredMembers.length > 0 ? (
+              <ListView aria-label="Leden" items={filteredMembers}>
                 {(member) => {
                   const chip = statusChip(member.status);
 
@@ -95,14 +132,95 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                           </Chip>
                         ) : null}
                       </div>
+                      <DashboardEntityActions
+                        endpoint="/api/platform/members"
+                        entityLabel={`Lid ${member.fullName}`}
+                        updatePayloadBase={{
+                          id: member.id,
+                          expectedVersion: member.version,
+                        }}
+                        archivePayload={{
+                          id: member.id,
+                          expectedVersion: member.version,
+                        }}
+                        deletePayload={{
+                          id: member.id,
+                          expectedVersion: member.version,
+                        }}
+                        fields={[
+                          { name: "fullName", label: "Naam", defaultValue: member.fullName },
+                          { name: "email", label: "E-mail", defaultValue: member.email, type: "email" },
+                          { name: "phone", label: "Telefoon", defaultValue: member.phone },
+                          {
+                            name: "phoneCountry",
+                            label: "Landcode",
+                            defaultValue: member.phoneCountry,
+                            type: "select",
+                            options: ["NL", "BE", "DE", "GB", "US", "AE"].map((country) => ({
+                              value: country,
+                              label: country,
+                            })),
+                          },
+                          {
+                            name: "membershipPlanId",
+                            label: "Contract",
+                            defaultValue: member.membershipPlanId,
+                            type: "select",
+                            options: snapshot.membershipPlans.map((plan) => ({
+                              value: plan.id,
+                              label: plan.name,
+                            })),
+                          },
+                          {
+                            name: "homeLocationId",
+                            label: "Vestiging",
+                            defaultValue: member.homeLocationId,
+                            type: "select",
+                            options: snapshot.locations.map((location) => ({
+                              value: location.id,
+                              label: location.name,
+                            })),
+                          },
+                          {
+                            name: "status",
+                            label: "Status",
+                            defaultValue: member.status,
+                            type: "select",
+                            options: [
+                              { value: "active", label: "Actief" },
+                              { value: "trial", label: "Trial" },
+                              { value: "paused", label: "Gepauzeerd" },
+                              { value: "archived", label: "Gearchiveerd" },
+                            ],
+                          },
+                          {
+                            name: "waiverStatus",
+                            label: "Waiver",
+                            defaultValue: member.waiverStatus,
+                            type: "select",
+                            options: [
+                              { value: "complete", label: "Compleet" },
+                              { value: "pending", label: "Open" },
+                            ],
+                          },
+                          { name: "tags", label: "Tags", defaultValue: member.tags, type: "list" },
+                        ]}
+                      />
                     </ListView.Item>
                   );
                 }}
               </ListView>
+              ) : (
+                <EmptyPanel
+                  title="Geen leden gevonden"
+                  description="Pas je zoekterm of statusfilter aan om meer leden te tonen."
+                />
+              )}
+              </>
             ) : (
               <EmptyPanel
-                title="No members yet"
-                description="Add the first member or import your existing member list."
+                title="Nog geen leden"
+                description="Voeg je eerste lid toe of importeer je bestaande ledenlijst."
               />
             )
           ) : snapshot.waivers.length > 0 ? (
@@ -128,16 +246,16 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
             </ListView>
           ) : (
             <EmptyPanel
-              title="No waivers tracked"
-              description="Signed or requested waivers appear here once members are added."
+              title="Nog geen waivers"
+              description="Ondertekende of aangevraagde waivers verschijnen hier zodra leden zijn toegevoegd."
             />
             )}
           </div>
         </PageSection>
 
         <PageSection
-          title="Member signups"
-          description="Publieke aanmeldingen wachten hier op owner-goedkeuring of afwijzing."
+          title="Lidaanmeldingen"
+          description="Publieke inschrijvingen tonen hier contract, waiver en checkoutstatus. Alleen oude pending aanvragen vragen nog handmatige review."
         >
           {snapshot.memberSignups.length > 0 ? (
             <div className="grid gap-3">

@@ -2,7 +2,7 @@
 
 import { DoorOpen, ShieldCheck } from "lucide-react";
 import { Card, Chip } from "@heroui/react";
-import { ListView } from "@heroui-pro/react/list-view";
+import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import { PageSection, formatDateTime, type DashboardPageProps } from "@/components/dashboard/shared";

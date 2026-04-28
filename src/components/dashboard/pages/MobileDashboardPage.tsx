@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Languages, QrCode, Smartphone, UserRoundCheck } from "lucide-react";
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
-import { ListView } from "@heroui-pro/react/list-view";
+import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { NativeSelect } from "@heroui-pro/react/native-select";
 import { toast } from "sonner";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
@@ -15,6 +15,23 @@ import {
   PageSection,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
+
+function getRequestStatusLabel(status: string) {
+  switch (status) {
+    case "approved":
+      return "Goedgekeurd";
+    case "rejected":
+      return "Afgewezen";
+    case "pending":
+      return "Open";
+    default:
+      return status;
+  }
+}
+
+function getReviewDecisionLabel(decision: "approved" | "rejected") {
+  return decision === "approved" ? "Goedkeuren" : "Afwijzen";
+}
 
 export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
@@ -63,14 +80,14 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Mobile experience"
+        title="Mobiele ervaring"
         description="White-label, mobiele check-in en coaching-apps voor leden lopen allemaal via dezelfde platformlaag."
       >
         <FeatureModuleBoard features={mobileFeatures} snapshot={snapshot} />
       </PageSection>
 
       <PageSection
-        title="Mobile setup"
+        title="Mobiele app instellen"
         description="Configureer je white-label app, onboarding en check-in ervaring voor leden."
         actions={
           <Button
@@ -87,24 +104,26 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                     checkInMode,
                     whiteLabelDomain,
                   });
-                  toast.success("Mobile-instellingen opgeslagen.");
+                  toast.success("Mobiele instellingen opgeslagen.");
                   router.refresh();
                 } catch (error) {
                   toast.error(
-                    error instanceof Error ? error.message : "Mobile-instellingen opslaan mislukt.",
+                    error instanceof Error
+                      ? error.message
+                      : "Mobiele instellingen opslaan mislukt.",
                   );
                 }
               })
             }
           >
-            {isPending ? "Opslaan..." : "Mobile opslaan"}
+            {isPending ? "Opslaan..." : "Mobiel opslaan"}
           </Button>
         }
       >
         <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
           <Card.Content className="grid gap-4 md:grid-cols-2">
             <div className="field-stack">
-              <Label>App display name</Label>
+              <Label>Appnaam</Label>
               <Input
                 fullWidth
                 value={appDisplayName}
@@ -112,7 +131,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Onboarding headline</Label>
+              <Label>Onboardingkop</Label>
               <Input
                 fullWidth
                 value={onboardingHeadline}
@@ -120,7 +139,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Support channel</Label>
+              <Label>Supportkanaal</Label>
               <Input
                 fullWidth
                 value={supportChannel}
@@ -128,7 +147,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Primary accent</Label>
+              <Label>Primaire accentkleur</Label>
               <Input
                 fullWidth
                 placeholder="#F97316"
@@ -137,7 +156,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <label className="text-sm font-medium">Check-in mode</label>
+              <label className="text-sm font-medium">Check-inmodus</label>
               <NativeSelect fullWidth>
                 <NativeSelect.Trigger
                   value={checkInMode}
@@ -147,15 +166,15 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                     )
                   }
                 >
-                  <NativeSelect.Option value="qr">QR only</NativeSelect.Option>
-                  <NativeSelect.Option value="frontdesk">Frontdesk only</NativeSelect.Option>
-                  <NativeSelect.Option value="hybrid">Hybrid</NativeSelect.Option>
+                  <NativeSelect.Option value="qr">Alleen QR</NativeSelect.Option>
+                  <NativeSelect.Option value="frontdesk">Alleen frontdesk</NativeSelect.Option>
+                  <NativeSelect.Option value="hybrid">Hybride</NativeSelect.Option>
                   <NativeSelect.Indicator />
                 </NativeSelect.Trigger>
               </NativeSelect>
             </div>
             <div className="field-stack">
-              <Label>White label domain</Label>
+              <Label>White-label domein</Label>
               <Input
                 fullWidth
                 placeholder="app.jegym.nl"
@@ -171,13 +190,13 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
         {[
           {
             icon: Smartphone,
-            label: "Portal accounts",
+            label: "Portalaccounts",
             value: String(portalMembers.length),
             helper: "Leden die nu al direct een app- of portalervaring kunnen krijgen.",
           },
           {
             icon: QrCode,
-            label: "Mobile check-in",
+            label: "Mobiele check-in",
             value: mobileCheckInEnabled ? "Actief" : "Uit",
             helper: "QR en mobiele aankomstflow voor lessen en studio-bezoek.",
           },
@@ -189,7 +208,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
           },
           {
             icon: UserRoundCheck,
-            label: "Clubs zichtbaar",
+            label: "Vestigingen zichtbaar",
             value: String(snapshot.locations.length),
             helper: "Vestigingen die direct in een mobiele clubselector kunnen landen.",
           },
@@ -208,11 +227,11 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
       </div>
 
       <PageSection
-        title="Members ready for app rollout"
-        description="Portal-enabled leden zijn de eerste groep die je direct kunt onboarden in mobile journeys."
+        title="Leden klaar voor app-uitrol"
+        description="Leden met portaltoegang zijn de eerste groep die je direct kunt onboarden in mobiele journeys."
       >
         {portalMembers.length > 0 ? (
-          <ListView aria-label="Portal-ready members" items={portalMembers.slice(0, 6)}>
+          <ListView aria-label="Leden klaar voor app-uitrol" items={portalMembers.slice(0, 6)}>
             {(member) => (
               <ListView.Item id={member.id} textValue={member.fullName}>
                 <ListView.ItemContent>
@@ -237,8 +256,8 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <PageSection
-          title="Mobile self-service requests"
-          description="Laat members betaalmethode-updates en pauzeverzoeken indienen zonder mailverkeer."
+          title="Zelfserviceverzoeken"
+          description="Laat leden betaalmethode-updates en pauzeverzoeken indienen zonder mailverkeer."
         >
           <div className="grid gap-4">
             <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
@@ -286,17 +305,17 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                           requestedMethodLabel,
                           note: paymentMethodNote || undefined,
                         });
-                        toast.success("Payment method request toegevoegd.");
+                        toast.success("Betaalmethodeverzoek toegevoegd.");
                         router.refresh();
                       } catch (error) {
                         toast.error(
-                          error instanceof Error ? error.message : "Request toevoegen mislukt.",
+                          error instanceof Error ? error.message : "Verzoek toevoegen mislukt.",
                         );
                       }
                     })
                   }
                 >
-                  Betaalmethode-request
+                  Betaalmethodeverzoek maken
                 </Button>
               </Card.Content>
             </Card>
@@ -356,7 +375,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                         <p className="text-muted text-sm">{request.requestedMethodLabel}</p>
                       </div>
                       <Chip size="sm" variant={request.status === "pending" ? "soft" : "tertiary"}>
-                        {request.status}
+                        {getRequestStatusLabel(request.status)}
                       </Chip>
                     </div>
                     <p className="text-muted text-sm">{request.note ?? "Geen notitie"}</p>
@@ -375,19 +394,19 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                                     requestId: request.id,
                                     decision,
                                   });
-                                  toast.success("Request beoordeeld.");
+                                  toast.success("Verzoek beoordeeld.");
                                   router.refresh();
                                 } catch (error) {
                                   toast.error(
                                     error instanceof Error
                                       ? error.message
-                                      : "Request beoordelen mislukt.",
+                                      : "Verzoek beoordelen mislukt.",
                                   );
                                 }
                               })
                             }
                           >
-                            {decision}
+                            {getReviewDecisionLabel(decision)}
                           </Button>
                         ))}
                       </div>
@@ -407,7 +426,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                         </p>
                       </div>
                       <Chip size="sm" variant={request.status === "pending" ? "soft" : "tertiary"}>
-                        {request.status}
+                        {getRequestStatusLabel(request.status)}
                       </Chip>
                     </div>
                     <p className="text-muted text-sm">{request.reason}</p>
@@ -438,7 +457,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                               })
                             }
                           >
-                            {decision}
+                            {getReviewDecisionLabel(decision)}
                           </Button>
                         ))}
                       </div>
@@ -451,13 +470,13 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
         </PageSection>
 
         <PageSection
-          title="Receipts en contracten"
-          description="Alles wat members in de app terugzien: betalingen, contracten en actieve documenten."
+          title="Betalingsbewijzen en contracten"
+          description="Alles wat leden in de app terugzien: betalingen, contracten en actieve documenten."
         >
           <div className="grid gap-4">
             <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
               <Card.Content className="space-y-3">
-                <p className="font-medium">Recente receipts</p>
+                <p className="font-medium">Recente betalingsbewijzen</p>
                 {snapshot.mobileSelfService.receipts.length > 0 ? (
                   snapshot.mobileSelfService.receipts.map((receipt) => (
                     <div key={receipt.invoiceId} className="rounded-2xl border border-border/70 bg-surface p-4">
@@ -470,8 +489,8 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                   ))
                 ) : (
                   <EmptyPanel
-                    title="Nog geen receipts"
-                    description="Zodra facturen betaald zijn, komen de receipts hier beschikbaar."
+                    title="Nog geen betalingsbewijzen"
+                    description="Zodra facturen betaald zijn, komen betalingsbewijzen hier beschikbaar."
                   />
                 )}
               </Card.Content>
@@ -479,7 +498,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
 
             <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
               <Card.Content className="space-y-3">
-                <p className="font-medium">Contracten in app</p>
+                <p className="font-medium">Contracten in de app</p>
                 {snapshot.mobileSelfService.contracts.length > 0 ? (
                   snapshot.mobileSelfService.contracts.map((contract) => (
                     <div key={contract.id} className="rounded-2xl border border-border/70 bg-surface p-4">
@@ -495,7 +514,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                 ) : (
                   <EmptyPanel
                     title="Nog geen contracten"
-                    description="Contracten worden automatisch zichtbaar zodra members zijn aangemaakt of goedgekeurd."
+                    description="Contracten worden automatisch zichtbaar zodra leden zijn aangemaakt of goedgekeurd."
                   />
                 )}
               </Card.Content>

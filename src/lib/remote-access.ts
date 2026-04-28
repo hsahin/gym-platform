@@ -19,6 +19,10 @@ export interface StoredRemoteAccessSettings {
   readonly lastRemoteActionBy?: string;
 }
 
+export interface RemoteAccessRuntimeOptions {
+  readonly liveProviderConfigured?: boolean;
+}
+
 export const REMOTE_ACCESS_PROVIDER_OPTIONS: ReadonlyArray<{
   key: RemoteAccessProvider;
   label: string;
@@ -125,11 +129,14 @@ export function isRemoteAccessReady(settings: StoredRemoteAccessSettings) {
   return settings.enabled && getRemoteAccessConnectionStatus(settings) === "configured";
 }
 
-export function getRemoteAccessStatusLabel(settings: StoredRemoteAccessSettings) {
+export function getRemoteAccessStatusLabel(
+  settings: StoredRemoteAccessSettings,
+  options?: RemoteAccessRuntimeOptions,
+) {
   const status = getRemoteAccessConnectionStatus(settings);
 
   if (status === "configured" && settings.enabled) {
-    return "Live preview";
+    return options?.liveProviderConfigured ? "Live" : "Live credentials nodig";
   }
 
   if (status === "configured") {
@@ -143,13 +150,20 @@ export function getRemoteAccessStatusLabel(settings: StoredRemoteAccessSettings)
   return "Niet gekoppeld";
 }
 
-export function getRemoteAccessHelpText(settings: StoredRemoteAccessSettings) {
+export function getRemoteAccessHelpText(
+  settings: StoredRemoteAccessSettings,
+  options?: RemoteAccessRuntimeOptions,
+) {
   const providerLabel = getRemoteAccessProviderLabel(settings.provider);
   const bridgeLabel = getRemoteAccessBridgeLabel(settings.bridgeType);
   const status = getRemoteAccessConnectionStatus(settings);
 
   if (status === "configured" && settings.enabled) {
-    return `${providerLabel} staat klaar in ${bridgeLabel}-modus. Remote openen draait nu in preview totdat live credentials worden aangesloten.`;
+    if (options?.liveProviderConfigured) {
+      return `${providerLabel} opent live in ${bridgeLabel}-modus. Elke remote open actie gaat via de gekoppelde provider en wordt gelogd.`;
+    }
+
+    return `${providerLabel} is ingesteld in ${bridgeLabel}-modus, maar de live API-token ontbreekt nog in de omgeving.`;
   }
 
   if (status === "configured") {

@@ -31,74 +31,74 @@ const pageCopy: Record<
   { title: string; description: string; ctaLabel?: string; ctaHref?: string }
 > = {
   overview: {
-    title: "Overview",
-    description: "Members, bookings, revenue readiness, and setup state in one view.",
-    ctaLabel: "Public booking",
+    title: "Overzicht",
+    description: "Leden, reserveringen, omzetgereedheid en setupstatus in één beeld.",
+    ctaLabel: "Open reserveringen",
     ctaHref: "/reserve",
   },
   classes: {
-    title: "Classes",
-    description: "Schedule sessions, manage bookings, and record attendance.",
+    title: "Lessen",
+    description: "Plan lessen, beheer reserveringen en registreer check-ins.",
   },
   members: {
-    title: "Members",
-    description: "Member lifecycle, waivers, and operational context.",
+    title: "Leden",
+    description: "Lidcyclus, waivers en operationele context per club.",
   },
   contracts: {
-    title: "Contracts",
-    description: "Membership plans, pricing, and imports.",
+    title: "Contracten",
+    description: "Memberships, prijzen en imports in één beheerlaag.",
   },
   coaching: {
     title: "Coaching",
-    description: "Workout plans, nutrition, progress tracking, and premium coach journeys.",
+    description: "Workoutflows, voeding, voortgang en premium coachmomenten.",
   },
   retention: {
-    title: "Retention",
-    description: "Community, rewards, questionnaires, and member loyalty programs.",
+    title: "Retentie",
+    description: "Community, rewards, questionnaires en loyale ledenflows.",
   },
   access: {
-    title: "Access",
-    description: "Remote access state, device mapping, and owner actions.",
+    title: "Toegang",
+    description: "Remote toegang, deurkoppelingen en owner-acties op afstand.",
   },
   payments: {
-    title: "Payments",
-    description: "Billing profile, enabled payment flows, and preview state.",
+    title: "Betalingen",
+    description: "Billingprofiel, live betaalflows en de huidige verwerkingsstatus.",
   },
   mobile: {
-    title: "Mobile",
-    description: "White-label app flows, check-in, and mobile-ready member experiences.",
+    title: "Mobiele app",
+    description: "White-label appflows, check-in en memberervaring voor mobiel gebruik.",
   },
   marketing: {
-    title: "Marketing Tools",
-    description: "Email, promotions, leads, and conversion signals anchored in live gym data.",
+    title: "Marketing",
+    description: "E-mail, promoties, leads en conversiesignalen uit live gymdata.",
   },
   integrations: {
-    title: "Integrations",
-    description: "Hardware, software, equipment, and migration bridges around the gym stack.",
+    title: "Integraties",
+    description: "Hardware, software, equipment en migratiekoppelingen rondom je gymstack.",
   },
   settings: {
-    title: "Settings",
-    description: "Locations, staff, legal state, and runtime health.",
+    title: "Instellingen",
+    description: "Vestigingen, team, juridische status en runtimegezondheid.",
   },
   superadmin: {
     title: "Superadmin",
-    description: "Toggle tenant-level feature flags and control module rollout from one place.",
+    description: "Beheer tenant-flags en houd module-rollout centraal onder controle.",
   },
 };
 
 const navigationItems = [
-  { key: "overview", label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { key: "classes", label: "Classes", href: "/dashboard/classes", icon: CalendarDays },
-  { key: "members", label: "Members", href: "/dashboard/members", icon: Users },
-  { key: "contracts", label: "Contracts", href: "/dashboard/contracts", icon: WalletCards },
+  { key: "overview", label: "Overzicht", href: "/dashboard", icon: LayoutDashboard },
+  { key: "classes", label: "Lessen", href: "/dashboard/classes", icon: CalendarDays },
+  { key: "members", label: "Leden", href: "/dashboard/members", icon: Users },
+  { key: "contracts", label: "Contracten", href: "/dashboard/contracts", icon: WalletCards },
   { key: "coaching", label: "Coaching", href: "/dashboard/coaching", icon: Dumbbell },
-  { key: "retention", label: "Retention", href: "/dashboard/retention", icon: HeartHandshake },
-  { key: "access", label: "Access", href: "/dashboard/access", icon: DoorOpen },
-  { key: "payments", label: "Payments", href: "/dashboard/payments", icon: CreditCard },
-  { key: "mobile", label: "Mobile", href: "/dashboard/mobile", icon: AppWindow },
+  { key: "retention", label: "Retentie", href: "/dashboard/retention", icon: HeartHandshake },
+  { key: "access", label: "Toegang", href: "/dashboard/access", icon: DoorOpen },
+  { key: "payments", label: "Betalingen", href: "/dashboard/payments", icon: CreditCard },
+  { key: "mobile", label: "Mobiele app", href: "/dashboard/mobile", icon: AppWindow },
   { key: "marketing", label: "Marketing", href: "/dashboard/marketing", icon: Megaphone },
-  { key: "integrations", label: "Integrations", href: "/dashboard/integrations", icon: Link2 },
-  { key: "settings", label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { key: "integrations", label: "Integraties", href: "/dashboard/integrations", icon: Link2 },
+  { key: "settings", label: "Instellingen", href: "/dashboard/settings", icon: Settings },
   { key: "superadmin", label: "Superadmin", href: "/dashboard/superadmin", icon: Cog },
 ] satisfies ReadonlyArray<{
   key: DashboardPageKey;
@@ -192,14 +192,14 @@ export function GymDashboardClientShell({
               </div>
               <div>
                 <p className="font-semibold">GymOS</p>
-                <p className="text-muted text-xs">Operational workspace</p>
+                <p className="text-muted text-xs">Werkruimte voor dagelijkse operatie</p>
               </div>
             </Link>
           </Sidebar.Header>
 
           <Sidebar.Content>
             <Sidebar.Group>
-              <Sidebar.Menu aria-label="Dashboard navigation">
+              <Sidebar.Menu aria-label="Dashboardnavigatie">
                 {visibleNavigationItems.map((item) => (
                   <Sidebar.MenuItem
                     key={item.key}

@@ -93,12 +93,18 @@ describe("remote access helpers", () => {
     );
     expect(getRemoteAccessStatusLabel(attention)).toBe("Aandacht nodig");
     expect(getRemoteAccessStatusLabel(configuredDisabled)).toBe("Klaar om te activeren");
-    expect(getRemoteAccessStatusLabel(configuredEnabled)).toBe("Live preview");
+    expect(getRemoteAccessStatusLabel(configuredEnabled)).toBe("Live credentials nodig");
+    expect(getRemoteAccessStatusLabel(configuredEnabled, { liveProviderConfigured: true })).toBe(
+      "Live",
+    );
     expect(getRemoteAccessHelpText(createDefaultRemoteAccessSettings())).toContain(
       "Koppel een slim slot",
     );
     expect(getRemoteAccessHelpText(attention)).toContain("Vul locatie");
     expect(getRemoteAccessHelpText(configuredDisabled)).toContain("is ingevuld");
-    expect(getRemoteAccessHelpText(configuredEnabled)).toContain("staat klaar");
+    expect(getRemoteAccessHelpText(configuredEnabled)).toContain("live API-token");
+    expect(getRemoteAccessHelpText(configuredEnabled, { liveProviderConfigured: true })).toContain(
+      "opent live",
+    );
   });
 });

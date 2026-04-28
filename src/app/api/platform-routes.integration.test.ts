@@ -261,6 +261,10 @@ describe("owner platform route integrations", () => {
 
   it("lets owners read and review mobile self-service requests while blocking members on the owner route", async () => {
     const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "mobile.white_label",
+      enabled: true,
+    });
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
       city: "Amsterdam",

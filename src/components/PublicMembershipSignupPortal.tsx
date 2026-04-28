@@ -28,7 +28,21 @@ export function PublicMembershipSignupPortal({
   const [paymentMethod, setPaymentMethod] = useState<"direct_debit" | "one_time" | "payment_request">("direct_debit");
   const [contractAccepted, setContractAccepted] = useState(false);
   const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const [portalPassword, setPortalPassword] = useState("");
   const [notes, setNotes] = useState("");
+  const signupReady = Boolean(
+    snapshot.tenantSlug &&
+      snapshot.billingReady &&
+      snapshot.legalReady &&
+      fullName.trim() &&
+      email.trim() &&
+      phone.trim() &&
+      membershipPlanId &&
+      preferredLocationId &&
+      portalPassword.trim().length >= 8 &&
+      contractAccepted &&
+      waiverAccepted,
+  );
 
   useEffect(() => {
     setMembershipPlanId(snapshot.membershipPlans[0]?.id ?? "");
@@ -39,17 +53,17 @@ export function PublicMembershipSignupPortal({
     <div className="section-stack py-6 md:py-8">
       <header className="app-header">
         <div className="app-header__brand-copy">
-          <p className="text-sm font-semibold">Join the gym</p>
+          <p className="text-sm font-semibold">Lid worden</p>
           <p className="text-muted text-sm">
             {snapshot.tenantSlug ? snapshot.tenantName : "Kies eerst je club"}
           </p>
         </div>
         <nav className="app-header__nav text-sm">
           <Link href="/" prefetch={false} className="text-muted transition hover:text-foreground">
-            Home
+            Start
           </Link>
           <Link href="/login" prefetch={false} className="text-muted transition hover:text-foreground">
-            Login
+            Inloggen
           </Link>
         </nav>
       </header>
@@ -61,7 +75,7 @@ export function PublicMembershipSignupPortal({
               <Card className="rounded-[28px] border-border/80">
                 <Card.Header>
                   <Card.Title>{gym.name}</Card.Title>
-                  <Card.Description>Open de publieke aanmeldflow voor deze club.</Card.Description>
+                  <Card.Description>Open de aanmeldflow van deze club.</Card.Description>
                 </Card.Header>
               </Card>
             </Link>
@@ -72,22 +86,38 @@ export function PublicMembershipSignupPortal({
           <Card.Header className="space-y-3">
             <Card.Title className="text-3xl">Word lid bij {snapshot.tenantName}</Card.Title>
             <Card.Description className="max-w-2xl text-base">
-              Kies je contract, bevestig je waiver en dien je aanmelding in. De owner rondt daarna
-              je onboarding af.
+              Kies je contract, bevestig je waiver en start direct de checkout. Na betaling staan je
+              lidmaatschap, contract en member portal klaar.
             </Card.Description>
           </Card.Header>
           <Card.Content className="grid gap-4 md:grid-cols-2">
             <div className="field-stack">
               <Label>Naam</Label>
-              <Input fullWidth value={fullName} onChange={(event) => setFullName(event.target.value)} />
+              <Input
+                fullWidth
+                placeholder="Voor- en achternaam"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+              />
             </div>
             <div className="field-stack">
               <Label>E-mail</Label>
-              <Input fullWidth type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <Input
+                fullWidth
+                placeholder="naam@voorbeeld.nl"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
             </div>
             <div className="field-stack">
               <Label>Telefoon</Label>
-              <Input fullWidth value={phone} onChange={(event) => setPhone(event.target.value)} />
+              <Input
+                fullWidth
+                placeholder="06 12345678"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
             </div>
             <div className="field-stack">
               <Label>Landcode</Label>
@@ -129,15 +159,25 @@ export function PublicMembershipSignupPortal({
               </NativeSelect>
             </div>
             <div className="field-stack">
-              <Label>Checkout methode</Label>
+              <Label>Betaalmethode</Label>
               <NativeSelect fullWidth>
                 <NativeSelect.Trigger value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>
-                  <NativeSelect.Option value="direct_debit">Direct debit</NativeSelect.Option>
+                  <NativeSelect.Option value="direct_debit">Automatische incasso</NativeSelect.Option>
                   <NativeSelect.Option value="one_time">Eenmalige betaling</NativeSelect.Option>
                   <NativeSelect.Option value="payment_request">Betaalverzoek</NativeSelect.Option>
                   <NativeSelect.Indicator />
                 </NativeSelect.Trigger>
               </NativeSelect>
+            </div>
+            <div className="field-stack">
+              <Label>Member portal wachtwoord</Label>
+              <Input
+                fullWidth
+                placeholder="Minimaal 8 tekens"
+                type="password"
+                value={portalPassword}
+                onChange={(event) => setPortalPassword(event.target.value)}
+              />
             </div>
             <div className="field-stack md:col-span-2">
               <Label>Opmerking</Label>
@@ -156,13 +196,23 @@ export function PublicMembershipSignupPortal({
               </p>
               <p className="text-muted text-sm">
                 {snapshot.billingReady
-                  ? "Je checkout wordt doorgezet naar billing zodra de owner je aanvraag goedkeurt."
-                  : "Billing staat nog niet live; je aanvraag komt eerst bij de owner voor handmatige opvolging."}
+                  ? "Je betaling wordt direct als veilige checkout gestart."
+                  : "Checkout staat nog niet live; deze club moet Mollie eerst activeren."}
               </p>
+              <p className="text-muted text-sm">
+                {snapshot.legalReady
+                  ? "Contract-PDF en waiveropslag zijn ingericht voor directe onboarding."
+                  : "Contract-PDF en waiveropslag moeten nog ingericht worden voordat self-signup live kan."}
+              </p>
+              {!signupReady ? (
+                <p className="text-muted text-sm">
+                  Vul eerst alle verplichte velden in, kies een portal wachtwoord en accepteer contract en waiver.
+                </p>
+              ) : null}
             </div>
             <div className="md:col-span-2">
               <Button
-                isDisabled={isPending || !snapshot.tenantSlug}
+                isDisabled={isPending || !signupReady}
                 onPress={() =>
                   startTransition(async () => {
                     try {
@@ -184,6 +234,7 @@ export function PublicMembershipSignupPortal({
                           paymentMethod,
                           contractAccepted,
                           waiverAccepted,
+                          portalPassword,
                           notes: notes || undefined,
                         }),
                       });
@@ -196,17 +247,24 @@ export function PublicMembershipSignupPortal({
                       setFullName("");
                       setEmail("");
                       setPhone("");
+                      setPortalPassword("");
                       setNotes("");
                       setContractAccepted(false);
                       setWaiverAccepted(false);
-                      toast.success("Aanmelding ontvangen. De owner beoordeelt deze nu.");
+                      if (payload.data?.checkoutUrl) {
+                        toast.success("Checkout gestart. Je wordt doorgestuurd naar de betaling.");
+                        window.location.assign(payload.data.checkoutUrl);
+                        return;
+                      }
+
+                      toast.success("Inschrijving afgerond. Je lidmaatschap staat klaar.");
                     } catch (error) {
                       toast.error(error instanceof Error ? error.message : "Aanmelding mislukt.");
                     }
                   })
                 }
               >
-                {isPending ? "Versturen..." : "Dien aanmelding in"}
+                {isPending ? "Checkout starten..." : "Checkout starten"}
               </Button>
             </div>
           </Card.Content>

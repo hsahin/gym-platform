@@ -86,6 +86,7 @@ export interface CreateMemberInput {
   readonly status: MemberStatus;
   readonly tags: ReadonlyArray<string>;
   readonly waiverStatus: GymMember["waiverStatus"];
+  readonly waiverStorageKey?: string;
 }
 
 export interface UpdateMemberInput extends CreateMemberInput {

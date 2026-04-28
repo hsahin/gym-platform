@@ -303,6 +303,7 @@ export interface UpdateLocalTenantBillingInvoiceInput {
   readonly paidAt?: string;
   readonly refundedAt?: string;
   readonly lastWebhookEventType?: string;
+  readonly externalReference?: string;
 }
 
 export interface CreateLocalTenantBillingRefundInput {
@@ -3185,6 +3186,7 @@ export async function updateLocalTenantBillingInvoice(
           paidAt: input.paidAt ?? existing.paidAt,
           refundedAt: input.refundedAt ?? existing.refundedAt,
           lastWebhookEventType: input.lastWebhookEventType ?? existing.lastWebhookEventType,
+          externalReference: input.externalReference ?? existing.externalReference,
         },
       ],
     }).invoices[0]!;

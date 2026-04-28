@@ -34,7 +34,7 @@ export function LoginPageView({
           <div className="app-header__brand-copy">
             <p className="text-sm font-semibold">GymOS</p>
             <p className="text-muted text-sm">
-              Owner access, tenant setup, and workspace entry.
+              Toegang voor eigenaars, team en leden.
             </p>
           </div>
         </div>
@@ -42,7 +42,7 @@ export function LoginPageView({
         <div className="app-header__actions">
           <nav className="app-header__nav text-sm">
             <Link href="/" prefetch={false} className="text-muted transition hover:text-foreground">
-              Home
+              Start
             </Link>
             <Link
               href="/pricing"
@@ -68,7 +68,7 @@ export function LoginPageView({
           <Card.Header className="space-y-4">
             <div className="flex flex-wrap gap-2">
               <Chip size="sm" variant="soft">
-                {mode === "login" ? "Account login" : "Nieuwe gym"}
+                {mode === "login" ? "Accounttoegang" : "Nieuwe gym"}
               </Chip>
               {roleLabel ? (
                 <Chip size="sm" variant="tertiary">
@@ -80,12 +80,12 @@ export function LoginPageView({
               <Card.Title className="text-2xl md:text-3xl">
                 {mode === "login"
                   ? "Log in op je account."
-                  : "Maak je eerste gym workspace aan."}
+                  : "Maak je eerste sportschool aan."}
               </Card.Title>
               <Card.Description className="max-w-xl text-base">
                 {mode === "login"
-                  ? "Owners, teamleden en clubleden gebruiken hier hetzelfde account-entrypoint."
-                  : "This creates the owner account and the tenant shell. The rest of the setup happens inside the dashboard."}
+                  ? "Eigenaars, teamleden en clubleden gebruiken hier hetzelfde inlogpunt."
+                  : "Hiermee maak je het owner-account en de tenantbasis aan. De rest van de inrichting gebeurt daarna in het dashboard."}
               </Card.Description>
             </div>
           </Card.Header>
@@ -205,7 +205,7 @@ export function LoginPageView({
                   </Card>
                 ) : null}
 
-                <Button type="submit">Gym owner aanmelden</Button>
+                <Button type="submit">Sportschool aanmaken</Button>
               </form>
             )}
           </Card.Content>

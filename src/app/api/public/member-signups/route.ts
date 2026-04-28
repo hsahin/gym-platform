@@ -17,6 +17,7 @@ const publicMemberSignupSchema = z.object({
   paymentMethod: z.enum(["direct_debit", "one_time", "payment_request"]),
   contractAccepted: z.boolean(),
   waiverAccepted: z.boolean(),
+  portalPassword: z.string().min(8),
   notes: z.string().max(280).optional(),
 });
 

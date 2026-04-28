@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { PublicReservationPortal } from "@/components/PublicReservationPortal";
 import { RuntimeConfigurationState } from "@/components/RuntimeConfigurationState";
 import {
@@ -17,14 +16,6 @@ export default async function ReservePage({
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   const viewer = await resolveViewerFromToken(token);
 
-  if (!viewer) {
-    redirect("/login");
-  }
-
-  if (viewer.roleKey !== "member") {
-    redirect("/dashboard");
-  }
-
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const gym =
     typeof resolvedSearchParams?.gym === "string"
@@ -35,9 +26,14 @@ export default async function ReservePage({
 
   try {
     const services = await getGymPlatformServices();
-    const snapshot = await services.getMemberReservationSnapshot(viewer.actor, {
-      tenantSlug: gym,
-    });
+    const snapshot =
+      viewer?.roleKey === "member"
+        ? await services.getMemberReservationSnapshot(viewer.actor, {
+            tenantSlug: gym,
+          })
+        : await services.getPublicReservationSnapshot({
+            tenantSlug: gym,
+          });
 
     return (
       <main className="min-h-screen bg-transparent">

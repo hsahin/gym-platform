@@ -38,6 +38,18 @@ function toEntity<T>(document: CollectionDocument<T>): T {
   return toClientPlain(document);
 }
 
+function buildWaiverFileName(fullName: string) {
+  return `${fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-waiver.pdf`;
+}
+
+function buildWaiverStorageKey(storagePrefix: string | undefined, fileName: string | undefined) {
+  if (!storagePrefix?.trim() || !fileName) {
+    return undefined;
+  }
+
+  return `${storagePrefix.trim().replace(/\/+$/g, "")}/${fileName}`;
+}
+
 const collections = {
   locations: "gym_locations",
   membershipPlans: "gym_membership_plans",
@@ -628,6 +640,9 @@ export class MongoGymStore implements GymStore {
       );
     }
 
+    const waiverFileName =
+      input.waiverStatus === "complete" ? buildWaiverFileName(member.fullName) : undefined;
+
     await waivers.insertOne({
       tenantId: tenantContext.tenantId,
       id: `waiver_${crypto.randomUUID()}`,
@@ -638,10 +653,8 @@ export class MongoGymStore implements GymStore {
       memberName: member.fullName,
       status: input.waiverStatus === "complete" ? "signed" : "requested",
       uploadedAt: input.waiverStatus === "complete" ? now : undefined,
-      fileName:
-        input.waiverStatus === "complete"
-          ? `${member.fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-waiver.pdf`
-          : undefined,
+      fileName: waiverFileName,
+      storageKey: buildWaiverStorageKey(input.waiverStorageKey, waiverFileName),
     });
 
     return member;
@@ -747,6 +760,10 @@ export class MongoGymStore implements GymStore {
 
     const waiver = await waivers.findOne({ memberId: normalizedMember.id });
     if (waiver) {
+      const waiverFileName =
+        input.waiverStatus === "complete"
+          ? waiver.fileName ?? buildWaiverFileName(input.fullName)
+          : undefined;
       await waivers.updateOne(
         { id: waiver.id },
         {
@@ -754,11 +771,10 @@ export class MongoGymStore implements GymStore {
             memberName: input.fullName,
             status: input.waiverStatus === "complete" ? "signed" : "requested",
             uploadedAt: input.waiverStatus === "complete" ? waiver.uploadedAt ?? now : undefined,
-            fileName:
-              input.waiverStatus === "complete"
-                ? waiver.fileName ??
-                  `${input.fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-waiver.pdf`
-                : undefined,
+            fileName: waiverFileName,
+            storageKey:
+              buildWaiverStorageKey(input.waiverStorageKey, waiverFileName) ??
+              (input.waiverStatus === "complete" ? waiver.storageKey : undefined),
             updatedAt: now,
           },
           increment: { version: 1 },

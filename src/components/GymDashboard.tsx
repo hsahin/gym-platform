@@ -18,7 +18,7 @@ const OverviewDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/OverviewDashboardPage").then(
       (module) => module.OverviewDashboardPage,
     ),
-  { loading: () => pageLoadingState("Overview") },
+  { loading: () => pageLoadingState("Overzicht") },
 );
 
 const ClassesDashboardPage = dynamic<DashboardPageProps>(
@@ -26,7 +26,7 @@ const ClassesDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/ClassesDashboardPage").then(
       (module) => module.ClassesDashboardPage,
     ),
-  { loading: () => pageLoadingState("Classes") },
+  { loading: () => pageLoadingState("Lessen") },
 );
 
 const MembersDashboardPage = dynamic<DashboardPageProps>(
@@ -34,7 +34,7 @@ const MembersDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/MembersDashboardPage").then(
       (module) => module.MembersDashboardPage,
     ),
-  { loading: () => pageLoadingState("Members") },
+  { loading: () => pageLoadingState("Leden") },
 );
 
 const ContractsDashboardPage = dynamic<DashboardPageProps>(
@@ -42,7 +42,7 @@ const ContractsDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/ContractsDashboardPage").then(
       (module) => module.ContractsDashboardPage,
     ),
-  { loading: () => pageLoadingState("Contracts") },
+  { loading: () => pageLoadingState("Contracten") },
 );
 
 const CoachingDashboardPage = dynamic<DashboardPageProps>(
@@ -58,7 +58,7 @@ const RetentionDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/RetentionDashboardPage").then(
       (module) => module.RetentionDashboardPage,
     ),
-  { loading: () => pageLoadingState("Retention") },
+  { loading: () => pageLoadingState("Retentie") },
 );
 
 const AccessDashboardPage = dynamic<DashboardPageProps>(
@@ -66,7 +66,7 @@ const AccessDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/AccessDashboardPage").then(
       (module) => module.AccessDashboardPage,
     ),
-  { loading: () => pageLoadingState("Access") },
+  { loading: () => pageLoadingState("Toegang") },
 );
 
 const PaymentsDashboardPage = dynamic<DashboardPageProps>(
@@ -74,7 +74,7 @@ const PaymentsDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/PaymentsDashboardPage").then(
       (module) => module.PaymentsDashboardPage,
     ),
-  { loading: () => pageLoadingState("Payments") },
+  { loading: () => pageLoadingState("Betalingen") },
 );
 
 const MobileDashboardPage = dynamic<DashboardPageProps>(
@@ -82,7 +82,7 @@ const MobileDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/MobileDashboardPage").then(
       (module) => module.MobileDashboardPage,
     ),
-  { loading: () => pageLoadingState("Mobile") },
+  { loading: () => pageLoadingState("Mobiele app") },
 );
 
 const MarketingDashboardPage = dynamic<DashboardPageProps>(
@@ -98,7 +98,7 @@ const IntegrationsDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/IntegrationsDashboardPage").then(
       (module) => module.IntegrationsDashboardPage,
     ),
-  { loading: () => pageLoadingState("Integrations") },
+  { loading: () => pageLoadingState("Integraties") },
 );
 
 const SettingsDashboardPage = dynamic<DashboardPageProps>(
@@ -106,7 +106,7 @@ const SettingsDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/SettingsDashboardPage").then(
       (module) => module.SettingsDashboardPage,
     ),
-  { loading: () => pageLoadingState("Settings") },
+  { loading: () => pageLoadingState("Instellingen") },
 );
 
 const SuperadminDashboardPage = dynamic<DashboardPageProps>(

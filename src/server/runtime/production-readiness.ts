@@ -71,12 +71,14 @@ function getRuntimeDataStoresConfigurationIssue(): LiveInfrastructureConfigurati
 }
 
 function getMessagingConfigurationIssue(): LiveInfrastructureConfigurationIssue | null {
-  if (process.env.ENABLE_REAL_MESSAGES !== "true") {
+  const liveMessagesRequested = process.env.ENABLE_REAL_MESSAGES === "true";
+  const wahaConfigured = hasConfiguredEnv(wahaEnvNames);
+  const whatsappCloudConfigured = hasConfiguredEnv(whatsappCloudEnvNames);
+
+  if (!liveMessagesRequested && !wahaConfigured && !whatsappCloudConfigured) {
     return null;
   }
 
-  const wahaConfigured = hasConfiguredEnv(wahaEnvNames);
-  const whatsappCloudConfigured = hasConfiguredEnv(whatsappCloudEnvNames);
   const wahaMissingEnv = getMissingEnvNames(wahaEnvNames);
   const whatsappCloudMissingEnv = getMissingEnvNames(whatsappCloudEnvNames);
   const wahaReady = wahaMissingEnv.length === 0;
@@ -91,8 +93,8 @@ function getMessagingConfigurationIssue(): LiveInfrastructureConfigurationIssue 
     label: "Live berichten",
     helpText:
       wahaConfigured || whatsappCloudConfigured
-        ? "ENABLE_REAL_MESSAGES=true staat aan, maar de gekozen providerconfiguratie is niet compleet."
-        : "ENABLE_REAL_MESSAGES=true vereist WAHA_BASE_URL + WAHA_API_KEY of WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_ACCESS_TOKEN.",
+        ? "Live berichtconfiguratie is incompleet. Vul de ontbrekende WAHA of WhatsApp Cloud variabelen aan."
+        : "Live berichten vereisen WAHA_BASE_URL + WAHA_API_KEY of WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_ACCESS_TOKEN.",
     missingEnv:
       wahaConfigured || whatsappCloudConfigured
         ? [...(wahaConfigured ? wahaMissingEnv : []), ...(whatsappCloudConfigured ? whatsappCloudMissingEnv : [])]
@@ -101,7 +103,10 @@ function getMessagingConfigurationIssue(): LiveInfrastructureConfigurationIssue 
 }
 
 function getStorageConfigurationIssue(): LiveInfrastructureConfigurationIssue | null {
-  if (process.env.ENABLE_REAL_UPLOADS !== "true") {
+  const liveUploadsRequested = process.env.ENABLE_REAL_UPLOADS === "true";
+  const spacesConfigured = hasConfiguredEnv(spacesEnvNames);
+
+  if (!liveUploadsRequested && !spacesConfigured) {
     return null;
   }
 
@@ -115,7 +120,7 @@ function getStorageConfigurationIssue(): LiveInfrastructureConfigurationIssue | 
     key: "storage",
     label: "Cloudopslag",
     helpText:
-      "ENABLE_REAL_UPLOADS=true vereist een complete Spaces-configuratie voor waivers en uploads.",
+      "Cloudopslag vereist een complete Spaces-configuratie voor waivers en uploads.",
     missingEnv,
   };
 }
@@ -138,44 +143,62 @@ export function isProductionRuntime() {
 }
 
 export function getProductionReadinessChecks(): ReadonlyArray<ProductionReadinessCheck> {
+  const localFallbackMode = allowsRuntimeFallbacks();
+
   return [
     {
       key: "mongo",
       label: "MongoDB",
-      ready: isPresent(process.env.MONGODB_URI) && isPresent(process.env.MONGODB_DB_NAME),
+      ready:
+        localFallbackMode ||
+        (isPresent(process.env.MONGODB_URI) && isPresent(process.env.MONGODB_DB_NAME)),
       severity: "required",
-      helpText: "Productie gebruikt uitsluitend MongoDB voor tenants, accounts en gymdata.",
+      helpText: localFallbackMode
+        ? "Lokale fallback is actief; productie gebruikt uitsluitend MongoDB voor tenants, accounts en gymdata."
+        : "Productie gebruikt uitsluitend MongoDB voor tenants, accounts en gymdata.",
     },
     {
       key: "session-secret",
       label: "Sessiesleutel",
       ready:
-        isPresent(process.env.CLAIMTECH_SESSION_SECRET) &&
-        process.env.CLAIMTECH_SESSION_SECRET !== "replace-me" &&
-        process.env.CLAIMTECH_SESSION_SECRET !== "claimtech-gym-platform-local-secret",
+        localFallbackMode ||
+        (isPresent(process.env.CLAIMTECH_SESSION_SECRET) &&
+          process.env.CLAIMTECH_SESSION_SECRET !== "replace-me" &&
+          process.env.CLAIMTECH_SESSION_SECRET !== "claimtech-gym-platform-local-secret"),
       severity: "required",
-      helpText: "Gebruik een lange unieke CLAIMTECH_SESSION_SECRET voor veilige cookies.",
+      helpText: localFallbackMode
+        ? "Lokale fallback is actief; productie vereist een lange unieke CLAIMTECH_SESSION_SECRET."
+        : "Gebruik een lange unieke CLAIMTECH_SESSION_SECRET voor veilige cookies.",
     },
     {
       key: "cache",
       label: "Redis cache",
-      ready: isPresent(process.env.REDIS_URL),
+      ready: localFallbackMode || isPresent(process.env.REDIS_URL),
       severity: "required",
-      helpText: "Redis is verplicht omdat de app niet meer terugvalt naar memory cache.",
+      helpText: localFallbackMode
+        ? "Lokale fallback is actief; productie gebruikt Redis in plaats van memory cache."
+        : "Redis is verplicht omdat de app niet meer terugvalt naar memory cache.",
     },
     {
       key: "backups",
       label: "Backups",
-      ready: process.env.MONGODB_BACKUP_POLICY === "enabled",
+      ready: localFallbackMode || process.env.MONGODB_BACKUP_POLICY === "enabled",
       severity: "recommended",
-      helpText: "Zet automatische Mongo backups of point-in-time recovery aan.",
+      helpText: localFallbackMode
+        ? "Lokale fallback is actief; backupbeleid wordt in productie gecontroleerd."
+        : "Zet automatische Mongo backups of point-in-time recovery aan.",
     },
     {
       key: "monitoring",
       label: "Monitoring",
-      ready: isPresent(process.env.MONITORING_WEBHOOK_URL) || isPresent(process.env.SENTRY_DSN),
+      ready:
+        localFallbackMode ||
+        isPresent(process.env.MONITORING_WEBHOOK_URL) ||
+        isPresent(process.env.SENTRY_DSN),
       severity: "recommended",
-      helpText: "Koppel Sentry of een webhook voor foutmeldingen en uptime signalen.",
+      helpText: localFallbackMode
+        ? "Lokale fallback is actief; monitoring wordt in productie gecontroleerd."
+        : "Koppel Sentry of een webhook voor foutmeldingen en uptime signalen.",
     },
   ];
 }

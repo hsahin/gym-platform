@@ -59,7 +59,7 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   );
   const [webhookEventType, setWebhookEventType] = useState("payment.paid");
   const [webhookStatus, setWebhookStatus] = useState<"received" | "processed" | "failed">("processed");
-  const [providerReference, setProviderReference] = useState("tr_preview");
+  const [providerReference, setProviderReference] = useState("tr_mollie");
   const [payloadSummary, setPayloadSummary] = useState("Webhook verwerkt");
   const [refundAmountCents, setRefundAmountCents] = useState(0);
   const [refundReason, setRefundReason] = useState("Refund");
@@ -598,8 +598,8 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <PageSection
-          title="Payments"
-          description="Billing profile, enabled flows, and settlement state."
+          title="Betalingen"
+          description="Billingprofiel, actieve betaalflows en uitbetalingsstatus."
         >
           <div className="grid gap-4">
             <Card className="rounded-2xl border-border/80 bg-surface-secondary">

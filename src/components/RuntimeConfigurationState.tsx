@@ -6,7 +6,7 @@ import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
 
 export function RuntimeConfigurationState({
   detail,
-  title = "Live runtime configuratie ontbreekt",
+  title = "Live runtimeconfiguratie ontbreekt",
 }: {
   readonly detail: string;
   readonly title?: string;
@@ -16,15 +16,15 @@ export function RuntimeConfigurationState({
       <header className="app-header">
         <div className="app-header__brand-copy">
           <p className="text-sm font-semibold">GymOS</p>
-          <p className="text-muted text-sm">Lokale runtime zonder fallback state.</p>
+          <p className="text-muted text-sm">Lokale runtime zonder tijdelijke fallback.</p>
         </div>
         <div className="app-header__actions">
           <nav className="app-header__nav text-sm">
             <Link href="/" className="text-muted transition hover:text-foreground">
-              Home
+              Start
             </Link>
             <Link href="/login" className="text-muted transition hover:text-foreground">
-              Login
+              Inloggen
             </Link>
           </nav>
           <ThemeModeSwitch />
@@ -34,11 +34,11 @@ export function RuntimeConfigurationState({
       <Card className="mx-auto w-full max-w-2xl rounded-[32px] border-border/80">
         <Card.Header className="space-y-3">
           <Chip size="sm" variant="soft">
-            Runtime config
+            Runtimeconfiguratie
           </Chip>
           <Card.Title>{title}</Card.Title>
           <Card.Description>
-            Deze lokale app draait niet meer op file- of memory-fallbacks.
+            Deze omgeving mist de verbindingen die nodig zijn om de bestaande flows correct te laden.
           </Card.Description>
         </Card.Header>
         <Card.Content className="section-stack">

@@ -2,8 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PATCH as reviewMemberSignup } from "@/app/api/platform/member-signups/route";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as memberMobileSelfServiceRoute } from "@/app/api/member/mobile-self-service/route";
 import { POST as publicMemberSignupRoute } from "@/app/api/public/member-signups/route";
@@ -26,6 +25,9 @@ import {
 } from "@/server/runtime/gym-services";
 
 let tempDir = "";
+const originalMollieApiKey = process.env.MOLLIE_API_KEY;
+const originalAppBaseUrl = process.env.APP_BASE_URL;
+const originalFetch = globalThis.fetch;
 
 async function bootstrapOwnerPlatform() {
   const state = await bootstrapLocalPlatform({
@@ -106,6 +108,17 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
+  if (originalMollieApiKey === undefined) {
+    delete process.env.MOLLIE_API_KEY;
+  } else {
+    process.env.MOLLIE_API_KEY = originalMollieApiKey;
+  }
+  if (originalAppBaseUrl === undefined) {
+    delete process.env.APP_BASE_URL;
+  } else {
+    process.env.APP_BASE_URL = originalAppBaseUrl;
+  }
+  globalThis.fetch = originalFetch;
   globalThis.__gymPlatformServices = undefined;
   await rm(tempDir, { recursive: true, force: true });
 });
@@ -177,7 +190,7 @@ describe("api route integrations", () => {
     expect(state.tenant.name).toBe("Northside Athletics");
   });
 
-  it("supports the public signup flow through owner approval and invoice creation", async () => {
+  it("supports the public signup flow through direct checkout and onboarding", async () => {
     const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -193,6 +206,47 @@ describe("api route integrations", () => {
       billingCycle: "monthly",
       perks: ["24/7 access"],
     });
+    await services.updateLegalSettings(ownerActor, tenantContext, {
+      termsUrl: "https://northside.test/voorwaarden",
+      privacyUrl: "https://northside.test/privacy",
+      sepaCreditorId: "NL00ZZZ123456780000",
+      sepaMandateText:
+        "Ik machtig Northside Athletics om mijn lidmaatschap via SEPA incasso te innen.",
+      contractPdfTemplateKey: "contracts/templates/northside-v1.pdf",
+      waiverStorageKey: "waivers/northside/signed/",
+      waiverRetentionMonths: 84,
+    });
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["direct_debit", "one_time", "payment_request"],
+    });
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      if (target.endsWith("/payments") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            id: "tr_route_signup_1",
+            status: "open",
+            _links: {
+              checkout: {
+                href: "https://pay.mollie.com/p/route-signup",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unhandled Mollie request: ${target}`);
+    }) as typeof fetch;
 
     const signupResponse = await publicMemberSignupRoute(
       createMutationRequest("http://localhost/api/public/member-signups", {
@@ -206,51 +260,38 @@ describe("api route integrations", () => {
         paymentMethod: "direct_debit",
         contractAccepted: true,
         waiverAccepted: true,
+        portalPassword: "trial-pass-123",
         notes: "Wil graag in mei starten.",
       }),
     );
     const signupPayload = (await signupResponse.json()) as {
       ok: boolean;
       data: {
-        id: string;
-        status: string;
+        signup: {
+          id: string;
+          status: string;
+          approvedMemberId?: string;
+        };
+        member: {
+          id: string;
+          email: string;
+        };
+        invoice: {
+          externalReference?: string;
+        };
+        checkoutUrl: string;
+        providerPaymentId: string;
       };
     };
 
     expect(signupResponse.status).toBe(201);
     expect(signupPayload.ok).toBe(true);
-    expect(signupPayload.data.status).toBe("pending_review");
-
-    const { token: ownerToken } = await loginAndExtractSession(
-      "owner@northside.test",
-      "strong-pass-123",
-    );
-    const approvalResponse = await reviewMemberSignup(
-      createMutationRequest(
-        "http://localhost/api/platform/member-signups",
-        {
-          signupRequestId: signupPayload.data.id,
-          decision: "approved",
-          ownerNotes: "Welkomstcall gepland.",
-          memberStatus: "trial",
-          portalPassword: "trial-pass-123",
-        },
-        { method: "PATCH", token: ownerToken },
-      ),
-    );
-    const approvalPayload = (await approvalResponse.json()) as {
-      ok: boolean;
-      data: {
-        signup: {
-          status: string;
-          approvedMemberId?: string;
-        };
-      };
-    };
-
-    expect(approvalResponse.status).toBe(200);
-    expect(approvalPayload.data.signup.status).toBe("approved");
-    expect(approvalPayload.data.signup.approvedMemberId).toBeTruthy();
+    expect(signupPayload.data.signup.status).toBe("approved");
+    expect(signupPayload.data.signup.approvedMemberId).toBe(signupPayload.data.member.id);
+    expect(signupPayload.data.member.email).toBe("lena@northside.test");
+    expect(signupPayload.data.invoice.externalReference).toBe("tr_route_signup_1");
+    expect(signupPayload.data.checkoutUrl).toBe("https://pay.mollie.com/p/route-signup");
+    expect(signupPayload.data.providerPaymentId).toBe("tr_route_signup_1");
 
     const refreshedServices = await getGymPlatformServices();
     const refreshedTenantContext = refreshedServices.createRequestTenantContext(
@@ -267,6 +308,8 @@ describe("api route integrations", () => {
     expect(dashboard.billingBackoffice.invoices).toHaveLength(1);
     expect(dashboard.billingBackoffice.invoices[0]?.amountCents).toBe(11_900);
     expect(dashboard.billingBackoffice.invoices[0]?.source).toBe("signup_checkout");
+    expect(dashboard.billingBackoffice.invoices[0]?.externalReference).toBe("tr_route_signup_1");
+    expect(dashboard.waivers[0]?.storageKey).toBe("waivers/northside/signed/lena-bakker-waiver.pdf");
   });
 
   it("creates reservations for authenticated members through the public route", async () => {
@@ -356,7 +399,88 @@ describe("api route integrations", () => {
     expect(dashboard.bookings[0]?.source).toBe("member_app");
   });
 
-  it("rejects public reservations without a logged-in member session", async () => {
+  it("creates a trial member and reservation for anonymous public visitors", async () => {
+    const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 50,
+      managerName: "Saar de Jong",
+      amenities: ["Recovery zone"],
+    });
+    await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Trial intake",
+      priceMonthly: 0,
+      billingCycle: "monthly",
+      perks: ["Kennismakingsles"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Romy de Wit",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: ["NASM-CPT"],
+    });
+    const session = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Forge Intro",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-04T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 16,
+      level: "beginner",
+      focus: "intro",
+    });
+
+    const reservationResponse = await publicReservationsRoute(
+      createMutationRequest("http://localhost/api/public/reservations", {
+        tenantSlug: state.tenant.id,
+        classSessionId: session.id,
+        fullName: "Lena Jansen",
+        email: "lena@northside.test",
+        phone: "0612345678",
+        phoneCountry: "NL",
+        notes: "Eerste proefles.",
+      }),
+    );
+    const reservationPayload = (await reservationResponse.json()) as {
+      ok: boolean;
+      data: {
+        booking: {
+          source: string;
+          classSessionId: string;
+        };
+      };
+    };
+
+    expect(reservationResponse.status).toBe(201);
+    expect(reservationPayload.ok).toBe(true);
+    expect(reservationPayload.data.booking.source).toBe("member_app");
+    expect(reservationPayload.data.booking.classSessionId).toBe(session.id);
+
+    const refreshedServices = await getGymPlatformServices();
+    const refreshedTenantContext = refreshedServices.createRequestTenantContext(
+      ownerActor,
+      tenantContext.tenantId,
+    );
+    const dashboard = await refreshedServices.getDashboardSnapshot(
+      ownerActor,
+      refreshedTenantContext,
+      { page: "members" },
+    );
+    const createdMember = dashboard.members.find(
+      (member) => member.email === "lena@northside.test",
+    );
+
+    expect(createdMember).toMatchObject({
+      fullName: "Lena Jansen",
+      status: "trial",
+      waiverStatus: "pending",
+    });
+    expect(dashboard.memberPortalAccessMemberIds).not.toContain(createdMember?.id);
+  });
+
+  it("rejects anonymous public reservations without contact details", async () => {
     const response = await publicReservationsRoute(
       createMutationRequest("http://localhost/api/public/reservations", {
         tenantSlug: "northside-athletics",
@@ -371,10 +495,10 @@ describe("api route integrations", () => {
       };
     };
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
-    expect(payload.error.code).toBe("FORBIDDEN");
-    expect(payload.error.message).toContain("Log eerst in");
+    expect(payload.error.code).toBe("INVALID_INPUT");
+    expect(payload.error.message).toContain("Vul naam, e-mail en telefoonnummer in");
   });
 
   it("rejects invalid public member signups before they enter review", async () => {
@@ -406,6 +530,7 @@ describe("api route integrations", () => {
         paymentMethod: "direct_debit",
         contractAccepted: false,
         waiverAccepted: true,
+        portalPassword: "lena-member-123",
       }),
     );
     const payload = (await response.json()) as {
@@ -431,6 +556,10 @@ describe("api route integrations", () => {
 
   it("lets members submit self-service requests and blocks owners on the member route", async () => {
     const { ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "mobile.white_label",
+      enabled: true,
+    });
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
       city: "Amsterdam",

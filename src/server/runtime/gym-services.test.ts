@@ -1,8 +1,9 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createAuthActor } from "@claimtech/auth";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createAuthActor, type AuthActor } from "@claimtech/auth";
+import type { TenantContext } from "@claimtech/tenant";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   authenticateLocalAccount,
   bootstrapLocalPlatform,
@@ -12,6 +13,40 @@ import { buildPlatformActor } from "@/server/runtime/demo-session";
 import { createGymPlatformServices } from "@/server/runtime/gym-services";
 
 let tempDir = "";
+const originalMollieApiKey = process.env.MOLLIE_API_KEY;
+const originalAppBaseUrl = process.env.APP_BASE_URL;
+const originalNukiApiToken = process.env.NUKI_API_TOKEN;
+const originalEnableRealMessages = process.env.ENABLE_REAL_MESSAGES;
+const originalWahaBaseUrl = process.env.WAHA_BASE_URL;
+const originalWahaApiKey = process.env.WAHA_API_KEY;
+const originalWahaSession = process.env.WAHA_SESSION;
+const originalWhatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const originalWhatsappAccessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+const originalEnableRealUploads = process.env.ENABLE_REAL_UPLOADS;
+const originalSpacesBucket = process.env.SPACES_BUCKET;
+const originalSpacesEndpoint = process.env.SPACES_ENDPOINT;
+const originalSpacesRegion = process.env.SPACES_REGION;
+const originalSpacesAccessKeyId = process.env.SPACES_ACCESS_KEY_ID;
+const originalSpacesSecretAccessKey = process.env.SPACES_SECRET_ACCESS_KEY;
+const originalFetch = globalThis.fetch;
+
+function clearMessagingEnv() {
+  delete process.env.ENABLE_REAL_MESSAGES;
+  delete process.env.WAHA_BASE_URL;
+  delete process.env.WAHA_API_KEY;
+  delete process.env.WAHA_SESSION;
+  delete process.env.WHATSAPP_PHONE_NUMBER_ID;
+  delete process.env.WHATSAPP_ACCESS_TOKEN;
+}
+
+function clearUploadEnv() {
+  delete process.env.ENABLE_REAL_UPLOADS;
+  delete process.env.SPACES_BUCKET;
+  delete process.env.SPACES_ENDPOINT;
+  delete process.env.SPACES_REGION;
+  delete process.env.SPACES_ACCESS_KEY_ID;
+  delete process.env.SPACES_SECRET_ACCESS_KEY;
+}
 
 async function bootstrapOwnerPlatform() {
   const state = await bootstrapLocalPlatform({
@@ -33,6 +68,20 @@ async function bootstrapOwnerPlatform() {
   };
 }
 
+async function enableTenantFeatures(
+  services: Awaited<ReturnType<typeof createGymPlatformServices>>,
+  actor: AuthActor,
+  tenantContext: TenantContext,
+  keys: ReadonlyArray<string>,
+) {
+  for (const key of keys) {
+    await services.updateFeatureFlag(actor, tenantContext, {
+      key,
+      enabled: true,
+    });
+  }
+}
+
 function createMemberViewer(email: string, tenantId: string, displayName = "Member Viewer") {
   return createAuthActor({
     subjectId: `member-viewer:${email}`,
@@ -50,10 +99,88 @@ function createMemberViewer(email: string, tenantId: string, displayName = "Memb
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
+  clearMessagingEnv();
+  clearUploadEnv();
 });
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
+  if (originalMollieApiKey === undefined) {
+    delete process.env.MOLLIE_API_KEY;
+  } else {
+    process.env.MOLLIE_API_KEY = originalMollieApiKey;
+  }
+  if (originalAppBaseUrl === undefined) {
+    delete process.env.APP_BASE_URL;
+  } else {
+    process.env.APP_BASE_URL = originalAppBaseUrl;
+  }
+  if (originalNukiApiToken === undefined) {
+    delete process.env.NUKI_API_TOKEN;
+  } else {
+    process.env.NUKI_API_TOKEN = originalNukiApiToken;
+  }
+  if (originalEnableRealMessages === undefined) {
+    delete process.env.ENABLE_REAL_MESSAGES;
+  } else {
+    process.env.ENABLE_REAL_MESSAGES = originalEnableRealMessages;
+  }
+  if (originalWahaBaseUrl === undefined) {
+    delete process.env.WAHA_BASE_URL;
+  } else {
+    process.env.WAHA_BASE_URL = originalWahaBaseUrl;
+  }
+  if (originalWahaApiKey === undefined) {
+    delete process.env.WAHA_API_KEY;
+  } else {
+    process.env.WAHA_API_KEY = originalWahaApiKey;
+  }
+  if (originalWahaSession === undefined) {
+    delete process.env.WAHA_SESSION;
+  } else {
+    process.env.WAHA_SESSION = originalWahaSession;
+  }
+  if (originalWhatsappPhoneNumberId === undefined) {
+    delete process.env.WHATSAPP_PHONE_NUMBER_ID;
+  } else {
+    process.env.WHATSAPP_PHONE_NUMBER_ID = originalWhatsappPhoneNumberId;
+  }
+  if (originalWhatsappAccessToken === undefined) {
+    delete process.env.WHATSAPP_ACCESS_TOKEN;
+  } else {
+    process.env.WHATSAPP_ACCESS_TOKEN = originalWhatsappAccessToken;
+  }
+  if (originalEnableRealUploads === undefined) {
+    delete process.env.ENABLE_REAL_UPLOADS;
+  } else {
+    process.env.ENABLE_REAL_UPLOADS = originalEnableRealUploads;
+  }
+  if (originalSpacesBucket === undefined) {
+    delete process.env.SPACES_BUCKET;
+  } else {
+    process.env.SPACES_BUCKET = originalSpacesBucket;
+  }
+  if (originalSpacesEndpoint === undefined) {
+    delete process.env.SPACES_ENDPOINT;
+  } else {
+    process.env.SPACES_ENDPOINT = originalSpacesEndpoint;
+  }
+  if (originalSpacesRegion === undefined) {
+    delete process.env.SPACES_REGION;
+  } else {
+    process.env.SPACES_REGION = originalSpacesRegion;
+  }
+  if (originalSpacesAccessKeyId === undefined) {
+    delete process.env.SPACES_ACCESS_KEY_ID;
+  } else {
+    process.env.SPACES_ACCESS_KEY_ID = originalSpacesAccessKeyId;
+  }
+  if (originalSpacesSecretAccessKey === undefined) {
+    delete process.env.SPACES_SECRET_ACCESS_KEY;
+  } else {
+    process.env.SPACES_SECRET_ACCESS_KEY = originalSpacesSecretAccessKey;
+  }
+  globalThis.fetch = originalFetch;
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -317,6 +444,237 @@ describe("gym platform services", () => {
     expect(snapshot.waivers[0]?.memberId).toBe(member.id);
   });
 
+  it("uses explicit not-configured receipts instead of preview messaging or upload paths", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+    const membershipPlan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: [],
+      certifications: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Noa van Dijk",
+      email: "noa@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "pending",
+    });
+    const classSession = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Morning Strength",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-04-20T08:00:00.000Z",
+      durationMinutes: 60,
+      capacity: 14,
+      level: "mixed",
+      focus: "Compound lifts",
+    });
+
+    const booking = await services.createBooking(ownerActor, tenantContext, {
+      memberId: member.id,
+      classSessionId: classSession.id,
+      idempotencyKey: "not-configured-message",
+      source: "frontdesk",
+    });
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(booking.messageReceipt).toMatchObject({
+      accepted: false,
+      status: "failed",
+      raw: {
+        mode: "not_configured",
+      },
+    });
+    expect(booking.messageReceipt.providerMessageId).toBeUndefined();
+    expect(snapshot.runtime.messagingMode).toBe("not_configured");
+    expect(snapshot.runtime.storageMode).toBe("not_configured");
+    expect(snapshot.waiverUploadPath).toBe("");
+    expect(snapshot.healthReport.checks.find((check) => check.name === "Berichten")).toMatchObject({
+      status: "healthy",
+      summary: expect.not.stringContaining("preview"),
+    });
+    expect(snapshot.healthReport.checks.find((check) => check.name === "Documenten")).toMatchObject({
+      status: "healthy",
+      summary: expect.not.stringContaining("preview"),
+    });
+  });
+
+  it("reports local fallback runtime honestly without production-only degradation", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const getCheck = (name: string) =>
+      snapshot.healthReport.checks.find((check) => check.name === name);
+
+    expect(snapshot.runtime).toMatchObject({
+      storeMode: "memory",
+      cacheMode: "memory",
+    });
+    expect(getCheck("Data")).toMatchObject({
+      status: "healthy",
+      summary: expect.stringContaining("lokale memory store"),
+    });
+    expect(String(getCheck("Data")?.summary ?? "")).not.toContain("vaste databaseconfiguratie");
+    expect(getCheck("Snelheid")).toMatchObject({
+      status: "healthy",
+      summary: expect.stringContaining("lokale memory cache"),
+    });
+    expect(String(getCheck("Snelheid")?.summary ?? "")).not.toContain("snelle live cachelaag");
+    expect(getCheck("Productie-readiness")).toMatchObject({
+      status: "healthy",
+      summary: expect.stringContaining("Lokale ontwikkelmodus"),
+    });
+    expect(String(getCheck("Productie-readiness")?.summary ?? "")).not.toContain("MongoDB");
+    expect(String(getCheck("Productie-readiness")?.summary ?? "")).not.toContain("Redis");
+    expect(getCheck("Migraties")).toMatchObject({
+      status: "healthy",
+      summary: expect.stringContaining("niet als lokale blocker"),
+    });
+    expect(getCheck("Security")).toMatchObject({
+      status: "healthy",
+      summary: expect.stringContaining("Lokale sessieconfiguratie"),
+    });
+    expect(snapshot.healthReport.checks.map((check) => check.summary).join(" ")).not.toContain(
+      "preview",
+    );
+  });
+
+  it("sends booking notifications through direct WAHA when credentials are configured", async () => {
+    process.env.WAHA_BASE_URL = "https://waha.example";
+    process.env.WAHA_API_KEY = "secret-key";
+    process.env.WAHA_SESSION = "northside";
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      if (target === "https://waha.example/api/sessions/northside") {
+        expect(init?.method).toBe("GET");
+        return new Response(JSON.stringify({ status: "WORKING" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (
+        target ===
+        "https://waha.example/api/contacts/check-exists?phone=31612345678&session=northside"
+      ) {
+        expect(init?.method).toBe("GET");
+        return new Response(JSON.stringify({ numberExists: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (target === "https://waha.example/api/sendText") {
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          chatId: "31612345678@c.us",
+          session: "northside",
+        });
+        return new Response(JSON.stringify({ id: "waha_msg_1" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled WAHA request: ${target}`);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+    const membershipPlan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: [],
+      certifications: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Noa van Dijk",
+      email: "noa@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+    });
+    const classSession = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Morning Strength",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-04-20T08:00:00.000Z",
+      durationMinutes: 60,
+      capacity: 14,
+      level: "mixed",
+      focus: "Compound lifts",
+    });
+
+    const booking = await services.createBooking(ownerActor, tenantContext, {
+      memberId: member.id,
+      classSessionId: classSession.id,
+      idempotencyKey: "waha-message",
+      source: "frontdesk",
+    });
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(booking.messageReceipt).toMatchObject({
+      accepted: true,
+      status: "sent",
+      providerMessageId: "waha_msg_1",
+    });
+    expect(snapshot.runtime.messagingMode).toBe("waha");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("only exposes waiver upload paths when Spaces storage is fully configured", async () => {
+    process.env.SPACES_BUCKET = "gym-files";
+    process.env.SPACES_ENDPOINT = "https://ams3.digitaloceanspaces.com";
+    process.env.SPACES_REGION = "ams3";
+    process.env.SPACES_ACCESS_KEY_ID = "spaces-key";
+    process.env.SPACES_SECRET_ACCESS_KEY = "spaces-secret";
+
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(snapshot.runtime.storageMode).toBe("spaces");
+    expect(snapshot.waiverUploadPath).toContain("waivers");
+    expect(snapshot.waiverUploadPath).toContain("signed-liability-waiver.pdf");
+  });
+
   it("can enable member portal access and authenticate the linked member account", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
@@ -489,6 +847,32 @@ describe("gym platform services", () => {
 
   it("stores owner workspace settings for booking, revenue, coaching, retention, mobile, marketing and integrations", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, [
+      "booking.one_to_one",
+      "booking.credit_system",
+      "commerce.webshop_pos",
+      "billing.autocollect",
+      "coaching.ai_max",
+      "coaching.workout_plans",
+      "coaching.nutrition",
+      "coaching.on_demand_videos",
+      "coaching.progress_tracking",
+      "coaching.heart_rate",
+      "retention.planner",
+      "retention.community_groups",
+      "retention.challenges_rewards",
+      "retention.questionnaire",
+      "retention.pro_content",
+      "retention.fitzone",
+      "mobile.white_label",
+      "marketing.email",
+      "marketing.promotions",
+      "marketing.leads",
+      "integrations.software",
+      "integrations.equipment",
+      "integrations.virtuagym_connect",
+      "integrations.body_composition",
+    ]);
 
     const booking = await services.updateBookingWorkspace(ownerActor, tenantContext, {
       oneToOneSessionName: "Performance PT",
@@ -585,6 +969,276 @@ describe("gym platform services", () => {
         reason: "tenant_override",
       },
     );
+  });
+
+  it("enforces tenant feature flags as hard server-side gates for dashboard actions", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const membershipPlan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Noa van Dijk",
+      email: "noa@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+    });
+    const classSession = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Evening Hyrox",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-04-20T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 10,
+      level: "advanced",
+      focus: "Engine",
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "booking.group_classes",
+      enabled: false,
+    });
+    await expect(
+      services.createBooking(ownerActor, tenantContext, {
+        memberId: member.id,
+        classSessionId: classSession.id,
+        idempotencyKey: "blocked-feature-booking",
+        source: "frontdesk",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "booking.group_classes" },
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "booking.scheduling",
+      enabled: false,
+    });
+    await expect(
+      services.createClassSession(ownerActor, tenantContext, {
+        title: "Blocked class",
+        locationId: location.id,
+        trainerId: trainer.id,
+        startsAt: "2026-04-21T18:30:00.000Z",
+        durationMinutes: 60,
+        capacity: 10,
+        level: "mixed",
+        focus: "Blocked",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "booking.scheduling" },
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "membership.management",
+      enabled: false,
+    });
+    await expect(
+      services.createMember(ownerActor, tenantContext, {
+        fullName: "Blocked Member",
+        email: "blocked-member@northside.test",
+        phone: "0699999999",
+        phoneCountry: "NL",
+        membershipPlanId: membershipPlan.id,
+        homeLocationId: location.id,
+        status: "active",
+        tags: [],
+        waiverStatus: "pending",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "membership.management" },
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "staff.management",
+      enabled: false,
+    });
+    await expect(
+      services.createTrainer(ownerActor, tenantContext, {
+        fullName: "Blocked Trainer",
+        homeLocationId: location.id,
+        specialties: [],
+        certifications: [],
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "staff.management" },
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "clubs.multi_location",
+      enabled: false,
+    });
+    await expect(
+      services.createLocation(ownerActor, tenantContext, {
+        name: "Blocked West",
+        city: "Amsterdam",
+        neighborhood: "West",
+        capacity: 80,
+        managerName: "Saar de Jong",
+        amenities: [],
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "clubs.multi_location" },
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "billing.processing",
+      enabled: false,
+    });
+    await expect(
+      services.updateBillingSettings(ownerActor, tenantContext, {
+        enabled: true,
+        provider: "mollie",
+        profileLabel: "Northside Athletics Payments",
+        profileId: "pfl_test_123456",
+        settlementLabel: "Northside Club",
+        supportEmail: "billing@northside.test",
+        paymentMethods: ["one_time"],
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "billing.processing" },
+    });
+
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "access.24_7",
+      enabled: false,
+    });
+    await expect(
+      services.updateRemoteAccessSettings(ownerActor, tenantContext, {
+        enabled: true,
+        provider: "nuki",
+        bridgeType: "cloud_api",
+        locationId: location.id,
+        deviceLabel: "Front door",
+        externalDeviceId: "nuki-123",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "access.24_7" },
+    });
+
+    await expect(
+      services.createLead(ownerActor, tenantContext, {
+        fullName: "Blocked Lead",
+        email: "lead@northside.test",
+        phone: "0611111111",
+        source: "website",
+        stage: "new",
+        interest: "Trial",
+        expectedValueCents: 8900,
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "marketing.leads" },
+    });
+
+    await expect(
+      services.createCommunityGroup(ownerActor, tenantContext, {
+        name: "Blocked community",
+        channel: "WhatsApp",
+        description: "Should be gated.",
+        memberIds: [member.id],
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "retention.community_groups" },
+    });
+
+    await expect(
+      services.requestMobilePaymentMethodUpdate(ownerActor, tenantContext, {
+        memberId: member.id,
+        memberName: member.fullName,
+        requestedMethodLabel: "Nieuwe SEPA IBAN",
+        note: "Should be gated.",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "mobile.white_label" },
+    });
+
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const coachingWorkspace = snapshot.coachingWorkspace;
+    const retentionWorkspace = snapshot.retentionWorkspace;
+    const marketingWorkspace = snapshot.marketingWorkspace;
+    const integrationWorkspace = snapshot.integrationWorkspace;
+
+    await expect(
+      services.updateCoachingWorkspace(ownerActor, tenantContext, {
+        workoutPlanFocus: coachingWorkspace.workoutPlanFocus,
+        nutritionCadence: coachingWorkspace.nutritionCadence,
+        videoLibraryUrl: coachingWorkspace.videoLibraryUrl,
+        progressMetric: coachingWorkspace.progressMetric,
+        heartRateProvider: coachingWorkspace.heartRateProvider,
+        aiCoachMode: "Blocked AI copilot",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "coaching.ai_max" },
+    });
+    await expect(
+      services.updateRetentionWorkspace(ownerActor, tenantContext, {
+        retentionCadence: retentionWorkspace.retentionCadence,
+        communityChannel: retentionWorkspace.communityChannel,
+        challengeTheme: retentionWorkspace.challengeTheme,
+        questionnaireTrigger: retentionWorkspace.questionnaireTrigger,
+        proContentPath: "https://blocked-content.northside.test",
+        fitZoneOffer: retentionWorkspace.fitZoneOffer,
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "retention.pro_content" },
+    });
+    await expect(
+      services.updateMarketingWorkspace(ownerActor, tenantContext, {
+        emailSenderName: marketingWorkspace.emailSenderName,
+        emailReplyTo: marketingWorkspace.emailReplyTo,
+        promotionHeadline: "Blocked promo",
+        leadPipelineLabel: marketingWorkspace.leadPipelineLabel,
+        automationCadence: marketingWorkspace.automationCadence,
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "marketing.promotions" },
+    });
+    await expect(
+      services.updateIntegrationWorkspace(ownerActor, tenantContext, {
+        hardwareVendors: integrationWorkspace.hardwareVendors,
+        softwareIntegrations: integrationWorkspace.softwareIntegrations,
+        equipmentIntegrations: integrationWorkspace.equipmentIntegrations,
+        migrationProvider: integrationWorkspace.migrationProvider,
+        bodyCompositionProvider: "Blocked InBody",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      details: { feature: "integrations.body_composition" },
+    });
   });
 
   it("supports a six-month contract and sets the next renewal accordingly", async () => {
@@ -1024,6 +1678,7 @@ describe("gym platform services", () => {
 
   it("converts a lead into a member with a real contract and location", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["marketing.leads"]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -1152,6 +1807,7 @@ describe("gym platform services", () => {
 
   it("creates a collection case when a booking is cancelled too late", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["billing.autocollect"]);
     const nearFutureStart = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
     const location = await services.createLocation(ownerActor, tenantContext, {
@@ -1229,7 +1885,38 @@ describe("gym platform services", () => {
     );
   });
 
-  it("runs a public member signup flow with contract choice, checkout, waiver signing and owner approval", async () => {
+  it("runs a public member signup flow with direct checkout, waiver signing and onboarding", async () => {
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+    const paymentRequests: Array<{
+      readonly method?: string;
+      readonly metadata?: Record<string, string>;
+      readonly redirectUrl?: string;
+      readonly webhookUrl?: string;
+    }> = [];
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      if (target.endsWith("/payments") && init?.method === "POST") {
+        paymentRequests.push(JSON.parse(String(init.body)));
+
+        return new Response(
+          JSON.stringify({
+            id: "tr_signup_checkout_1",
+            status: "open",
+            _links: {
+              checkout: {
+                href: "https://pay.mollie.com/p/signup-checkout",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unhandled Mollie request: ${target}`);
+    }) as typeof fetch;
+
     const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
 
     const location = await services.createLocation(ownerActor, tenantContext, {
@@ -1246,11 +1933,30 @@ describe("gym platform services", () => {
       billingCycle: "monthly",
       perks: ["Open gym"],
     });
+    await services.updateLegalSettings(ownerActor, tenantContext, {
+      termsUrl: "https://northside.test/voorwaarden",
+      privacyUrl: "https://northside.test/privacy",
+      sepaCreditorId: "NL00ZZZ123456780000",
+      sepaMandateText:
+        "Ik machtig Northside Athletics om mijn lidmaatschap via SEPA incasso te innen.",
+      contractPdfTemplateKey: "contracts/templates/northside-v1.pdf",
+      waiverStorageKey: "waivers/northside/signed/",
+      waiverRetentionMonths: 84,
+    });
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["direct_debit", "one_time", "payment_request"],
+    });
     const publicSnapshot = await services.getPublicMembershipSignupSnapshot({
       tenantSlug: state.tenant.id,
     });
 
-    const signup = await services.submitPublicMemberSignup({
+    const checkout = await services.submitPublicMemberSignup({
       tenantSlug: state.tenant.id,
       fullName: "Jade Vermeer",
       email: "jade@northside.test",
@@ -1261,32 +1967,49 @@ describe("gym platform services", () => {
       paymentMethod: "direct_debit",
       contractAccepted: true,
       waiverAccepted: true,
-      notes: "Start het liefst volgende week.",
-    });
-    const approval = await services.reviewMemberSignupRequest(ownerActor, tenantContext, {
-      signupRequestId: signup.id,
-      decision: "approved",
-      ownerNotes: "Welkom bij Northside.",
-      memberStatus: "trial",
       portalPassword: "jade-member-123",
+      notes: "Start het liefst volgende week.",
     });
     const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
     const authenticated = await authenticateLocalAccount(
       "jade@northside.test",
       "jade-member-123",
     );
-    const approvedMember = approval.member!;
+    const approvedMember = checkout.member;
 
     expect(publicSnapshot.membershipPlans.map((item) => item.id)).toContain(plan.id);
-    expect(signup.status).toBe("pending_review");
-    expect(signup.waiverAcceptedAt).toBeTruthy();
-    expect(approval.signup.status).toBe("approved");
+    expect(publicSnapshot.billingReady).toBe(true);
+    expect(publicSnapshot.legalReady).toBe(true);
+    expect(checkout.signup.status).toBe("approved");
+    expect(checkout.signup.waiverAcceptedAt).toBeTruthy();
+    expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-checkout");
+    expect(checkout.providerPaymentId).toBe("tr_signup_checkout_1");
+    expect(checkout.invoice).toMatchObject({
+      memberId: approvedMember.id,
+      memberName: "Jade Vermeer",
+      amountCents: 11900,
+      status: "open",
+      source: "signup_checkout",
+      externalReference: "tr_signup_checkout_1",
+    });
     expect(approvedMember.email).toBe("jade@northside.test");
+    expect(paymentRequests[0]).toMatchObject({
+      method: "directdebit",
+      redirectUrl: expect.stringContaining("/dashboard/payments"),
+      webhookUrl: expect.stringContaining("/api/platform/billing/mollie/webhook"),
+      metadata: {
+        tenantId: tenantContext.tenantId,
+        invoiceId: checkout.invoice.id,
+        memberId: approvedMember.id,
+        source: "signup_checkout",
+      },
+    });
     expect(snapshot.memberSignups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: signup.id,
+          id: checkout.signup.id,
           status: "approved",
+          approvedMemberId: approvedMember.id,
         }),
       ]),
     );
@@ -1297,6 +2020,7 @@ describe("gym platform services", () => {
           amountCents: 11900,
           status: "open",
           source: "signup_checkout",
+          externalReference: "tr_signup_checkout_1",
         }),
       ]),
     );
@@ -1305,6 +2029,17 @@ describe("gym platform services", () => {
         expect.objectContaining({
           memberId: approvedMember.id,
           membershipPlanId: plan.id,
+          documentUrl: expect.stringContaining("contracts/signed/"),
+        }),
+      ]),
+    );
+    expect(snapshot.waivers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          memberId: approvedMember.id,
+          status: "signed",
+          fileName: "jade-vermeer-waiver.pdf",
+          storageKey: "waivers/northside/signed/jade-vermeer-waiver.pdf",
         }),
       ]),
     );
@@ -1350,6 +2085,7 @@ describe("gym platform services", () => {
         paymentMethod: "direct_debit",
         contractAccepted: true,
         waiverAccepted: true,
+        portalPassword: "jade-member-123",
       }),
     ).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
@@ -1358,6 +2094,7 @@ describe("gym platform services", () => {
 
   it("manages billing invoices, retries, refunds, webhooks and reconciliation", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["billing.autocollect"]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -1446,8 +2183,136 @@ describe("gym platform services", () => {
     expect(snapshot.billingBackoffice.reconciliationRuns[0]?.id).toBe(reconciliation.id);
   });
 
+  it("sends configured billing invoices, retries, refunds and webhook sync to Mollie", async () => {
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+
+    let paymentCreateCount = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      if (target.endsWith("/payments") && init?.method === "POST") {
+        paymentCreateCount += 1;
+        const body = JSON.parse(String(init.body)) as {
+          amount: { currency: string; value: string };
+          metadata?: { invoiceId?: string; tenantId?: string };
+          webhookUrl?: string;
+          redirectUrl?: string;
+        };
+
+        expect(body.amount).toEqual({ currency: "EUR", value: "119.00" });
+        expect(body.metadata?.tenantId).toBeTruthy();
+        expect(body.metadata?.invoiceId).toBeTruthy();
+        expect(body.webhookUrl).toContain("/api/platform/billing/mollie/webhook");
+        expect(body.redirectUrl).toContain("/dashboard/payments");
+
+        const id = paymentCreateCount === 1 ? "tr_invoice_1" : "tr_retry_2";
+        return new Response(
+          JSON.stringify({
+            id,
+            status: "open",
+            _links: {
+              checkout: {
+                href: `https://pay.mollie.com/p/${id}`,
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (target.endsWith("/payments/tr_retry_2") && (!init?.method || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({
+            id: "tr_retry_2",
+            status: "paid",
+            metadata: {
+              invoiceId: "placeholder",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (target.endsWith("/payments/tr_retry_2/refunds") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as {
+          amount: { currency: string; value: string };
+          description: string;
+        };
+
+        expect(body).toMatchObject({
+          amount: { currency: "EUR", value: "49.00" },
+          description: "Partial goodwill refund",
+        });
+
+        return new Response(JSON.stringify({ id: "re_1", status: "queued" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled Mollie request: ${target}`);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["billing.autocollect"]);
+
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["direct_debit", "one_time", "payment_request"],
+    });
+
+    const invoice = await services.createBillingInvoice(ownerActor, tenantContext, {
+      memberName: "Robin de Wit",
+      description: "Membership May 2026",
+      amountCents: 11900,
+      dueAt: "2026-05-01T08:00:00.000Z",
+      source: "membership",
+    });
+    const retried = await services.retryBillingInvoice(ownerActor, tenantContext, {
+      invoiceId: invoice.id,
+      reason: "Nieuwe incassopoging ingepland",
+    });
+    const webhook = await services.syncMollieBillingWebhook({
+      tenantId: tenantContext.tenantId,
+      paymentId: retried.externalReference!,
+    });
+    const refund = await services.refundBillingInvoice(ownerActor, tenantContext, {
+      invoiceId: invoice.id,
+      amountCents: 4900,
+      reason: "Partial goodwill refund",
+    });
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(invoice.externalReference).toBe("tr_invoice_1");
+    expect(retried.externalReference).toBe("tr_retry_2");
+    expect(webhook).toMatchObject({
+      invoiceId: invoice.id,
+      eventType: "payment.paid",
+      providerReference: "tr_retry_2",
+      status: "processed",
+    });
+    expect(refund.status).toBe("processed");
+    expect(snapshot.billingBackoffice.invoices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: invoice.id,
+          status: "refunded",
+          externalReference: "tr_retry_2",
+        }),
+      ]),
+    );
+  });
+
   it("creates lead attribution and follow-up tasks, including abandoned booking automation", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["marketing.leads"]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -1542,6 +2407,10 @@ describe("gym platform services", () => {
 
   it("supports recurring PT appointments with packs, credits and coach agenda", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, [
+      "booking.credit_system",
+      "booking.one_to_one",
+    ]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside PT Studio",
@@ -1614,6 +2483,10 @@ describe("gym platform services", () => {
 
   it("blocks coach appointments when the selected PT pack does not have enough credits", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, [
+      "booking.credit_system",
+      "booking.one_to_one",
+    ]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside PT Studio",
@@ -1687,6 +2560,11 @@ describe("gym platform services", () => {
 
   it("stores community groups, challenges and questionnaires as first-class records", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, [
+      "retention.community_groups",
+      "retention.challenges_rewards",
+      "retention.questionnaire",
+    ]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -1771,6 +2649,7 @@ describe("gym platform services", () => {
 
   it("tracks mobile self-service receipts, payment method updates, pause requests and contracts", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["mobile.white_label"]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -1877,6 +2756,7 @@ describe("gym platform services", () => {
 
   it("lets members submit their own mobile self-service requests but not review them", async () => {
     const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["mobile.white_label"]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -1947,6 +2827,7 @@ describe("gym platform services", () => {
 
   it("includes filtered self-service data in the member reservation snapshot", async () => {
     const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["mobile.white_label"]);
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -2187,7 +3068,24 @@ describe("gym platform services", () => {
     });
   });
 
-  it("returns a remote unlock preview after configuration", async () => {
+  it("opens a configured Nuki smart lock through the live provider", async () => {
+    process.env.NUKI_API_TOKEN = "nuki-live-token";
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.nuki.io/smartlock/nuki-lock-01/action/unlock");
+      expect(init?.method).toBe("POST");
+      expect(init?.headers).toMatchObject({
+        authorization: "Bearer nuki-live-token",
+      });
+
+      return new Response(
+        JSON.stringify({
+          id: "nuki_action_1",
+          status: "accepted",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -2210,8 +3108,40 @@ describe("gym platform services", () => {
     const action = await services.requestRemoteAccessUnlock(ownerActor, tenantContext);
 
     expect(action.provider).toBe("nuki");
+    expect(action.mode).toBe("live");
+    expect(action.providerActionId).toBe("nuki_action_1");
+    expect(action.providerStatus).toBe("accepted");
     expect(action.summary).toContain("Nuki Smart Lock");
     expect(action.summary).toContain("Hoofdingang");
+  });
+
+  it("blocks Nuki remote opens when live credentials are missing", async () => {
+    delete process.env.NUKI_API_TOKEN;
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+
+    await services.updateRemoteAccessSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "nuki",
+      bridgeType: "cloud_api",
+      locationId: location.id,
+      deviceLabel: "Hoofdingang",
+      externalDeviceId: "nuki-lock-01",
+    });
+
+    await expect(
+      services.requestRemoteAccessUnlock(ownerActor, tenantContext),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("Nuki live credentials ontbreken"),
+    });
   });
 
   it("lets an owner configure Mollie billing for a gym", async () => {
@@ -2353,7 +3283,24 @@ describe("gym platform services", () => {
     });
   });
 
-  it("returns a billing preview for a payment request flow", async () => {
+  it("creates a live Mollie payment request flow", async () => {
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+    globalThis.fetch =
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            id: "tr_request_1",
+            status: "open",
+            _links: {
+              checkout: {
+                href: "https://pay.mollie.com/p/request",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ) as typeof fetch;
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
     await services.updateBillingSettings(ownerActor, tenantContext, {
@@ -2376,8 +3323,38 @@ describe("gym platform services", () => {
 
     expect(action.provider).toBe("mollie");
     expect(action.paymentMethod).toBe("payment_request");
+    expect(action.mode).toBe("live");
+    expect(action.checkoutUrl).toBe("https://pay.mollie.com/p/request");
+    expect(action.providerPaymentId).toBe("tr_request_1");
     expect(action.summary).toContain("Mollie");
     expect(action.summary).toContain("Noa van Dijk");
+  });
+
+  it("blocks Mollie payment actions when live credentials are missing", async () => {
+    delete process.env.MOLLIE_API_KEY;
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["payment_request"],
+    });
+
+    await expect(
+      services.requestBillingPreview(ownerActor, tenantContext, {
+        paymentMethod: "payment_request",
+        amountCents: 2495,
+        currency: "EUR",
+        description: "Intake bundle",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("Mollie live credentials ontbreken"),
+    });
   });
 
   it("imports existing contracts and customer list in one flow", async () => {

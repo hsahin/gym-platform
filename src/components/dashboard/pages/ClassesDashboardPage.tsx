@@ -3,15 +3,17 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
-import { ListView } from "@heroui-pro/react/list-view";
+import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { BookingDialog } from "@/components/BookingDialog";
 import { CancelBookingButton } from "@/components/CancelBookingButton";
+import { DashboardEntityActions } from "@/components/DashboardEntityActions";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
+import { filterManagementRecords } from "@/lib/dashboard-management";
 import {
   EmptyPanel,
   PageSection,
@@ -24,6 +26,8 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [classesView, setClassesView] = useState<"schedule" | "bookings">("schedule");
+  const [classSearch, setClassSearch] = useState("");
+  const [classStatusFilter, setClassStatusFilter] = useState("all");
   const [oneToOneSessionName, setOneToOneSessionName] = useState(
     snapshot.bookingWorkspace.oneToOneSessionName,
   );
@@ -58,6 +62,12 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const upcomingSessions = [...snapshot.classSessions].sort((left, right) =>
     left.startsAt.localeCompare(right.startsAt),
   );
+  const filteredClassSessions = filterManagementRecords(upcomingSessions, {
+    query: classSearch,
+    searchKeys: ["title", "focus", "level", "status"],
+    filterKey: "status",
+    filterValue: classStatusFilter,
+  });
   const recentBookings = [...snapshot.bookings].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
@@ -290,8 +300,8 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <PageSection
           actions={<BookingDialog classSessions={snapshot.classSessions} members={snapshot.members} />}
-          title="Classes and bookings"
-          description="Switch between schedule and booking operations."
+          title="Lessen en reserveringen"
+          description="Schakel tussen roosterbeheer en reserveringsbeheer."
         >
           <div className="grid content-start gap-3">
             <Segment
@@ -300,13 +310,39 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
               size="sm"
               onSelectionChange={(key) => setClassesView(String(key) as typeof classesView)}
             >
-              <Segment.Item id="schedule">Schedule</Segment.Item>
-              <Segment.Item id="bookings">Bookings</Segment.Item>
+              <Segment.Item id="schedule">Rooster</Segment.Item>
+              <Segment.Item id="bookings">Reserveringen</Segment.Item>
             </Segment>
 
             {classesView === "schedule" ? (
               upcomingSessions.length > 0 ? (
-                <ListView aria-label="Classes" items={upcomingSessions}>
+                <>
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                  <div className="field-stack">
+                    <Label>Zoeken</Label>
+                    <Input
+                      fullWidth
+                      placeholder="Zoek op lesnaam, focus of niveau"
+                      value={classSearch}
+                      onChange={(event) => setClassSearch(event.target.value)}
+                    />
+                  </div>
+                  <label className="field-stack">
+                    <span className="text-sm font-medium">Filter</span>
+                    <select
+                      className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                      value={classStatusFilter}
+                      onChange={(event) => setClassStatusFilter(event.target.value)}
+                    >
+                      <option value="all">Alle statussen</option>
+                      <option value="active">Actief</option>
+                      <option value="paused">Gepauzeerd</option>
+                      <option value="archived">Gearchiveerd</option>
+                    </select>
+                  </label>
+                </div>
+                {filteredClassSessions.length > 0 ? (
+                <ListView aria-label="Lessen" items={filteredClassSessions}>
                   {(session) => (
                     <ListView.Item id={session.id} textValue={session.title}>
                       <ListView.ItemContent>
@@ -316,16 +352,108 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                           {session.capacity}
                         </ListView.Description>
                       </ListView.ItemContent>
-                      <Chip size="sm" variant="tertiary">
-                        {session.level}
-                      </Chip>
+                      <div className="flex flex-wrap gap-2">
+                        <Chip size="sm" variant="tertiary">
+                          {session.level}
+                        </Chip>
+                        <Chip size="sm" variant="tertiary">
+                          {session.status}
+                        </Chip>
+                      </div>
+                      <DashboardEntityActions
+                        endpoint="/api/platform/classes"
+                        entityLabel={`Les ${session.title}`}
+                        updatePayloadBase={{
+                          id: session.id,
+                          expectedVersion: session.version,
+                        }}
+                        archivePayload={{
+                          id: session.id,
+                          expectedVersion: session.version,
+                        }}
+                        deletePayload={{
+                          id: session.id,
+                          expectedVersion: session.version,
+                        }}
+                        fields={[
+                          { name: "title", label: "Lesnaam", defaultValue: session.title },
+                          {
+                            name: "locationId",
+                            label: "Vestiging",
+                            defaultValue: session.locationId,
+                            type: "select",
+                            options: snapshot.locations.map((location) => ({
+                              value: location.id,
+                              label: location.name,
+                            })),
+                          },
+                          {
+                            name: "trainerId",
+                            label: "Trainer",
+                            defaultValue: session.trainerId,
+                            type: "select",
+                            options: snapshot.trainers.map((trainer) => ({
+                              value: trainer.id,
+                              label: trainer.fullName,
+                            })),
+                          },
+                          {
+                            name: "startsAt",
+                            label: "Starttijd",
+                            defaultValue: session.startsAt.slice(0, 16),
+                            type: "datetime-local",
+                          },
+                          {
+                            name: "durationMinutes",
+                            label: "Duur minuten",
+                            defaultValue: session.durationMinutes,
+                            type: "number",
+                          },
+                          {
+                            name: "capacity",
+                            label: "Capaciteit",
+                            defaultValue: session.capacity,
+                            type: "number",
+                          },
+                          {
+                            name: "level",
+                            label: "Niveau",
+                            defaultValue: session.level,
+                            type: "select",
+                            options: [
+                              { value: "beginner", label: "Beginner" },
+                              { value: "mixed", label: "Mixed" },
+                              { value: "advanced", label: "Advanced" },
+                            ],
+                          },
+                          { name: "focus", label: "Focus", defaultValue: session.focus },
+                          {
+                            name: "status",
+                            label: "Status",
+                            defaultValue: session.status,
+                            type: "select",
+                            options: [
+                              { value: "active", label: "Actief" },
+                              { value: "paused", label: "Gepauzeerd" },
+                              { value: "archived", label: "Gearchiveerd" },
+                            ],
+                          },
+                        ]}
+                      />
                     </ListView.Item>
                   )}
                 </ListView>
+                ) : (
+                  <EmptyPanel
+                    title="Geen lessen gevonden"
+                    description="Pas je zoekterm of statusfilter aan om meer lessen te tonen."
+                  />
+                )}
+                </>
               ) : (
                 <EmptyPanel
-                  title="No classes yet"
-                  description="Schedule the first live class from the workbench."
+                  title="Nog geen lessen"
+                  description="Plan je eerste live les vanuit de workbench."
                 />
               )
             ) : recentBookings.length > 0 ? (
@@ -373,8 +501,8 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
               </div>
             ) : (
               <EmptyPanel
-                title="No bookings yet"
-                description="Bookings will populate here once members start reserving."
+                title="Nog geen reserveringen"
+                description="Reserveringen verschijnen hier zodra leden lessen boeken."
               />
             )}
           </div>

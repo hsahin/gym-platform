@@ -73,6 +73,11 @@ describe("dashboard pages", () => {
     expect(pages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          key: "overview",
+          title: "Overzicht",
+          value: "52 leden",
+        }),
+        expect.objectContaining({
           key: "contracts",
           title: "Contracten",
           value: "3 contracten",
@@ -80,17 +85,17 @@ describe("dashboard pages", () => {
         expect.objectContaining({
           key: "coaching",
           title: "Coaching",
-          value: "2 features live",
+          value: "2 modules actief",
         }),
         expect.objectContaining({
           key: "retention",
           title: "Retentie",
-          value: "3 features live",
+          value: "3 modules actief",
         }),
         expect.objectContaining({
           key: "mobile",
-          title: "Mobile app",
-          value: "1 module live",
+          title: "Mobiele app",
+          value: "1 module actief",
         }),
         expect.objectContaining({
           key: "integrations",
@@ -126,15 +131,15 @@ describe("dashboard pages", () => {
     );
 
     expect(pages.find((page) => page.key === "payments")).toMatchObject({
-      value: "Owner-only",
+      value: "Alleen owner",
       helper: expect.not.stringContaining("Mollie API"),
     });
     expect(pages.find((page) => page.key === "access")).toMatchObject({
-      value: "Owner-only",
+      value: "Alleen owner",
       helper: expect.not.stringContaining("Nuki API"),
     });
     expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
-      value: "Owner-only",
+      value: "Alleen owner",
     });
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
       value: "2 checks",
@@ -221,13 +226,13 @@ describe("dashboard pages", () => {
       value: "1 contract",
     });
     expect(pages.find((page) => page.key === "coaching")).toMatchObject({
-      value: "1 feature live",
+      value: "1 module actief",
     });
     expect(pages.find((page) => page.key === "retention")).toMatchObject({
-      value: "1 feature live",
+      value: "1 module actief",
     });
     expect(pages.find((page) => page.key === "mobile")).toMatchObject({
-      value: "1 module live",
+      value: "1 module actief",
     });
     expect(pages.find((page) => page.key === "integrations")).toMatchObject({
       value: "1 koppeling live",

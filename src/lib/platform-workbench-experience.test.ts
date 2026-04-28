@@ -23,7 +23,7 @@ describe("platform workbench experience", () => {
         }),
         expect.objectContaining({
           key: "memberships",
-          countLabel: "0 memberships",
+          countLabel: "0 lidmaatschappen",
           statusLabel: "Nu",
           statusTone: "current",
         }),
@@ -120,7 +120,7 @@ describe("platform workbench experience", () => {
 
     expect(experience.steps[5]).toMatchObject({
       key: "staff",
-      statusLabel: "Owner-only",
+      statusLabel: "Alleen owner",
       statusTone: "locked",
     });
   });

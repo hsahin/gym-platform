@@ -133,19 +133,19 @@ export function getDashboardPages(
   const pages: ReadonlyArray<Omit<DashboardPageDefinition, "href">> = [
     {
       key: "overview",
-      title: "Dashboard",
+      title: "Overzicht",
       value: formatCountLabel(input.membersCount, "lid", "leden"),
-      helper: "Owner facts, planning, recente reserveringen en launch-signalen.",
+      helper: "Kerncijfers, planning, recente reserveringen en launchsignalen.",
     },
     {
       key: "classes",
-      title: "Classes",
+      title: "Lessen",
       value: formatCountLabel(input.classSessionsCount, "les", "lessen"),
       helper: "Rooster, reserveringen, check-ins, capaciteit en wachtlijstbeheer.",
     },
     {
       key: "members",
-      title: "Members",
+      title: "Leden",
       value: formatCountLabel(input.membersCount, "lid", "leden"),
       helper: "Leden, intake-status, tags en membercontext per vestiging.",
     },
@@ -153,49 +153,49 @@ export function getDashboardPages(
       key: "contracts",
       title: "Contracten",
       value: formatCountLabel(input.membershipPlansCount, "contract", "contracten"),
-      helper: "Maand, 6 maanden en jaarcontracten beheren voor memberships.",
+      helper: "Maand-, 6-maanden- en jaarcontracten beheren voor lidmaatschappen.",
     },
     {
       key: "coaching",
       title: "Coaching",
       value: formatCountLabel(
         input.coachingFeaturesEnabled,
-        "feature live",
-        "features live",
+        "module actief",
+        "modules actief",
       ),
-      helper: "Workout plans, nutrition, progress tracking en premium coaching-momenten.",
+      helper: "Workoutflows, voeding, voortgang en premium coachmomenten.",
     },
     {
       key: "retention",
       title: "Retentie",
       value: formatCountLabel(
         input.retentionFeaturesEnabled,
-        "feature live",
-        "features live",
+        "module actief",
+        "modules actief",
       ),
-      helper: "Challenges, communities, questionnaires en membership-retentieflows.",
+      helper: "Uitdagingen, community's, vragenlijsten en retentieflows.",
     },
     {
       key: "access",
-      title: "Smartdeurs",
+      title: "Toegang",
       value: input.canManageRemoteAccess
         ? input.remoteAccessStatusLabel
-        : "Owner-only",
+        : "Alleen owner",
       helper: "Remote toegang voor Nuki en andere gangbare slimme sloten.",
     },
     {
       key: "payments",
       title: "Betalingen",
-      value: input.canManagePayments ? input.paymentsStatusLabel : "Owner-only",
+      value: input.canManagePayments ? input.paymentsStatusLabel : "Alleen owner",
       helper: "Mollie, incasso, eenmalige betalingen en betaalverzoeken per gym.",
     },
     {
       key: "mobile",
-      title: "Mobile app",
+      title: "Mobiele app",
       value: formatCountLabel(
         input.mobileFeaturesEnabled,
-        "module live",
-        "modules live",
+        "module actief",
+        "modules actief",
       ),
       helper: "White-label, mobile check-in en app-ervaringen voor leden en coaching.",
     },
@@ -217,7 +217,7 @@ export function getDashboardPages(
     },
     {
       key: "settings",
-      title: "Settings",
+      title: "Instellingen",
       value:
         input.healthAttentionCount === 0
           ? "Alles gezond"
@@ -227,8 +227,8 @@ export function getDashboardPages(
     {
       key: "superadmin",
       title: "Superadmin",
-      value: input.canManageFeatureFlags ? "Flags beheer" : "Owner-only",
-      helper: "Feature flags, rolloutcontrole en tenant-level activatie van platformmodules.",
+      value: input.canManageFeatureFlags ? "Flags beheer" : "Alleen owner",
+      helper: "Moduleflags, rolloutcontrole en tenantbrede activatie van platformmodules.",
     },
   ];
 

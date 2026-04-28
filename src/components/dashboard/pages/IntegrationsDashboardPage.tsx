@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ActivitySquare, Database, Link2, PlugZap } from "lucide-react";
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
-import { ListView } from "@heroui-pro/react/list-view";
+import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import {
   parseCommaList,
   submitDashboardMutation,

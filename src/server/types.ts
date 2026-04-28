@@ -194,6 +194,16 @@ export interface MemberSignupRequest {
   readonly updatedAt: string;
 }
 
+export interface PublicMembershipSignupResult {
+  readonly signup: MemberSignupRequest;
+  readonly member: GymMember;
+  readonly invoice: BillingInvoice;
+  readonly contract: MemberContractRecord | null;
+  readonly checkoutUrl: string;
+  readonly providerPaymentId: string;
+  readonly providerStatus: string;
+}
+
 export interface BillingInvoice {
   readonly id: string;
   readonly tenantId: TenantId;
@@ -489,8 +499,8 @@ export interface StaffSummary {
 export interface RuntimeState {
   readonly storeMode: "memory" | "mongo";
   readonly cacheMode: "memory" | "redis";
-  readonly messagingMode: "preview" | "waha" | "whatsapp-cloud";
-  readonly storageMode: "preview" | "spaces";
+  readonly messagingMode: "not_configured" | "waha" | "whatsapp-cloud";
+  readonly storageMode: "not_configured" | "spaces";
 }
 
 export interface DashboardUiCapabilities {
@@ -528,7 +538,9 @@ export interface RemoteAccessActionReceipt {
   readonly deviceLabel: string;
   readonly locationName: string | null;
   readonly requestedAt: string;
-  readonly mode: "preview";
+  readonly mode: "live";
+  readonly providerActionId: string;
+  readonly providerStatus: string;
   readonly summary: string;
 }
 
@@ -560,7 +572,11 @@ export interface BillingActionReceipt {
   readonly description: string;
   readonly memberName?: string;
   readonly requestedAt: string;
-  readonly mode: "preview";
+  readonly mode: "live";
+  readonly invoiceId: string;
+  readonly providerPaymentId: string;
+  readonly providerStatus: string;
+  readonly checkoutUrl: string;
   readonly summary: string;
 }
 
@@ -689,8 +705,13 @@ export interface PublicMembershipSignupSnapshot {
   }>;
   readonly legal: Pick<
     LegalComplianceSummary,
-    "termsUrl" | "privacyUrl" | "sepaMandateText" | "contractPdfTemplateKey"
+    | "termsUrl"
+    | "privacyUrl"
+    | "sepaMandateText"
+    | "contractPdfTemplateKey"
+    | "waiverStorageKey"
   >;
+  readonly legalReady: boolean;
   readonly billingReady: boolean;
 }
 

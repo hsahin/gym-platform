@@ -69,7 +69,7 @@ export function PublicLandingPage({
           </div>
           <div className="app-header__brand-copy">
             <p className="text-sm font-semibold">GymOS</p>
-            <p className="text-muted text-sm">Operations for multi-location gyms</p>
+            <p className="text-muted text-sm">Sportscholen met meerdere vestigingen</p>
           </div>
         </div>
 
@@ -112,27 +112,28 @@ export function PublicLandingPage({
         <section className="subtle-grid rounded-[28px] border border-border/80 bg-background px-6 py-7 md:px-8 md:py-9">
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
-              Multi-gym
+              Meerdere clubs
             </span>
             <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
-              Live booking data
+              Live roosterdata
             </span>
           </div>
 
           <div className="mt-5 max-w-4xl space-y-3">
             <h1 className="text-4xl leading-tight font-semibold md:text-5xl">
-              Run bookings, members, payments, and access from one calm surface.
+              Beheer reserveringen, leden, betalingen en toegang vanuit één rustig overzicht.
             </h1>
             <p className="text-muted max-w-3xl text-base leading-7">
-              The product is focused on actual gym operations: schedule fill, member
-              state, revenue readiness, and launch setup. No marketing-shell dashboard.
+              Dit platform is gebouwd voor echte gym-operatie: roosterbezetting,
+              lidstatus, betaalgereedheid en een duidelijke livegang. Geen losse
+              marketinglaag, wel direct bruikbaar clubbeheer.
             </p>
           </div>
 
           <div className="mt-7 grid gap-4 sm:grid-cols-3">
-            <MetricCard label="Gyms" value={String(activeGymCount)} />
-            <MetricCard label="Classes live" value={String(snapshot.classSessions.length)} />
-            <MetricCard label="Occupancy" value={`${occupancy}%`} />
+            <MetricCard label="Clubs" value={String(activeGymCount)} />
+            <MetricCard label="Lessen live" value={String(snapshot.classSessions.length)} />
+            <MetricCard label="Bezetting" value={`${occupancy}%`} />
           </div>
 
           <div className="mt-7 flex flex-wrap gap-3">
@@ -163,9 +164,10 @@ export function PublicLandingPage({
         <section className="rounded-[28px] border border-border/80 bg-background px-6 py-7 md:px-8 md:py-9">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-lg font-semibold">Live demand</p>
+              <p className="text-lg font-semibold">Live vraag</p>
               <p className="text-muted mt-1 text-sm leading-6">
-                The public flow exposes what is actually available, not a static brochure.
+                De publieke flow laat alleen zien wat echt boekbaar is, niet een
+                statische brochure.
               </p>
             </div>
             <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
@@ -175,7 +177,7 @@ export function PublicLandingPage({
 
           <div className="mt-6 space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">Booked</span>
+              <span className="text-muted">Geboekt</span>
               <span className="tabular-nums">
                 {bookedSpots} / {totalCapacity || 0}
               </span>
@@ -211,17 +213,17 @@ export function PublicLandingPage({
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <FeatureCard
-          title="Operations first"
-          copy="Pages are organized by work: classes, members, contracts, access, payments, settings."
+          <FeatureCard
+          title="Operatie eerst"
+          copy="Pagina's zijn ingedeeld op werk: lessen, leden, contracten, toegang, betalingen en instellingen."
         />
         <FeatureCard
-          title="Real setup flows"
-          copy="The workbench creates locations, memberships, trainers, staff, payments, and legal setup."
+          title="Echte inrichtflows"
+          copy="De workbench helpt je locaties, memberships, trainers, team, betalingen en juridische basis opzetten."
         />
         <FeatureCard
-          title="Consumer flow included"
-          copy="Every gym gets its own reservation flow and live schedule without separate tooling."
+          title="Ledenflow inbegrepen"
+          copy="Elke club krijgt een eigen reserveringsflow en live rooster, zonder aparte tooling ernaast."
         />
       </section>
     </main>
