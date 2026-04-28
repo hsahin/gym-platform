@@ -43,6 +43,7 @@ export interface DashboardPagesInput {
   readonly mobileFeaturesEnabled: number;
   readonly integrationFeaturesEnabled: number;
   readonly canManageFeatureFlags: boolean;
+  readonly canManageOwnerAccounts: boolean;
 }
 
 export interface DashboardPageDefinition {
@@ -227,8 +228,12 @@ export function getDashboardPages(
     {
       key: "superadmin",
       title: "Superadmin",
-      value: input.canManageFeatureFlags ? "Flags beheer" : "Alleen owner",
-      helper: "Moduleflags, rolloutcontrole en tenantbrede activatie van platformmodules.",
+      value: input.canManageOwnerAccounts
+        ? "Owner beheer"
+        : input.canManageFeatureFlags
+          ? "Flags beheer"
+          : "Geen toegang",
+      helper: "Owner accounts, moduleflags en rolloutcontrole voor het platform.",
     },
   ];
 

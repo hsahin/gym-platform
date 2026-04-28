@@ -69,6 +69,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
     mobileFeaturesEnabled,
     integrationFeaturesEnabled,
     canManageFeatureFlags: snapshot.uiCapabilities.canManageFeatureFlags,
+    canManageOwnerAccounts: snapshot.uiCapabilities.canManageOwnerAccounts,
   });
   const overviewFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "overview",

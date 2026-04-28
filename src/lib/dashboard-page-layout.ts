@@ -23,7 +23,7 @@ const pageFormTitles: Record<DashboardPageKey, ReadonlyArray<string>> = {
     "Teamlid uitnodigen",
     "Contracten en klanten importeren",
   ],
-  superadmin: ["Feature flags beheren"],
+  superadmin: ["Gym owner account toevoegen", "Feature flags beheren"],
 };
 
 export function getDashboardPageLayout(

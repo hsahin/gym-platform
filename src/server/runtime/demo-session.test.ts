@@ -61,6 +61,24 @@ describe("demo session runtime", () => {
     expect(viewer?.tenantContext.tenantId).toBe("northside-athletics");
   });
 
+  it("resolves superadmin sessions with a global platform admin role", async () => {
+    const token = await issueSessionForAccount(
+      {
+        userId: "staff_superadmin",
+        email: "superadmin@gym-platform.test",
+        displayName: "Platform Superadmin",
+        roleKey: "superadmin",
+      },
+      "northside-athletics",
+    );
+    const viewer = await resolveViewerFromToken(token);
+
+    expect(viewer?.roleKey).toBe("superadmin");
+    expect(viewer?.roleLabel).toBe("Superadmin");
+    expect(viewer?.actor.globalRoles).toContain("platform.admin");
+    expect(viewer?.tenantContext.tenantId).toBe("northside-athletics");
+  });
+
   it("issues one session for multi-club member accounts", async () => {
     const token = await issueSessionForAuthenticatedAccount({
       account: {

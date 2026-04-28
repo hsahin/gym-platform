@@ -206,7 +206,12 @@ const roleDefinitions = [
   {
     key: "platform.admin",
     scope: "global" as const,
-    grants: ["dashboard.read", "reports.read", "settings.manage"],
+    grants: [
+      "dashboard.read",
+      "reports.read",
+      "settings.manage",
+      "platform.accounts.manage",
+    ],
   },
   {
     key: "gym.owner",
@@ -564,6 +569,10 @@ function assertAccess(
   tenantContext: TenantContext,
   requiredPermissions: ReadonlyArray<string>,
 ) {
+  if (runtime.permissionRegistry.hasPermissions(actor, requiredPermissions, tenantContext)) {
+    return;
+  }
+
   const membership = getTenantMembership(actor, tenantContext.tenantId);
 
   if (!membership) {
@@ -573,15 +582,13 @@ function assertAccess(
     });
   }
 
-  if (!runtime.permissionRegistry.hasPermissions(actor, requiredPermissions, tenantContext)) {
-    throw new AppError("De huidige rol mist permissies voor deze actie.", {
-      code: "FORBIDDEN",
-      details: {
-        tenantId: tenantContext.tenantId,
-        requiredPermissions,
-      },
-    });
-  }
+  throw new AppError("De huidige rol mist permissies voor deze actie.", {
+    code: "FORBIDDEN",
+    details: {
+      tenantId: tenantContext.tenantId,
+      requiredPermissions,
+    },
+  });
 }
 
 async function buildUserDirectory() {
@@ -1261,7 +1268,7 @@ async function buildStaffSummaries(
   ]);
   const accountByUserId = new Map(
     accounts
-      .filter((account) => account.roleKey !== "member")
+      .filter((account) => account.roleKey !== "member" && account.roleKey !== "superadmin")
       .map((account) => [account.userId, account]),
   );
 
@@ -1280,7 +1287,60 @@ async function buildStaffSummaries(
       roleKey: account?.roleKey,
       updatedAt: account?.updatedAt,
     };
-  }).filter((staff) => staff.roleKey !== "member");
+  }).filter((staff) => staff.roleKey !== "member" && staff.roleKey !== "superadmin");
+}
+
+async function buildSuperadminSummary(): Promise<GymDashboardSnapshot["superadmin"]> {
+  const [tenants, accounts] = await Promise.all([
+    listLocalTenants(),
+    listLocalPlatformAccounts(),
+  ]);
+  const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]));
+  const ownerAccounts = accounts
+    .filter((account) => account.roleKey === "owner")
+    .map((account) => {
+      const tenant = tenantById.get(account.tenantId);
+
+      return {
+        id: account.userId,
+        tenantId: account.tenantId,
+        tenantName: tenant?.name ?? account.tenantId,
+        displayName: account.displayName,
+        email: account.email,
+        status: account.status,
+        roleKey: "owner" as const,
+        updatedAt: account.updatedAt,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.tenantName.localeCompare(right.tenantName, "nl") ||
+        left.displayName.localeCompare(right.displayName, "nl"),
+    );
+
+  return {
+    tenantsCount: tenants.length,
+    activeOwnerAccounts: ownerAccounts.filter((account) => account.status === "active").length,
+    archivedOwnerAccounts: ownerAccounts.filter((account) => account.status === "archived").length,
+    ownerAccounts,
+  };
+}
+
+async function toOwnerAccountSummary(
+  account: Awaited<ReturnType<typeof listLocalPlatformAccounts>>[number],
+): Promise<GymDashboardSnapshot["superadmin"]["ownerAccounts"][number]> {
+  const tenant = await getLocalTenantProfile(account.tenantId);
+
+  return {
+    id: account.userId,
+    tenantId: account.tenantId,
+    tenantName: tenant?.name ?? account.tenantId,
+    displayName: account.displayName,
+    email: account.email,
+    status: account.status,
+    roleKey: "owner",
+    updatedAt: account.updatedAt,
+  };
 }
 
 async function buildRemoteAccessSummary(
@@ -2074,6 +2134,15 @@ function slimDashboardSnapshotForPage(
             contracts: [],
           },
     staff: page === "settings" ? snapshot.staff : [],
+    superadmin:
+      page === "superadmin"
+        ? snapshot.superadmin
+        : {
+            tenantsCount: 0,
+            activeOwnerAccounts: 0,
+            archivedOwnerAccounts: 0,
+            ownerAccounts: [],
+          },
     auditEntries: page === "access" ? snapshot.auditEntries : [],
     notificationPreview:
       page === "retention" || page === "marketing" ? snapshot.notificationPreview : "",
@@ -2545,6 +2614,37 @@ export interface GymPlatformServices {
     actor: AuthActor,
     tenantContext: TenantContext,
     input: { readonly userId: string; readonly expectedUpdatedAt: string },
+  ): Promise<void>;
+  createGymOwnerAccount(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly tenantId: string;
+      readonly displayName: string;
+      readonly email: string;
+      readonly password: string;
+    },
+  ): Promise<GymDashboardSnapshot["superadmin"]["ownerAccounts"][number]>;
+  updateGymOwnerAccount(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly tenantId: string;
+      readonly userId: string;
+      readonly expectedUpdatedAt: string;
+      readonly displayName: string;
+      readonly email: string;
+      readonly status: "active" | "archived";
+    },
+  ): Promise<GymDashboardSnapshot["superadmin"]["ownerAccounts"][number]>;
+  deleteGymOwnerAccount(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly tenantId: string;
+      readonly userId: string;
+      readonly expectedUpdatedAt: string;
+    },
   ): Promise<void>;
   updateRemoteAccessSettings(
     actor: AuthActor,
@@ -3274,6 +3374,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         auditEntries,
         healthReport,
         staff,
+        superadmin,
       ] = await Promise.all([
         runtime.store.listLocations(tenantContext),
         runtime.store.listMembershipPlans(tenantContext),
@@ -3287,6 +3388,18 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         runtime.auditLogger.list({ tenantId: tenantContext.tenantId }),
         runtime.healthRegistry.run({ tenantContext }),
         buildStaffSummaries(runtime, tenantContext),
+        runtime.permissionRegistry.hasPermissions(
+          actor,
+          ["platform.accounts.manage"],
+          tenantContext,
+        )
+          ? buildSuperadminSummary()
+          : Promise.resolve({
+              tenantsCount: 0,
+              activeOwnerAccounts: 0,
+              archivedOwnerAccounts: 0,
+              ownerAccounts: [],
+            }),
       ]);
       const [
         remoteAccess,
@@ -3410,6 +3523,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             ["settings.manage"],
             tenantContext,
           ),
+          canManageOwnerAccounts: runtime.permissionRegistry.hasPermissions(
+            actor,
+            ["platform.accounts.manage"],
+            tenantContext,
+          ),
         },
         remoteAccess,
         payments,
@@ -3467,6 +3585,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         leads: tenantProfile?.leads ?? [],
         collectionCases: tenantProfile?.collectionCases ?? [],
         staff,
+        superadmin,
         auditEntries: auditEntries.slice(0, 6) as ReadonlyArray<AuditEntry>,
         healthReport,
         projectedRevenueLabel: formatCurrencyValue(projectedRevenue, "EUR", "nl"),
@@ -5155,6 +5274,109 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         metadata: { userId: input.userId },
       });
 
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+    },
+    async createGymOwnerAccount(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["platform.accounts.manage"]);
+      const nextState = await createLocalPlatformAccount(input.tenantId, {
+        displayName: input.displayName,
+        email: input.email,
+        password: input.password,
+        roleKey: "owner",
+      });
+      const createdAccount = [...nextState.accounts]
+        .reverse()
+        .find(
+          (account) =>
+            account.roleKey === "owner" &&
+            account.email === input.email.trim().toLowerCase(),
+        );
+
+      if (!createdAccount) {
+        throw new AppError("Owner-account kon niet worden aangemaakt.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      await runtime.userDirectory.upsert(
+        createPlatformUser({
+          userId: createdAccount.userId,
+          email: createdAccount.email,
+          displayName: createdAccount.displayName,
+          memberships: [
+            {
+              tenantId: input.tenantId,
+              roleKeys: [getMembershipRole("owner")],
+            },
+          ],
+        }),
+      );
+      await runtime.auditLogger.write({
+        action: "superadmin.owner_account.created",
+        category: "staff",
+        actorId: actor.subjectId,
+        tenantId: toTenantId(input.tenantId),
+        metadata: { userId: createdAccount.userId },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return toOwnerAccountSummary(createdAccount);
+    },
+    async updateGymOwnerAccount(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["platform.accounts.manage"]);
+      const nextState = await updateLocalPlatformAccount(input.tenantId, {
+        userId: input.userId,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        displayName: input.displayName,
+        email: input.email,
+        roleKey: "owner",
+        status: input.status,
+      });
+      const updatedAccount = nextState.accounts.find(
+        (account) => account.userId === input.userId && account.roleKey === "owner",
+      );
+
+      if (!updatedAccount) {
+        throw new AppError("Owner-account kon niet worden bijgewerkt.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      await runtime.userDirectory.upsert(
+        createPlatformUser({
+          userId: updatedAccount.userId,
+          email: updatedAccount.email,
+          displayName: updatedAccount.displayName,
+          status: updatedAccount.status === "archived" ? "disabled" : "active",
+          memberships: [
+            {
+              tenantId: input.tenantId,
+              roleKeys: [getMembershipRole("owner")],
+            },
+          ],
+        }),
+      );
+      await runtime.auditLogger.write({
+        action: "superadmin.owner_account.updated",
+        category: "staff",
+        actorId: actor.subjectId,
+        tenantId: toTenantId(input.tenantId),
+        metadata: { userId: updatedAccount.userId, status: updatedAccount.status },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return toOwnerAccountSummary(updatedAccount);
+    },
+    async deleteGymOwnerAccount(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["platform.accounts.manage"]);
+      await deleteLocalPlatformAccount(input.tenantId, input);
+      await runtime.auditLogger.write({
+        action: "superadmin.owner_account.deleted",
+        category: "staff",
+        actorId: actor.subjectId,
+        tenantId: toTenantId(input.tenantId),
+        metadata: { userId: input.userId },
+      });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
     },
     async updateRemoteAccessSettings(actor, tenantContext, input) {

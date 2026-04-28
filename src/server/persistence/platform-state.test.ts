@@ -55,6 +55,8 @@ import {
   updateLocalTenantLeadTask,
   reviewLocalTenantPaymentMethodRequest,
   reviewLocalTenantPauseRequest,
+  ensureConfiguredSuperadminAccount,
+  upsertLocalSuperadminAccount,
 } from "@/server/persistence/platform-state";
 
 let tempDir = "";
@@ -240,6 +242,57 @@ describe("platform state", () => {
     expect(northsideAccounts.every((account) => account.tenantId === tenant.tenant.id)).toBe(
       true,
     );
+  });
+
+  it("creates a superadmin account anchored to the first gym and authenticates it", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    await upsertLocalSuperadminAccount({
+      displayName: "Platform Superadmin",
+      email: "superadmin@gym-platform.test",
+      password: "SuperAdminPass123!",
+    });
+
+    const authenticated = await authenticateLocalAccount(
+      "superadmin@gym-platform.test",
+      "SuperAdminPass123!",
+    );
+
+    expect(authenticated?.account).toMatchObject({
+      tenantId: tenant.tenant.id,
+      roleKey: "superadmin",
+      email: "superadmin@gym-platform.test",
+    });
+  });
+
+  it("can seed the configured superadmin account from environment variables", async () => {
+    await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+    vi.stubEnv("SUPERADMIN_NAME", "Configured Superadmin");
+    vi.stubEnv("SUPERADMIN_EMAIL", "configured-superadmin@gym-platform.test");
+    vi.stubEnv("SUPERADMIN_PASSWORD", "ConfiguredPass123!");
+
+    await expect(ensureConfiguredSuperadminAccount()).resolves.toBeTruthy();
+    await expect(
+      authenticateLocalAccount(
+        "configured-superadmin@gym-platform.test",
+        "ConfiguredPass123!",
+      ),
+    ).resolves.toMatchObject({
+      account: expect.objectContaining({
+        roleKey: "superadmin",
+        displayName: "Configured Superadmin",
+      }),
+    });
   });
 
   it("rejects duplicate setup and invalid team account mutations", async () => {

@@ -170,6 +170,13 @@ export interface CreatePlatformAccountInput {
   readonly roleKey: PlatformRoleKey;
 }
 
+export interface UpsertSuperadminAccountInput {
+  readonly displayName: string;
+  readonly email: string;
+  readonly password: string;
+  readonly tenantId?: string;
+}
+
 export interface UpdatePlatformAccountInput {
   readonly userId: string;
   readonly expectedUpdatedAt: string;
@@ -663,6 +670,10 @@ function isMemberAccount(account: Pick<LocalPlatformAccount, "roleKey">) {
   return account.roleKey === "member";
 }
 
+function isSuperadminAccount(account: Pick<LocalPlatformAccount, "roleKey">) {
+  return account.roleKey === "superadmin";
+}
+
 function assertUniqueTenantEmail(
   accounts: ReadonlyArray<LocalPlatformAccount>,
   tenantId: TenantId,
@@ -680,6 +691,25 @@ function assertUniqueTenantEmail(
     throw new AppError("Er bestaat al een account met dit e-mailadres binnen deze gym.", {
       code: "INVALID_INPUT",
       details: { email: normalizedEmail, tenantId },
+    });
+  }
+}
+
+function assertUniquePlatformEmail(
+  accounts: ReadonlyArray<LocalPlatformAccount>,
+  normalizedEmail: string,
+  excludeUserId?: string,
+) {
+  const conflict = accounts.some(
+    (account) =>
+      account.userId !== excludeUserId &&
+      normalizeEmail(account.email) === normalizedEmail,
+  );
+
+  if (conflict) {
+    throw new AppError("Er bestaat al een platformaccount met dit e-mailadres.", {
+      code: "INVALID_INPUT",
+      details: { email: normalizedEmail },
     });
   }
 }
@@ -2104,6 +2134,7 @@ export async function authenticateLocalAccount(
   password: string,
   tenantSlug?: string,
 ): Promise<AuthenticatedLocalAccount | null> {
+  await ensureConfiguredSuperadminAccount();
   const state = await readLocalPlatformState();
 
   if (!state) {
@@ -2268,6 +2299,114 @@ export async function createLocalPlatformAccount(
 
     await persistState(nextState);
     return toTenantBootstrapResult(nextState, tenant.id);
+  });
+}
+
+export async function upsertLocalSuperadminAccount(
+  input: UpsertSuperadminAccountInput,
+) {
+  return withStateMutation(async (current) => {
+    if (!current || current.tenants.length === 0) {
+      throw new AppError("Maak eerst minimaal één gym aan voordat je een superadmin koppelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant =
+      (input.tenantId
+        ? current.tenants.find((entry) => entry.id === input.tenantId)
+        : current.tenants[0]) ?? null;
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor dit superadmin-account.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId: input.tenantId },
+      });
+    }
+
+    const normalizedEmail = normalizeEmail(input.email);
+    const existingAccount = current.accounts.find(
+      (account) =>
+        isSuperadminAccount(account) &&
+        normalizeEmail(account.email) === normalizedEmail,
+    );
+    assertUniquePlatformEmail(current.accounts, normalizedEmail, existingAccount?.userId);
+
+    const displayName = input.displayName.trim() || "Platform Superadmin";
+    const passwordStillValid =
+      existingAccount && verifyPassword(input.password, existingAccount.passwordHash);
+
+    if (
+      existingAccount &&
+      existingAccount.tenantId === tenant.id &&
+      existingAccount.displayName === displayName &&
+      existingAccount.status === "active" &&
+      passwordStillValid
+    ) {
+      return toTenantBootstrapResult(current, tenant.id);
+    }
+
+    const now = new Date().toISOString();
+    const nextAccount: LocalPlatformAccount = existingAccount
+      ? {
+          ...existingAccount,
+          tenantId: tenant.id,
+          displayName,
+          email: normalizedEmail,
+          passwordHash: passwordStillValid
+            ? existingAccount.passwordHash
+            : hashPassword(input.password),
+          status: "active",
+          updatedAt: now,
+        }
+      : {
+          userId: accountIdGenerator.next(),
+          tenantId: tenant.id,
+          email: normalizedEmail,
+          displayName,
+          roleKey: "superadmin",
+          passwordHash: hashPassword(input.password),
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        };
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenant.id ? { ...entry, updatedAt: now } : entry,
+      ),
+      accounts: existingAccount
+        ? current.accounts.map((account) =>
+            account.userId === existingAccount.userId ? nextAccount : account,
+          )
+        : [...current.accounts, nextAccount],
+    };
+
+    await persistState(nextState);
+    return toTenantBootstrapResult(nextState, tenant.id);
+  });
+}
+
+export async function ensureConfiguredSuperadminAccount() {
+  const email = process.env.SUPERADMIN_EMAIL?.trim();
+  const password = process.env.SUPERADMIN_PASSWORD?.trim();
+
+  if (!email || !password) {
+    return null;
+  }
+
+  const state = await readLocalPlatformState();
+
+  if (!state || state.tenants.length === 0) {
+    return null;
+  }
+
+  return upsertLocalSuperadminAccount({
+    displayName: process.env.SUPERADMIN_NAME?.trim() || "Platform Superadmin",
+    email,
+    password,
+    tenantId: process.env.SUPERADMIN_TENANT_ID?.trim() || undefined,
   });
 }
 
@@ -2553,6 +2692,7 @@ export async function deleteLocalPlatformAccount(
 
     if (
       account.roleKey === "owner" &&
+      account.status === "active" &&
       current.accounts.filter(
         (entry) =>
           entry.tenantId === tenantId &&

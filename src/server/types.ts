@@ -496,6 +496,24 @@ export interface StaffSummary {
   readonly updatedAt?: string;
 }
 
+export interface SuperadminOwnerAccountSummary {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly status: "active" | "archived";
+  readonly roleKey: "owner";
+  readonly updatedAt: string;
+}
+
+export interface SuperadminSummary {
+  readonly tenantsCount: number;
+  readonly activeOwnerAccounts: number;
+  readonly archivedOwnerAccounts: number;
+  readonly ownerAccounts: ReadonlyArray<SuperadminOwnerAccountSummary>;
+}
+
 export interface RuntimeState {
   readonly storeMode: "memory" | "mongo";
   readonly cacheMode: "memory" | "redis";
@@ -511,6 +529,7 @@ export interface DashboardUiCapabilities {
   readonly canManageRemoteAccess: boolean;
   readonly canManagePayments: boolean;
   readonly canManageFeatureFlags: boolean;
+  readonly canManageOwnerAccounts: boolean;
 }
 
 export interface RemoteAccessSummary {
@@ -767,6 +786,7 @@ export interface GymDashboardSnapshot {
   readonly communityHub: CommunitySummary;
   readonly mobileSelfService: MobileSelfServiceSummary;
   readonly staff: ReadonlyArray<StaffSummary>;
+  readonly superadmin: SuperadminSummary;
   readonly auditEntries: ReadonlyArray<AuditEntry>;
   readonly healthReport: SystemHealthReport;
   readonly projectedRevenueLabel: string;

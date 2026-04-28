@@ -28,6 +28,7 @@ function createDashboardPagesInput(overrides?: Partial<Parameters<typeof getDash
     mobileFeaturesEnabled: 1,
     integrationFeaturesEnabled: 2,
     canManageFeatureFlags: true,
+    canManageOwnerAccounts: false,
     ...overrides,
   };
 }
@@ -123,6 +124,7 @@ describe("dashboard pages", () => {
         canManagePayments: false,
         canManageRemoteAccess: false,
         canManageFeatureFlags: false,
+        canManageOwnerAccounts: false,
         coachingFeaturesEnabled: 0,
         retentionFeaturesEnabled: 0,
         mobileFeaturesEnabled: 0,
@@ -139,7 +141,7 @@ describe("dashboard pages", () => {
       helper: expect.not.stringContaining("Nuki API"),
     });
     expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
-      value: "Alleen owner",
+      value: "Geen toegang",
     });
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
       value: "2 checks",
@@ -152,6 +154,19 @@ describe("dashboard pages", () => {
     });
     expect(pages.find((page) => page.key === "marketing")).toMatchObject({
       value: "Eerste data nodig",
+    });
+  });
+
+  it("labels the superadmin card as owner account management for platform admins", () => {
+    const pages = getDashboardPages(
+      createDashboardPagesInput({
+        canManageOwnerAccounts: true,
+      }),
+    );
+
+    expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
+      value: "Owner beheer",
+      helper: expect.stringContaining("Owner accounts"),
     });
   });
 

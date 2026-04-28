@@ -1,5 +1,5 @@
 export type PlatformRoleKey = "owner" | "manager" | "trainer" | "frontdesk";
-export type AccountRoleKey = PlatformRoleKey | "member";
+export type AccountRoleKey = PlatformRoleKey | "member" | "superadmin";
 
 type BadgeVariant = "success" | "info" | "warning" | "secondary";
 
@@ -75,6 +75,7 @@ const roleToMembershipRole: Record<PlatformRoleKey, string> = {
 const accountRoleToMembershipRole: Record<AccountRoleKey, string> = {
   ...roleToMembershipRole,
   member: "gym.member",
+  superadmin: "platform.admin",
 };
 
 const membershipRoleToRoleKey = new Map(
@@ -85,6 +86,10 @@ const membershipRoleToRoleKey = new Map(
 );
 
 export function getRoleLabel(roleKey: AccountRoleKey) {
+  if (roleKey === "superadmin") {
+    return "Superadmin";
+  }
+
   if (roleKey === "member") {
     return "Lid";
   }

@@ -47,6 +47,7 @@ describe("dashboard page layout", () => {
       "Contracten en klanten importeren",
     ]);
     expect(getDashboardPageLayout("superadmin").formTitles).toEqual([
+      "Gym owner account toevoegen",
       "Feature flags beheren",
     ]);
   });

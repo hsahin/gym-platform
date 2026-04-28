@@ -27,6 +27,7 @@ function createSnapshotFixture() {
       canManageRemoteAccess: true,
       canManagePayments: true,
       canManageFeatureFlags: true,
+      canManageOwnerAccounts: false,
     },
     remoteAccess: {
       enabled: true,
@@ -317,6 +318,12 @@ function createSnapshotFixture() {
         updatedAt: "2026-04-24T09:00:00.000Z",
       },
     ],
+    superadmin: {
+      tenantsCount: 0,
+      activeOwnerAccounts: 0,
+      archivedOwnerAccounts: 0,
+      ownerAccounts: [],
+    },
     auditEntries: [
       {
         eventId: "audit_1",

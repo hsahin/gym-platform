@@ -9,10 +9,17 @@ import {
   GET as getOwnerMobileSelfServiceRoute,
   POST as ownerMobileSelfServiceRoute,
 } from "@/app/api/platform/mobile-self-service/route";
+import {
+  DELETE as deleteSuperadminOwnerAccountRoute,
+  GET as getSuperadminOwnerAccountsRoute,
+  PATCH as updateSuperadminOwnerAccountRoute,
+  POST as createSuperadminOwnerAccountRoute,
+} from "@/app/api/platform/superadmin/owner-accounts/route";
 import { POST as updateFeatureFlagRoute } from "@/app/api/platform/feature-flags/route";
 import {
   authenticateLocalAccount,
   bootstrapLocalPlatform,
+  upsertLocalSuperadminAccount,
 } from "@/server/persistence/platform-state";
 import {
   IDEMPOTENCY_HEADER,
@@ -294,6 +301,169 @@ describe("owner platform route integrations", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("FORBIDDEN");
     expect(payload.error.message).toContain("mist permissies");
+  });
+
+  it("lets a superadmin manage owner accounts across gyms", async () => {
+    const firstGym = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+    const secondGym = await bootstrapLocalPlatform({
+      tenantName: "Atlas Forge Club",
+      ownerName: "Mustafa Ali",
+      ownerEmail: "owner@atlasforge.test",
+      password: "AtlasPass123!",
+    });
+    await upsertLocalSuperadminAccount({
+      displayName: "Platform Superadmin",
+      email: "superadmin@gym-platform.test",
+      password: "SuperAdminPass123!",
+    });
+
+    const { token } = await loginAndExtractSession(
+      "superadmin@gym-platform.test",
+      "SuperAdminPass123!",
+    );
+    const response = await getSuperadminOwnerAccountsRoute(
+      createAuthenticatedGetRequest(
+        "http://localhost/api/platform/superadmin/owner-accounts",
+        token,
+      ),
+    );
+    const payload = (await response.json()) as {
+      ok: boolean;
+      data: {
+        ownerAccounts: ReadonlyArray<{
+          tenantId: string;
+          tenantName: string;
+          email: string;
+          roleKey: string;
+        }>;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.ownerAccounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tenantId: firstGym.tenant.id,
+          tenantName: "Northside Athletics",
+          email: "owner@northside.test",
+          roleKey: "owner",
+        }),
+        expect.objectContaining({
+          tenantId: secondGym.tenant.id,
+          tenantName: "Atlas Forge Club",
+          email: "owner@atlasforge.test",
+          roleKey: "owner",
+        }),
+      ]),
+    );
+
+    const createResponse = await createSuperadminOwnerAccountRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/superadmin/owner-accounts",
+        {
+          tenantId: secondGym.tenant.id,
+          displayName: "Second Owner",
+          email: "second-owner@atlasforge.test",
+          password: "SecondOwnerPass123!",
+        },
+        token,
+      ),
+    );
+    const createPayload = (await createResponse.json()) as {
+      ok: boolean;
+      data: {
+        id: string;
+        tenantId: string;
+        email: string;
+        roleKey: string;
+        updatedAt: string;
+      };
+    };
+
+    expect(createResponse.status).toBe(201);
+    expect(createPayload.ok).toBe(true);
+    expect(createPayload.data).toMatchObject({
+      tenantId: secondGym.tenant.id,
+      email: "second-owner@atlasforge.test",
+      roleKey: "owner",
+    });
+
+    const updateResponse = await updateSuperadminOwnerAccountRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/superadmin/owner-accounts",
+        {
+          tenantId: secondGym.tenant.id,
+          userId: createPayload.data.id,
+          expectedUpdatedAt: createPayload.data.updatedAt,
+          displayName: "Second Owner Archived",
+          email: "second-owner@atlasforge.test",
+          status: "archived",
+        },
+        token,
+      ),
+    );
+    const updatePayload = (await updateResponse.json()) as {
+      ok: boolean;
+      data: {
+        id: string;
+        tenantId: string;
+        status: string;
+        updatedAt: string;
+      };
+    };
+
+    expect(updateResponse.status).toBe(200);
+    expect(updatePayload.ok).toBe(true);
+    expect(updatePayload.data).toMatchObject({
+      id: createPayload.data.id,
+      tenantId: secondGym.tenant.id,
+      status: "archived",
+    });
+
+    const deleteResponse = await deleteSuperadminOwnerAccountRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/superadmin/owner-accounts",
+        {
+          tenantId: secondGym.tenant.id,
+          userId: createPayload.data.id,
+          expectedUpdatedAt: updatePayload.data.updatedAt,
+        },
+        token,
+      ),
+    );
+    const deletePayload = (await deleteResponse.json()) as {
+      ok: boolean;
+      data: { deleted: boolean };
+    };
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deletePayload).toMatchObject({ ok: true, data: { deleted: true } });
+  });
+
+  it("blocks regular gym owners from the superadmin owner-account route", async () => {
+    await bootstrapOwnerPlatform();
+    const { token } = await loginAndExtractSession("owner@northside.test", "strong-pass-123");
+
+    const response = await getSuperadminOwnerAccountsRoute(
+      createAuthenticatedGetRequest(
+        "http://localhost/api/platform/superadmin/owner-accounts",
+        token,
+      ),
+    );
+    const payload = (await response.json()) as {
+      ok: boolean;
+      error: { code: string; message: string };
+    };
+
+    expect(response.status).toBe(403);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("FORBIDDEN");
   });
 
   it("lets owners read and review mobile self-service requests while blocking members on the owner route", async () => {

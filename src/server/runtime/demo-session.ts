@@ -46,14 +46,17 @@ export function buildPlatformActor(
   account: Pick<LocalPlatformAccount, "userId" | "email" | "displayName" | "roleKey">,
   tenantId: string,
 ): AuthActor {
+  const membershipRole = getMembershipRole(account.roleKey);
+
   return createAuthActor({
     subjectId: account.userId,
     email: account.email,
     displayName: account.displayName,
+    globalRoles: account.roleKey === "superadmin" ? [membershipRole] : [],
     tenantMemberships: [
       {
         tenantId,
-        roles: [getMembershipRole(account.roleKey)],
+        roles: [membershipRole],
       },
     ],
   });
@@ -74,11 +77,15 @@ export function buildActorForAccounts(
     accounts.length > 1 && accounts.every((account) => account.roleKey === "member")
       ? `member:${primaryAccount.email}`
       : primaryAccount.userId;
+  const globalRoles = accounts
+    .filter((account) => account.roleKey === "superadmin")
+    .map((account) => getMembershipRole(account.roleKey));
 
   return createAuthActor({
     subjectId,
     email: primaryAccount.email,
     displayName: primaryAccount.displayName,
+    globalRoles,
     tenantMemberships: accounts.map((account) => ({
       tenantId: account.tenantId,
       roles: [getMembershipRole(account.roleKey)],
@@ -104,6 +111,10 @@ export async function issueSessionForAuthenticatedAccount(
 }
 
 function resolveRoleKey(actor: AuthActor): AccountRoleKey {
+  if (actor.globalRoles.includes(getMembershipRole("superadmin"))) {
+    return "superadmin";
+  }
+
   const membership = listActorTenants(actor)[0];
   const membershipRole = membership?.roles.find((role) =>
     Boolean(getRoleKeyFromMembershipRole(role)),

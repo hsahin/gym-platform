@@ -82,7 +82,7 @@ const pageCopy: Record<
   },
   superadmin: {
     title: "Superadmin",
-    description: "Beheer tenant-flags en houd module-rollout centraal onder controle.",
+    description: "Beheer gym owners, tenant-flags en platform-rollout centraal.",
   },
 };
 
@@ -133,7 +133,10 @@ export function GymDashboardClientShell({
   const ctaHref =
     copy.ctaHref === "/reserve" ? `/reserve?gym=${tenantId}` : copy.ctaHref;
   const visibleNavigationItems = navigationItems.filter(
-    (item) => item.key !== "superadmin" || snapshot.uiCapabilities.canManageFeatureFlags,
+    (item) =>
+      item.key !== "superadmin" ||
+      snapshot.uiCapabilities.canManageFeatureFlags ||
+      snapshot.uiCapabilities.canManageOwnerAccounts,
   );
 
   return (
