@@ -29,6 +29,10 @@ describe("dashboard management UI wiring", () => {
     expect(classes).toContain('endpoint="/api/platform/classes"');
     expect(classes).toContain("classSearch");
     expect(classes).toContain("classStatusFilter");
+    expect(classes).toContain("buildClassTypeTabs");
+    expect(classes).toContain("selectedClassTypeKey");
+    expect(classes).toContain("Soort les kiezen");
+    expect(classes).toContain('submitDashboardMutation("/api/platform/classes"');
 
     expect(settings).toContain("DashboardEntityActions");
     expect(settings).toContain('endpoint="/api/platform/locations"');

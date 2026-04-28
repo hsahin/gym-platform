@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
@@ -13,6 +13,13 @@ import { DashboardEntityActions } from "@/components/DashboardEntityActions";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
+import {
+  ALL_CLASS_TYPE_KEY,
+  buildClassTypeTabs,
+  filterClassSessionsByType,
+  getClassTypeKeyForSession,
+  resolveSelectedClassType,
+} from "@/lib/class-types";
 import { filterManagementRecords } from "@/lib/dashboard-management";
 import {
   EmptyPanel,
@@ -22,12 +29,28 @@ import {
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
 
+function toDateTimeLocalValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function defaultClassStartValue() {
+  const nextMorning = new Date();
+  nextMorning.setDate(nextMorning.getDate() + 1);
+  nextMorning.setHours(9, 0, 0, 0);
+  return toDateTimeLocalValue(nextMorning);
+}
+
 export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [classesView, setClassesView] = useState<"schedule" | "bookings">("schedule");
   const [classSearch, setClassSearch] = useState("");
   const [classStatusFilter, setClassStatusFilter] = useState("all");
+  const [selectedClassTypeKey, setSelectedClassTypeKey] = useState("hiit");
   const [oneToOneSessionName, setOneToOneSessionName] = useState(
     snapshot.bookingWorkspace.oneToOneSessionName,
   );
@@ -62,7 +85,13 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const upcomingSessions = [...snapshot.classSessions].sort((left, right) =>
     left.startsAt.localeCompare(right.startsAt),
   );
-  const filteredClassSessions = filterManagementRecords(upcomingSessions, {
+  const classTypeTabs = buildClassTypeTabs(upcomingSessions);
+  const selectedClassType = resolveSelectedClassType(classTypeTabs, selectedClassTypeKey);
+  const typeFilteredClassSessions = filterClassSessionsByType(
+    upcomingSessions,
+    selectedClassTypeKey,
+  );
+  const filteredClassSessions = filterManagementRecords(typeFilteredClassSessions, {
     query: classSearch,
     searchKeys: ["title", "focus", "level", "status"],
     filterKey: "status",
@@ -71,9 +100,48 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const recentBookings = [...snapshot.bookings].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
+  const classSessionById = new Map(
+    snapshot.classSessions.map((session) => [session.id, session]),
+  );
+  const typeFilteredBookings =
+    selectedClassTypeKey === ALL_CLASS_TYPE_KEY
+      ? recentBookings
+      : recentBookings.filter((booking) => {
+          const classSession = classSessionById.get(booking.classSessionId);
+          return classSession
+            ? getClassTypeKeyForSession(classSession) === selectedClassTypeKey
+            : false;
+        });
   const classFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "classes",
   );
+
+  function createTypedClassSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const rawStartsAt = String(formData.get("startsAt") ?? "");
+
+    startTransition(async () => {
+      try {
+        await submitDashboardMutation("/api/platform/classes", {
+          title: String(formData.get("title") ?? ""),
+          locationId: String(formData.get("locationId") ?? ""),
+          trainerId: String(formData.get("trainerId") ?? ""),
+          startsAt: new Date(rawStartsAt).toISOString(),
+          durationMinutes: Number(formData.get("durationMinutes") ?? "45"),
+          capacity: Number(formData.get("capacity") ?? "16"),
+          level: String(formData.get("level") ?? "mixed"),
+          focus: selectedClassType.focus,
+        });
+        toast.success(`${selectedClassType.label} les gepland.`);
+        form.reset();
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Les plannen mislukt.");
+      }
+    });
+  }
 
   useEffect(() => {
     setOneToOneSessionName(snapshot.bookingWorkspace.oneToOneSessionName);
@@ -88,6 +156,12 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
     setMaxDailyWaitlistPerMember(snapshot.bookingPolicy.maxDailyWaitlistPerMember);
     setAutoPromoteWaitlist(snapshot.bookingPolicy.autoPromoteWaitlist);
   }, [snapshot.bookingPolicy, snapshot.bookingWorkspace]);
+
+  useEffect(() => {
+    if (!classTypeTabs.some((tab) => tab.key === selectedClassTypeKey)) {
+      setSelectedClassTypeKey(classTypeTabs[0]?.key ?? ALL_CLASS_TYPE_KEY);
+    }
+  }, [classTypeTabs, selectedClassTypeKey]);
 
   return (
     <div className="section-stack">
@@ -299,7 +373,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <PageSection
-          actions={<BookingDialog classSessions={snapshot.classSessions} members={snapshot.members} />}
+          actions={<BookingDialog classSessions={typeFilteredClassSessions} members={snapshot.members} />}
           title="Lessen en reserveringen"
           description="Schakel tussen roosterbeheer en reserveringsbeheer."
         >
@@ -313,6 +387,159 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
               <Segment.Item id="schedule">Rooster</Segment.Item>
               <Segment.Item id="bookings">Reserveringen</Segment.Item>
             </Segment>
+
+            <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+              <Card.Header className="space-y-2">
+                <Card.Title>Soort les kiezen</Card.Title>
+                <Card.Description>
+                  Gebruik tabs per lestype. De lijst, reserveringen en nieuwe planning volgen automatisch het gekozen type.
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className="grid gap-4">
+                <Segment
+                  className="w-full overflow-x-auto"
+                  selectedKey={selectedClassTypeKey}
+                  size="sm"
+                  onSelectionChange={(key) => {
+                    setSelectedClassTypeKey(String(key));
+                    setClassSearch("");
+                  }}
+                >
+                  {classTypeTabs.map((tab) => (
+                    <Segment.Item key={tab.key} id={tab.key}>
+                      {tab.label} ({tab.count})
+                    </Segment.Item>
+                  ))}
+                </Segment>
+
+                <div className="rounded-2xl border border-border bg-surface p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">
+                        {selectedClassType.key === ALL_CLASS_TYPE_KEY
+                          ? "Alle lessen"
+                          : `Plan ${selectedClassType.label}`}
+                      </p>
+                      <p className="text-muted text-sm leading-6">
+                        {selectedClassType.description}
+                      </p>
+                    </div>
+                    <Chip size="sm" variant="tertiary">
+                      {selectedClassType.count} gepland
+                    </Chip>
+                  </div>
+
+                  {classesView === "schedule" && selectedClassType.key !== ALL_CLASS_TYPE_KEY ? (
+                    snapshot.locations.length > 0 && snapshot.trainers.length > 0 ? (
+                      <form
+                        key={selectedClassType.key}
+                        className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                        onSubmit={createTypedClassSession}
+                      >
+                        <div className="field-stack xl:col-span-2">
+                          <Label>Lesnaam</Label>
+                          <Input
+                            fullWidth
+                            name="title"
+                            defaultValue={selectedClassType.defaultTitle}
+                            required
+                          />
+                        </div>
+                        <div className="field-stack">
+                          <Label>Soort / focus</Label>
+                          <Input fullWidth readOnly value={selectedClassType.focus} />
+                        </div>
+                        <label className="field-stack">
+                          <span className="text-sm font-medium">Niveau</span>
+                          <select
+                            className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                            name="level"
+                            defaultValue="mixed"
+                          >
+                            <option value="beginner">Beginner</option>
+                            <option value="mixed">Mixed</option>
+                            <option value="advanced">Advanced</option>
+                          </select>
+                        </label>
+                        <label className="field-stack">
+                          <span className="text-sm font-medium">Vestiging</span>
+                          <select
+                            className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                            name="locationId"
+                            required
+                          >
+                            {snapshot.locations.map((location) => (
+                              <option key={location.id} value={location.id}>
+                                {location.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field-stack">
+                          <span className="text-sm font-medium">Trainer</span>
+                          <select
+                            className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                            name="trainerId"
+                            required
+                          >
+                            {snapshot.trainers.map((trainer) => (
+                              <option key={trainer.id} value={trainer.id}>
+                                {trainer.fullName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="field-stack">
+                          <Label>Starttijd</Label>
+                          <Input
+                            fullWidth
+                            name="startsAt"
+                            defaultValue={defaultClassStartValue()}
+                            required
+                            type="datetime-local"
+                          />
+                        </div>
+                        <div className="field-stack">
+                          <Label>Duur</Label>
+                          <Input
+                            fullWidth
+                            min={15}
+                            name="durationMinutes"
+                            defaultValue="45"
+                            required
+                            type="number"
+                          />
+                        </div>
+                        <div className="field-stack">
+                          <Label>Capaciteit</Label>
+                          <Input
+                            fullWidth
+                            min={1}
+                            name="capacity"
+                            defaultValue="16"
+                            required
+                            type="number"
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button isDisabled={isPending} type="submit" variant="primary">
+                            {isPending ? "Plannen..." : `${selectedClassType.label} plannen`}
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <p className="text-muted mt-3 text-sm leading-6">
+                        Voeg eerst minimaal één vestiging en trainer toe via Instellingen voordat je lessen plant.
+                      </p>
+                    )
+                  ) : classesView === "schedule" ? (
+                    <p className="text-muted mt-3 text-sm leading-6">
+                      Kies een specifiek lestype zoals HIIT, Boxing of Yoga om direct een les met dat type te plannen.
+                    </p>
+                  ) : null}
+                </div>
+              </Card.Content>
+            </Card>
 
             {classesView === "schedule" ? (
               upcomingSessions.length > 0 ? (
@@ -456,9 +683,9 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                   description="Plan je eerste live les vanuit de workbench."
                 />
               )
-            ) : recentBookings.length > 0 ? (
+            ) : typeFilteredBookings.length > 0 ? (
               <div className="grid gap-3">
-                {recentBookings.map((booking) => {
+                {typeFilteredBookings.map((booking) => {
                   const chip = statusChip(booking.status);
 
                   return (
