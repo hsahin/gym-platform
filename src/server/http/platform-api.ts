@@ -8,6 +8,8 @@ const mutationRateLimiter = new InMemoryRateLimiter();
 export const MUTATION_CSRF_HEADER = "x-claimtech-csrf";
 export const MUTATION_CSRF_TOKEN = "claimtech-gym-platform";
 export const IDEMPOTENCY_HEADER = "x-idempotency-key";
+export const MUTATION_SECURITY_ERROR_MESSAGE =
+  "Deze actie kon niet veilig worden opgeslagen. Vernieuw de pagina en probeer het opnieuw.";
 
 interface MutationRateLimitOptions {
   readonly scope: string;
@@ -87,6 +89,40 @@ function readRequestOrigin(request: Request) {
   }
 }
 
+function firstHeaderValue(value: string | null) {
+  return value
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase() || null;
+}
+
+function readForwardedHost(request: Request) {
+  const forwarded = request.headers.get("forwarded");
+
+  if (!forwarded) {
+    return null;
+  }
+
+  const hostPart = forwarded
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.toLowerCase().startsWith("host="));
+
+  return hostPart?.slice(5).replace(/^"|"$/g, "").toLowerCase() || null;
+}
+
+function readExpectedMutationHosts(request: Request) {
+  return new Set(
+    [
+      firstHeaderValue(request.headers.get("host")),
+      firstHeaderValue(request.headers.get("x-forwarded-host")),
+      firstHeaderValue(request.headers.get("x-original-host")),
+      readForwardedHost(request),
+      new URL(request.url).host.toLowerCase(),
+    ].filter((host): host is string => Boolean(host)),
+  );
+}
+
 function assertSameOriginMutation(request: Request) {
   const origin = readRequestOrigin(request);
 
@@ -94,16 +130,30 @@ function assertSameOriginMutation(request: Request) {
     return;
   }
 
-  const requestUrl = new URL(request.url);
+  let originHost: string;
 
-  if (new URL(origin).host !== requestUrl.host) {
+  try {
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    throw new AppError(MUTATION_SECURITY_ERROR_MESSAGE, {
+      code: "FORBIDDEN",
+      details: {
+        origin,
+        reason: "malformed-origin",
+      },
+    });
+  }
+
+  const expectedHosts = readExpectedMutationHosts(request);
+
+  if (!expectedHosts.has(originHost)) {
     throw new AppError(
-      "Deze mutatie mag alleen vanaf dezelfde applicatie-origin worden verstuurd.",
+      MUTATION_SECURITY_ERROR_MESSAGE,
       {
         code: "FORBIDDEN",
         details: {
           origin,
-          expectedHost: requestUrl.host,
+          expectedHosts: [...expectedHosts],
         },
       },
     );
@@ -155,7 +205,7 @@ export function requireMutationSecurity(
   const idempotencyKey = request.headers.get(IDEMPOTENCY_HEADER)?.trim();
 
   if (csrfToken !== MUTATION_CSRF_TOKEN) {
-    throw new AppError("CSRF header ontbreekt of is ongeldig.", {
+    throw new AppError(MUTATION_SECURITY_ERROR_MESSAGE, {
       code: "CSRF_TOKEN_MISSING",
       details: {
         expectedHeader: MUTATION_CSRF_HEADER,
@@ -164,7 +214,7 @@ export function requireMutationSecurity(
   }
 
   if (!idempotencyKey) {
-    throw new AppError("Idempotency key ontbreekt voor deze mutatie.", {
+    throw new AppError(MUTATION_SECURITY_ERROR_MESSAGE, {
       code: "IDEMPOTENCY_KEY_MISSING",
       details: {
         expectedHeader: IDEMPOTENCY_HEADER,

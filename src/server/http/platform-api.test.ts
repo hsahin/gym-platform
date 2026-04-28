@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   IDEMPOTENCY_HEADER,
   MUTATION_CSRF_HEADER,
+  MUTATION_SECURITY_ERROR_MESSAGE,
   MUTATION_CSRF_TOKEN,
   getRequestId,
   jsonError,
@@ -25,7 +26,7 @@ describe("platform api helpers", () => {
     });
 
     expect(() => requireMutationSecurity(request)).toThrowError(
-      "CSRF header ontbreekt of is ongeldig.",
+      MUTATION_SECURITY_ERROR_MESSAGE,
     );
   });
 
@@ -38,7 +39,7 @@ describe("platform api helpers", () => {
     });
 
     expect(() => requireMutationSecurity(request)).toThrowError(
-      "Idempotency key ontbreekt voor deze mutatie.",
+      MUTATION_SECURITY_ERROR_MESSAGE,
     );
   });
 
@@ -74,7 +75,37 @@ describe("platform api helpers", () => {
           windowMs: 60_000,
         },
       }),
-    ).toThrowError("Deze mutatie mag alleen vanaf dezelfde applicatie-origin worden verstuurd.");
+    ).toThrowError(MUTATION_SECURITY_ERROR_MESSAGE);
+  });
+
+  it("accepts same-origin mutations behind a production proxy host", () => {
+    const request = new Request("http://localhost:3000/api/platform/locations", {
+      method: "POST",
+      headers: {
+        host: "localhost:3000",
+        "x-forwarded-host": "gym-platform-vc9yk.ondigitalocean.app",
+        origin: "https://gym-platform-vc9yk.ondigitalocean.app",
+        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [IDEMPOTENCY_HEADER]: "location-123",
+      },
+    });
+
+    expect(() => requireMutationSecurity(request)).not.toThrow();
+  });
+
+  it("returns a friendly security message for malformed mutation origins", () => {
+    const request = new Request("http://localhost/api/platform/locations", {
+      method: "POST",
+      headers: {
+        origin: "not a url",
+        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [IDEMPOTENCY_HEADER]: "location-456",
+      },
+    });
+
+    expect(() => requireMutationSecurity(request)).toThrowError(
+      MUTATION_SECURITY_ERROR_MESSAGE,
+    );
   });
 
   it("rate limits mutation requests when configured", () => {

@@ -20,6 +20,7 @@ import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
 import { NativeSelect } from "@heroui-pro/react/native-select";
 import { toast } from "sonner";
 import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
+import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import {
   buildWeeklyRecurringLocalStarts,
   CLASS_WEEKDAY_OPTIONS,
@@ -39,7 +40,6 @@ import {
   REMOTE_ACCESS_BRIDGE_OPTIONS,
   REMOTE_ACCESS_PROVIDER_OPTIONS,
 } from "@/lib/remote-access";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import { PLATFORM_ROLE_OPTIONS } from "@/server/runtime/platform-roles";
 import type { GymDashboardSnapshot } from "@/server/types";
 
@@ -62,29 +62,7 @@ async function submitJson<TResponse>(
   url: string,
   payload: unknown,
 ) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-      "x-idempotency-key": crypto.randomUUID(),
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const result = (await response.json()) as {
-    ok: boolean;
-    data?: TResponse;
-    error?: {
-      message: string;
-    };
-  };
-
-  if (!response.ok || !result.ok) {
-    throw new Error(result.error?.message ?? "Opslaan is mislukt.");
-  }
-
-  return result.data as TResponse;
+  return submitDashboardMutation<TResponse>(url, payload);
 }
 
 function statusToneToChip(tone: "complete" | "current" | "upcoming" | "locked") {
