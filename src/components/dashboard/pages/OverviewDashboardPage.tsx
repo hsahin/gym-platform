@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Card, Chip } from "@heroui/react";
 import { KPI, KPIGroup } from "@heroui-pro/react";
+import { Segment } from "@heroui-pro/react/segment";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
@@ -25,6 +26,9 @@ import {
 import { getDashboardPages } from "@/lib/dashboard-pages";
 
 export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
+  const [overviewActivityTab, setOverviewActivityTab] = useState<
+    "lessons" | "status" | "reservations" | "notes"
+  >("lessons");
   const upcomingSessions = [...snapshot.classSessions].sort((left, right) =>
     left.startsAt.localeCompare(right.startsAt),
   );
@@ -154,6 +158,16 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
         "Geen open healthchecks, waivers of runtime-acties op de overview.",
     },
   ] as const;
+  const overviewActivityTabs = [
+    { id: "lessons", label: "Volgende lessen", count: upcomingSessions.length },
+    {
+      id: "status",
+      label: "Platformstatus",
+      count: openHealthChecks.length,
+    },
+    { id: "reservations", label: "Recente reserveringen", count: recentBookings.length },
+    { id: "notes", label: "Teamnotities", count: recentAuditEntries.length },
+  ] as const;
 
   return (
     <div className="section-stack">
@@ -230,141 +244,190 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
         </div>
       </PageSection>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] xl:items-start">
-        <PageSection
-          title="Volgende lessen"
-          description="Aankomende lessen met trainer en capaciteit."
-        >
-          {upcomingSessions.length > 0 ? (
-            <ListView aria-label="Volgende lessen" items={upcomingSessions.slice(0, 6)}>
-              {(session) => {
-                const chip = statusChip(session.status);
+      <PageSection
+        title="Dagelijkse cockpit"
+        description="Schakel snel tussen lessen, platformstatus, reserveringen en teamnotities zonder lange dashboardblokken."
+      >
+        <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+          <Card.Content className="space-y-5">
+            <Segment
+              aria-label="Dashboard cockpit tabs"
+              className="w-full overflow-x-auto"
+              selectedKey={overviewActivityTab}
+              size="sm"
+              onSelectionChange={(key) =>
+                setOverviewActivityTab(String(key) as typeof overviewActivityTab)
+              }
+            >
+              {overviewActivityTabs.map((tab) => (
+                <Segment.Item id={tab.id} key={tab.id}>
+                  {tab.label} ({tab.count})
+                </Segment.Item>
+              ))}
+            </Segment>
 
-                return (
-                  <ListView.Item id={session.id} textValue={session.title}>
-                    <ListView.ItemContent>
-                      <ListView.Title>{session.title}</ListView.Title>
-                      <ListView.Description>
-                        {formatDateTime(session.startsAt)} · {session.focus} · {session.bookedCount}/
-                        {session.capacity}
-                      </ListView.Description>
-                    </ListView.ItemContent>
-                    <Chip color={chip.color} size="sm" variant={chip.variant}>
-                      {session.status}
-                    </Chip>
-                  </ListView.Item>
-                );
-              }}
-            </ListView>
-          ) : (
-            <EmptyPanel
-              title="Nog geen lessen"
-              description="Plan je eerste les vanuit de workbench om reserveringen te openen."
-            />
-          )}
-        </PageSection>
+            {overviewActivityTab === "lessons" ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Volgende lessen</h3>
+                  <p className="text-muted text-sm leading-6">
+                    Aankomende lessen met trainer en capaciteit.
+                  </p>
+                </div>
+                {upcomingSessions.length > 0 ? (
+                  <ListView aria-label="Volgende lessen" items={upcomingSessions.slice(0, 6)}>
+                    {(session) => {
+                      const chip = statusChip(session.status);
 
-        <PageSection
-          title="Platformstatus"
-          description="De huidige status van betalingen, toegang en runtimechecks."
-        >
-          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
-            {[
-              {
-                label: "Betalingen",
-                value: snapshot.payments.statusLabel,
-                helper: snapshot.payments.helpText,
-              },
-              {
-                label: "Toegang",
-                value: snapshot.remoteAccess.statusLabel,
-                helper: snapshot.remoteAccess.helpText,
-              },
-              {
-                label: "Gezondheid",
-                value:
-                  openHealthChecks.length === 0
-                    ? "Alles gezond"
-                    : `${openHealthChecks.length} aandachtspunt${openHealthChecks.length === 1 ? "" : "en"}`,
-                helper:
-                  openHealthChecks[0]?.summary ?? "Runtime en synchronisatiechecks.",
-              },
-            ].map((item) => (
-              <Card key={item.label} className="rounded-2xl border-border/70 bg-surface-secondary">
-                <Card.Content className="space-y-2">
-                  <p className="text-muted text-sm">{item.label}</p>
-                  <p className="text-lg font-semibold">{item.value}</p>
-                  <p className="text-muted text-sm leading-6">{item.helper}</p>
-                </Card.Content>
-              </Card>
-            ))}
-          </div>
-        </PageSection>
-      </div>
+                      return (
+                        <ListView.Item id={session.id} textValue={session.title}>
+                          <ListView.ItemContent>
+                            <ListView.Title>{session.title}</ListView.Title>
+                            <ListView.Description>
+                              {formatDateTime(session.startsAt)} · {session.focus} ·{" "}
+                              {session.bookedCount}/{session.capacity}
+                            </ListView.Description>
+                          </ListView.ItemContent>
+                          <Chip color={chip.color} size="sm" variant={chip.variant}>
+                            {session.status}
+                          </Chip>
+                        </ListView.Item>
+                      );
+                    }}
+                  </ListView>
+                ) : (
+                  <EmptyPanel
+                    title="Nog geen lessen"
+                    description="Plan je eerste les vanuit de workbench om reserveringen te openen."
+                  />
+                )}
+              </div>
+            ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start">
-        <PageSection
-          title="Recente reserveringen"
-          description="Laatste reserveringsactiviteit, inclusief wachtlijstdruk."
-        >
-          {recentBookings.length > 0 ? (
-            <ListView aria-label="Recente reserveringen" items={recentBookings.slice(0, 6)}>
-              {(booking) => {
-                const chip = statusChip(booking.status);
-
-                return (
-                  <ListView.Item id={booking.id} textValue={booking.memberName}>
-                    <ListView.ItemContent>
-                      <ListView.Title>{booking.memberName}</ListView.Title>
-                      <ListView.Description>
-                        {booking.source} · {booking.phone}
-                      </ListView.Description>
-                    </ListView.ItemContent>
-                    <Chip color={chip.color} size="sm" variant={chip.variant}>
-                      {booking.status}
-                    </Chip>
-                  </ListView.Item>
-                );
-              }}
-            </ListView>
-          ) : (
-            <EmptyPanel
-              title="Nog geen reserveringen"
-              description="Reserveringen verschijnen hier zodra de eerste les live staat."
-            />
-          )}
-        </PageSection>
-
-        <PageSection title="Teamnotities" description="Herbruikbare context voor het team.">
-          <div className="grid gap-3">
-            <Card className="rounded-2xl border-border/70 bg-surface-secondary">
-              <Card.Content className="space-y-2">
-                <p className="text-muted text-sm">Notificatievoorbeeld</p>
-                <p className="text-sm leading-6">{snapshot.notificationPreview}</p>
-              </Card.Content>
-            </Card>
-            <Card className="rounded-2xl border-border/70 bg-surface-secondary">
-              <Card.Content className="space-y-2">
-                <p className="text-muted text-sm">Laatste auditregels</p>
-                <div className="grid gap-2">
-                  {recentAuditEntries.map((entry) => (
-                    <div
-                      key={entry.eventId}
-                      className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-surface px-4 py-3"
+            {overviewActivityTab === "status" ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Platformstatus</h3>
+                  <p className="text-muted text-sm leading-6">
+                    De huidige status van betalingen, toegang en runtimechecks.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {[
+                    {
+                      label: "Betalingen",
+                      value: snapshot.payments.statusLabel,
+                      helper: snapshot.payments.helpText,
+                    },
+                    {
+                      label: "Toegang",
+                      value: snapshot.remoteAccess.statusLabel,
+                      helper: snapshot.remoteAccess.helpText,
+                    },
+                    {
+                      label: "Gezondheid",
+                      value:
+                        openHealthChecks.length === 0
+                          ? "Alles gezond"
+                          : `${openHealthChecks.length} aandachtspunt${openHealthChecks.length === 1 ? "" : "en"}`,
+                      helper:
+                        openHealthChecks[0]?.summary ?? "Runtime en synchronisatiechecks.",
+                    },
+                  ].map((item) => (
+                    <Card
+                      key={item.label}
+                      className="rounded-2xl border-border/70 bg-surface shadow-none"
                     >
-                      <div>
-                        <p className="text-sm font-medium">{entry.action}</p>
-                        <p className="text-muted text-xs">{formatDateTime(entry.occurredAt)}</p>
-                      </div>
-                      <ArrowRight className="text-muted h-4 w-4 shrink-0" />
-                    </div>
+                      <Card.Content className="space-y-2">
+                        <p className="text-muted text-sm">{item.label}</p>
+                        <p className="text-lg font-semibold">{item.value}</p>
+                        <p className="text-muted text-sm leading-6">{item.helper}</p>
+                      </Card.Content>
+                    </Card>
                   ))}
                 </div>
-              </Card.Content>
-            </Card>
-          </div>
-        </PageSection>
-      </div>
+              </div>
+            ) : null}
+
+            {overviewActivityTab === "reservations" ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Recente reserveringen</h3>
+                  <p className="text-muted text-sm leading-6">
+                    Laatste reserveringsactiviteit, inclusief wachtlijstdruk.
+                  </p>
+                </div>
+                {recentBookings.length > 0 ? (
+                  <ListView aria-label="Recente reserveringen" items={recentBookings.slice(0, 6)}>
+                    {(booking) => {
+                      const chip = statusChip(booking.status);
+
+                      return (
+                        <ListView.Item id={booking.id} textValue={booking.memberName}>
+                          <ListView.ItemContent>
+                            <ListView.Title>{booking.memberName}</ListView.Title>
+                            <ListView.Description>
+                              {booking.source} · {booking.phone}
+                            </ListView.Description>
+                          </ListView.ItemContent>
+                          <Chip color={chip.color} size="sm" variant={chip.variant}>
+                            {booking.status}
+                          </Chip>
+                        </ListView.Item>
+                      );
+                    }}
+                  </ListView>
+                ) : (
+                  <EmptyPanel
+                    title="Nog geen reserveringen"
+                    description="Reserveringen verschijnen hier zodra de eerste les live staat."
+                  />
+                )}
+              </div>
+            ) : null}
+
+            {overviewActivityTab === "notes" ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Teamnotities</h3>
+                  <p className="text-muted text-sm leading-6">
+                    Herbruikbare context voor het team.
+                  </p>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <Card className="rounded-2xl border-border/70 bg-surface shadow-none">
+                    <Card.Content className="space-y-2">
+                      <p className="text-muted text-sm">Notificatievoorbeeld</p>
+                      <p className="text-sm leading-6">{snapshot.notificationPreview}</p>
+                    </Card.Content>
+                  </Card>
+                  <Card className="rounded-2xl border-border/70 bg-surface shadow-none">
+                    <Card.Content className="space-y-2">
+                      <p className="text-muted text-sm">Laatste auditregels</p>
+                      <div className="grid gap-2">
+                        {recentAuditEntries.map((entry) => (
+                          <div
+                            key={entry.eventId}
+                            className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-surface-secondary px-4 py-3"
+                          >
+                            <div>
+                              <p className="text-sm font-medium">{entry.action}</p>
+                              <p className="text-muted text-xs">
+                                {formatDateTime(entry.occurredAt)}
+                              </p>
+                            </div>
+                            <ArrowRight className="text-muted h-4 w-4 shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                    </Card.Content>
+                  </Card>
+                </div>
+              </div>
+            ) : null}
+          </Card.Content>
+        </Card>
+      </PageSection>
 
       <LazyPlatformWorkbench
         sections={["locations", "contracts", "trainers", "classes", "members"]}

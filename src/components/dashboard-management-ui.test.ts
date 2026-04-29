@@ -135,6 +135,28 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("groups the main overview activity sections into tabbed segments", () => {
+    const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
+
+    expect(overview).toContain('import { Segment } from "@heroui-pro/react/segment";');
+    expect(overview).toContain("overviewActivityTab");
+    expect(overview).toContain("overviewActivityTabs");
+    expect(overview).toContain('title="Dagelijkse cockpit"');
+    expect(overview).toContain('aria-label="Dashboard cockpit tabs"');
+    expect(overview).toContain("<Segment.Item");
+    expect(overview).toContain('id: "lessons"');
+    expect(overview).toContain('id: "status"');
+    expect(overview).toContain('id: "reservations"');
+    expect(overview).toContain('id: "notes"');
+    expect(overview).toContain('overviewActivityTab === "lessons"');
+    expect(overview).toContain('overviewActivityTab === "status"');
+    expect(overview).toContain('overviewActivityTab === "reservations"');
+    expect(overview).toContain('overviewActivityTab === "notes"');
+    expect(overview).not.toContain(
+      "xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]",
+    );
+  });
+
   it("uses HeroUI Pro Kanban for gym setup progress with direct CTAs", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 

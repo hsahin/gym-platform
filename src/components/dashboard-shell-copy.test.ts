@@ -34,8 +34,11 @@ describe("dashboard shell copy", () => {
     expect(overviewSource).toContain('label: "Actieve leden"');
     expect(overviewSource).toContain('label: "Omzet MRR"');
     expect(overviewSource).toContain('label: "Bezetting"');
-    expect(overviewSource).toContain('title="Volgende lessen"');
-    expect(overviewSource).toContain('title="Recente reserveringen"');
+    expect(overviewSource).toContain('title="Dagelijkse cockpit"');
+    expect(overviewSource).toContain("Volgende lessen");
+    expect(overviewSource).toContain("Platformstatus");
+    expect(overviewSource).toContain("Recente reserveringen");
+    expect(overviewSource).toContain("Teamnotities");
     expect(overviewSource).toContain("Notificatievoorbeeld");
     expect(overviewSource).not.toContain('label: "Members"');
     expect(overviewSource).not.toContain('title="Next sessions"');
