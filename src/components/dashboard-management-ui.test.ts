@@ -97,6 +97,17 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("keeps payment forms stacked below the payment status overview", () => {
+    const payments = readSource("dashboard/pages/PaymentsDashboardPage.tsx");
+
+    expect(payments).toContain('title="Betalingen"');
+    expect(payments).toContain("stackSections");
+    expect(payments).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
+    expect(payments.indexOf('title="Betalingen"')).toBeLessThan(
+      payments.indexOf("<LazyPlatformWorkbench"),
+    );
+  });
+
   it("creates recurring workbench lessons with one batch request", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 
