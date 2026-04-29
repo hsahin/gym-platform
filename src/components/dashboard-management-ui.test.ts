@@ -71,6 +71,18 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("uses HeroUI Pro Kanban for gym setup progress with direct CTAs", () => {
+    const workbench = readSource("PlatformWorkbench.tsx");
+
+    expect(workbench).toContain('from "@heroui-pro/react/kanban"');
+    expect(workbench).toContain("<Kanban");
+    expect(workbench).toContain("<Kanban.Column");
+    expect(workbench).toContain("<Kanban.CardList");
+    expect(workbench).toContain("Voortgangsbord");
+    expect(workbench).toContain("router.push(step.href)");
+    expect(workbench).toContain("{step.ctaLabel}");
+  });
+
   it("keeps feature module summaries below the primary owner workflows", () => {
     const pageOrderChecks = [
       ["dashboard/pages/ClassesDashboardPage.tsx", 'title="Booking setup"', 'title="Booking modules"'],

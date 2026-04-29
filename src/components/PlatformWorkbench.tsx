@@ -17,6 +17,7 @@ import {
   TextArea,
 } from "@heroui/react";
 import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
+import { Kanban } from "@heroui-pro/react/kanban";
 import { NativeSelect } from "@heroui-pro/react/native-select";
 import { toast } from "sonner";
 import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
@@ -35,7 +36,10 @@ import {
   CONTRACT_IMPORT_REQUIRED_CSV_HEADER,
   MEMBERSHIP_BILLING_CYCLE_OPTIONS,
 } from "@/lib/memberships";
-import { getPlatformWorkbenchExperience } from "@/lib/platform-workbench-experience";
+import {
+  getPlatformWorkbenchExperience,
+  type PlatformWorkbenchStep,
+} from "@/lib/platform-workbench-experience";
 import {
   REMOTE_ACCESS_BRIDGE_OPTIONS,
   REMOTE_ACCESS_PROVIDER_OPTIONS,
@@ -77,6 +81,38 @@ function statusToneToChip(tone: "complete" | "current" | "upcoming" | "locked") 
       return { color: "warning" as const, variant: "tertiary" as const };
   }
 }
+
+const launchKanbanColumns = [
+  {
+    key: "current",
+    title: "Nu doen",
+    indicatorClassName: "bg-accent",
+    emptyState: "Geen directe setupactie.",
+  },
+  {
+    key: "upcoming",
+    title: "Daarna",
+    indicatorClassName: "bg-warning",
+    emptyState: "Geen vervolgstappen.",
+  },
+  {
+    key: "complete",
+    title: "Klaar",
+    indicatorClassName: "bg-success",
+    emptyState: "Nog niets afgerond.",
+  },
+  {
+    key: "locked",
+    title: "Geblokkeerd",
+    indicatorClassName: "bg-default",
+    emptyState: "Geen geblokkeerde stappen.",
+  },
+] satisfies ReadonlyArray<{
+  key: PlatformWorkbenchStep["statusTone"];
+  title: string;
+  indicatorClassName: string;
+  emptyState: string;
+}>;
 
 function Field({
   label,
@@ -561,15 +597,26 @@ export function PlatformWorkbench({
       {showLaunchHeader ? (
         <>
           <Card className="rounded-[32px] border-border/80">
-            <Card.Header className="space-y-3">
-              <Chip size="sm" variant="soft">
-                Livegang
-              </Chip>
-              <Card.Title>Bouw eerst de live dataset voordat je het team opschaalt.</Card.Title>
-              <Card.Description>
-                Vestigingen, lidmaatschappen, trainers, lessen, leden en teamaccounts
-                schrijven direct naar de operationele werkruimte.
-              </Card.Description>
+            <Card.Header className="items-start justify-between gap-4">
+              <div className="space-y-3">
+                <Chip size="sm" variant="soft">
+                  Livegang
+                </Chip>
+                <Card.Title>Gym opzetten: live dataset eerst op orde.</Card.Title>
+                <Card.Description>
+                  Vestigingen, lidmaatschappen, trainers, lessen, leden en
+                  teamaccounts schrijven direct naar de operationele werkruimte.
+                </Card.Description>
+              </div>
+              {nextStep ? (
+                <Button
+                  className="shrink-0"
+                  variant="outline"
+                  onPress={() => router.push(nextStep.href)}
+                >
+                  {nextStep.ctaLabel}
+                </Button>
+              ) : null}
             </Card.Header>
             <Card.Content className="section-stack">
               <div className="grid gap-4 md:grid-cols-5">
@@ -598,29 +645,87 @@ export function PlatformWorkbench({
             </Card.Content>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-3">
-            {workbenchExperience.steps.map((step) => {
-              const chip = statusToneToChip(step.statusTone);
+          <Card className="rounded-[32px] border-border/80">
+            <Card.Header className="space-y-3">
+              <Chip size="sm" variant="soft">
+                Voortgangsbord
+              </Chip>
+              <Card.Title>Doorloop je gym setup als Kanban.</Card.Title>
+              <Card.Description>
+                Elke kaart heeft een actieknop naar de juiste dashboardpagina waar je
+                die stap direct kunt afronden.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content>
+              <Kanban
+                hideScrollBar
+                aria-label="Gym setup voortgang"
+                className="items-start overflow-visible"
+                size="sm"
+              >
+                {launchKanbanColumns.map((column) => {
+                  const columnSteps = workbenchExperience.steps.filter(
+                    (step) => step.statusTone === column.key,
+                  );
 
-              return (
-                <Card key={step.key} className="rounded-[28px] border-border/80">
-                  <Card.Header className="items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <Card.Description>Stap {step.order}</Card.Description>
-                      <Card.Title>{step.title}</Card.Title>
-                    </div>
-                    <Chip color={chip.color} size="sm" variant={chip.variant}>
-                      {step.statusLabel}
-                    </Chip>
-                  </Card.Header>
-                  <Card.Content className="space-y-2">
-                    <p className="text-muted text-sm">{step.helper}</p>
-                    <p className="text-sm font-medium">{step.countLabel}</p>
-                  </Card.Content>
-                </Card>
-              );
-            })}
-          </div>
+                  return (
+                    <Kanban.Column key={column.key}>
+                      <Kanban.ColumnHeader>
+                        <Kanban.ColumnIndicator className={column.indicatorClassName} />
+                        <Kanban.ColumnTitle>{column.title}</Kanban.ColumnTitle>
+                        <Kanban.ColumnCount>{columnSteps.length}</Kanban.ColumnCount>
+                      </Kanban.ColumnHeader>
+                      <Kanban.ColumnBody className="bg-surface-secondary/80">
+                        <Kanban.CardList
+                          aria-label={`${column.title} setupstappen`}
+                          items={columnSteps}
+                          renderEmptyState={() => (
+                            <span className="text-muted text-sm">{column.emptyState}</span>
+                          )}
+                        >
+                          {(step) => {
+                            const chip = statusToneToChip(step.statusTone);
+
+                            return (
+                              <Kanban.Card id={step.key} textValue={step.title}>
+                                <div className="space-y-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="space-y-1">
+                                      <p className="text-muted text-xs uppercase tracking-[0.18em]">
+                                        Stap {step.order}
+                                      </p>
+                                      <p className="font-semibold leading-snug">
+                                        {step.title}
+                                      </p>
+                                    </div>
+                                    <Chip color={chip.color} size="sm" variant={chip.variant}>
+                                      {step.statusLabel}
+                                    </Chip>
+                                  </div>
+                                  <p className="text-muted text-sm leading-6">{step.helper}</p>
+                                  <p className="text-sm font-medium">{step.countLabel}</p>
+                                  <Button
+                                    fullWidth
+                                    size="sm"
+                                    variant={
+                                      step.statusTone === "current" ? "primary" : "outline"
+                                    }
+                                    onPress={() => router.push(step.href)}
+                                  >
+                                    {step.ctaLabel}
+                                  </Button>
+                                </div>
+                              </Kanban.Card>
+                            );
+                          }}
+                        </Kanban.CardList>
+                      </Kanban.ColumnBody>
+                    </Kanban.Column>
+                  );
+                })}
+              </Kanban>
+            </Card.Content>
+          </Card>
         </>
       ) : null}
 

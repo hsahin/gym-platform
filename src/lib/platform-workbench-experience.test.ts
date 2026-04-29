@@ -37,6 +37,53 @@ describe("platform workbench experience", () => {
     );
   });
 
+  it("attaches the right dashboard CTA to every launch step", () => {
+    const experience = getPlatformWorkbenchExperience({
+      locationsCount: 0,
+      membershipPlansCount: 0,
+      trainersCount: 0,
+      membersCount: 0,
+      classSessionsCount: 0,
+      staffCount: 1,
+      canManageStaff: true,
+    });
+
+    expect(experience.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "locations",
+          href: "/dashboard/settings",
+          ctaLabel: "Vestiging toevoegen",
+        }),
+        expect.objectContaining({
+          key: "memberships",
+          href: "/dashboard/contracts",
+          ctaLabel: "Contract toevoegen",
+        }),
+        expect.objectContaining({
+          key: "trainers",
+          href: "/dashboard/settings",
+          ctaLabel: "Trainer toevoegen",
+        }),
+        expect.objectContaining({
+          key: "classes",
+          href: "/dashboard/classes",
+          ctaLabel: "Les plannen",
+        }),
+        expect.objectContaining({
+          key: "members",
+          href: "/dashboard/members",
+          ctaLabel: "Lid toevoegen",
+        }),
+        expect.objectContaining({
+          key: "staff",
+          href: "/dashboard/settings",
+          ctaLabel: "Team beheren",
+        }),
+      ]),
+    );
+  });
+
   it("treats member setup as a later step instead of a launch blocker", () => {
     const experience = getPlatformWorkbenchExperience({
       locationsCount: 1,

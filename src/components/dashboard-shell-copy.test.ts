@@ -39,7 +39,9 @@ describe("dashboard shell copy", () => {
     expect(overviewSource).not.toContain('title="Next sessions"');
     expect(overviewSource).not.toContain("Latest booking activity");
 
-    expect(workbenchSource).toContain("Bouw eerst de live dataset");
+    expect(workbenchSource).toContain("Gym opzetten: live dataset eerst op orde.");
+    expect(workbenchSource).toContain("Doorloop je gym setup als Kanban.");
+    expect(workbenchSource).toContain("Elke kaart heeft een actieknop");
     expect(workbenchSource).toContain("Lidmaatschap toevoegen");
     expect(workbenchSource).toContain("Plan een losse les");
     expect(workbenchSource).toContain("Maak een echte Mollie betaallink");

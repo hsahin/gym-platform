@@ -14,9 +14,50 @@ export type PlatformWorkbenchStep = {
   title: string;
   countLabel: string;
   helper: string;
+  href: string;
+  ctaLabel: string;
   statusLabel: string;
   statusTone: "complete" | "current" | "upcoming" | "locked";
 };
+
+type PlatformWorkbenchStepBase = Omit<PlatformWorkbenchStep, "href" | "ctaLabel">;
+
+const stepTargets: Record<
+  PlatformWorkbenchStep["key"],
+  Pick<PlatformWorkbenchStep, "href" | "ctaLabel">
+> = {
+  classes: {
+    href: "/dashboard/classes",
+    ctaLabel: "Les plannen",
+  },
+  locations: {
+    href: "/dashboard/settings",
+    ctaLabel: "Vestiging toevoegen",
+  },
+  members: {
+    href: "/dashboard/members",
+    ctaLabel: "Lid toevoegen",
+  },
+  memberships: {
+    href: "/dashboard/contracts",
+    ctaLabel: "Contract toevoegen",
+  },
+  staff: {
+    href: "/dashboard/settings",
+    ctaLabel: "Team beheren",
+  },
+  trainers: {
+    href: "/dashboard/settings",
+    ctaLabel: "Trainer toevoegen",
+  },
+};
+
+function attachStepTarget(step: PlatformWorkbenchStepBase): PlatformWorkbenchStep {
+  return {
+    ...step,
+    ...stepTargets[step.key],
+  };
+}
 
 function formatCountLabel(
   count: number,
@@ -70,7 +111,7 @@ export function getPlatformWorkbenchExperience(
 
   const currentStepIndex = coreSteps.findIndex((step) => step.count === 0);
 
-  const steps: PlatformWorkbenchStep[] = coreSteps.map((step, index) => {
+  const steps: PlatformWorkbenchStepBase[] = coreSteps.map((step, index) => {
     if (step.count > 0) {
       return {
         ...step,
@@ -94,7 +135,7 @@ export function getPlatformWorkbenchExperience(
     };
   });
 
-  const memberStep: PlatformWorkbenchStep =
+  const memberStep: PlatformWorkbenchStepBase =
     input.membersCount > 0
       ? {
           key: "members",
@@ -123,7 +164,7 @@ export function getPlatformWorkbenchExperience(
     "accounts live",
   );
 
-  const staffStep: PlatformWorkbenchStep = !input.canManageStaff
+  const staffStep: PlatformWorkbenchStepBase = !input.canManageStaff
     ? {
         key: "staff",
         order: 6,
@@ -154,6 +195,6 @@ export function getPlatformWorkbenchExperience(
         };
 
   return {
-    steps: [...steps, memberStep, staffStep],
+    steps: [...steps, memberStep, staffStep].map(attachStepTarget),
   };
 }
