@@ -119,6 +119,10 @@ describe("dashboard shell copy", () => {
     expect(source).toContain("getDashboardFeatureStatusLabel");
     expect(source).toContain("getDashboardFeatureCategoryLabel");
     expect(source).toContain("getDashboardFeatureReasonLabel");
+    expect(source).toContain("Tooltip");
+    expect(source).toContain("TruncatedTooltipText");
+    expect(source).toContain("currentPage");
+    expect(source).toContain("shouldShowOpenAction");
     expect(source).toContain("Module openen");
     expect(source).toContain("submitDashboardMutation");
     expect(source).toContain("columns={editable ? 2 : 3}");

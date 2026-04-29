@@ -520,7 +520,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
         title="Mobiele modules"
         description="Compact overzicht van white-label, mobiele check-in en coaching-app uitbreidingen."
       >
-        <FeatureModuleBoard features={mobileFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="mobile" features={mobileFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

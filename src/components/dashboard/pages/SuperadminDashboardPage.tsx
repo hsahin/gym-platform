@@ -317,7 +317,12 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
           title={group.title}
           description="Schakel modules per tenant in of uit zonder verborgen configuraties."
         >
-          <FeatureModuleBoard editable features={group.features} snapshot={snapshot} />
+          <FeatureModuleBoard
+            currentPage="superadmin"
+            editable
+            features={group.features}
+            snapshot={snapshot}
+          />
         </PageSection>
       ))}
     </div>

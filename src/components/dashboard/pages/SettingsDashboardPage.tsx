@@ -426,7 +426,7 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
         title="Gym instellingsmodules"
         description="Compact overzicht van feature-uitrol voor vestigingen, teambeheer en operatie."
       >
-        <FeatureModuleBoard features={settingsFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="settings" features={settingsFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

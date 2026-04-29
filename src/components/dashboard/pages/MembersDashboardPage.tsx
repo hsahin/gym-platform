@@ -398,7 +398,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
         title="Ledenmodules"
         description="Compact overzicht van ledenbeheer, intake en membership lifecycle."
       >
-        <FeatureModuleBoard features={memberFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="members" features={memberFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

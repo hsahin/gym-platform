@@ -557,7 +557,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
         title="Coaching modules"
         description="Compact overzicht van training, voeding en progressiemodules."
       >
-        <FeatureModuleBoard features={coachingFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="coaching" features={coachingFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

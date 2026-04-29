@@ -757,7 +757,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
         title="Booking modules"
         description="Compact overzicht van rooster, groepsboekingen, trials en check-ins."
       >
-        <FeatureModuleBoard features={classFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="classes" features={classFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

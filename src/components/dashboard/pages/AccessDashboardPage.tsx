@@ -66,7 +66,7 @@ export function AccessDashboardPage({ snapshot }: DashboardPageProps) {
         title="Toegangsmodules"
         description="Compact overzicht van slimme toegang en owner-controlled open-acties."
       >
-        <FeatureModuleBoard features={accessFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="access" features={accessFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

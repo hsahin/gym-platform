@@ -637,7 +637,7 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
         title="Billing modules"
         description="Compact overzicht van betaalverwerking, incasso en AutoCollect."
       >
-        <FeatureModuleBoard features={paymentFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="payments" features={paymentFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

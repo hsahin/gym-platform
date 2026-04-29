@@ -303,7 +303,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
           title="Owner-inzicht"
           description="Compact overzicht van analytics en operationele signalen."
         >
-          <FeatureModuleBoard features={overviewFeatures} snapshot={snapshot} />
+          <FeatureModuleBoard currentPage="overview" features={overviewFeatures} snapshot={snapshot} />
         </PageSection>
       ) : null}
     </div>

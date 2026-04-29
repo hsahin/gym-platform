@@ -201,7 +201,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
         title="Integratiemodules"
         description="Compact overzicht van hardware, externe software en equipment-data."
       >
-        <FeatureModuleBoard features={integrationFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="integrations" features={integrationFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

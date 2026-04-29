@@ -523,7 +523,7 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
         title="Retention modules"
         description="Compact overzicht van community, loyaliteit en churn-preventie."
       >
-        <FeatureModuleBoard features={retentionFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="retention" features={retentionFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

@@ -605,7 +605,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
         title="Marketing modules"
         description="Compact overzicht van campagnes, promoties en lead flows."
       >
-        <FeatureModuleBoard features={marketingFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="marketing" features={marketingFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

@@ -166,4 +166,26 @@ describe("dashboard management UI wiring", () => {
       );
     }
   });
+
+  it("passes the current dashboard page into every feature module board", () => {
+    const pageCurrentPageChecks = [
+      ["dashboard/pages/ClassesDashboardPage.tsx", 'currentPage="classes"'],
+      ["dashboard/pages/MembersDashboardPage.tsx", 'currentPage="members"'],
+      ["dashboard/pages/ContractsDashboardPage.tsx", 'currentPage="contracts"'],
+      ["dashboard/pages/PaymentsDashboardPage.tsx", 'currentPage="payments"'],
+      ["dashboard/pages/AccessDashboardPage.tsx", 'currentPage="access"'],
+      ["dashboard/pages/MobileDashboardPage.tsx", 'currentPage="mobile"'],
+      ["dashboard/pages/RetentionDashboardPage.tsx", 'currentPage="retention"'],
+      ["dashboard/pages/CoachingDashboardPage.tsx", 'currentPage="coaching"'],
+      ["dashboard/pages/MarketingDashboardPage.tsx", 'currentPage="marketing"'],
+      ["dashboard/pages/IntegrationsDashboardPage.tsx", 'currentPage="integrations"'],
+      ["dashboard/pages/SettingsDashboardPage.tsx", 'currentPage="settings"'],
+      ["dashboard/pages/SuperadminDashboardPage.tsx", 'currentPage="superadmin"'],
+      ["dashboard/pages/OverviewDashboardPage.tsx", 'currentPage="overview"'],
+    ] as const;
+
+    for (const [page, currentPageMarker] of pageCurrentPageChecks) {
+      expect(readSource(page)).toContain(currentPageMarker);
+    }
+  });
 });

@@ -163,7 +163,7 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
         title="Contractmodules"
         description="Compact overzicht van uitbreidingen voor contractbeheer, credits en imports."
       >
-        <FeatureModuleBoard features={contractFeatures} snapshot={snapshot} />
+        <FeatureModuleBoard currentPage="contracts" features={contractFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );
