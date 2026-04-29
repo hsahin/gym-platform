@@ -2611,6 +2611,11 @@ export interface GymPlatformServices {
     tenantContext: TenantContext,
     input: { readonly id: string; readonly expectedVersion: number },
   ): Promise<void>;
+  deleteClassSessionSeries(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: { readonly id: string; readonly expectedVersion: number },
+  ): Promise<{ readonly deleted: number; readonly seriesId: string }>;
   createStaffAccount(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -5207,6 +5212,79 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         metadata: { classSessionId: input.id },
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+    },
+    async deleteClassSessionSeries(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await assertFeatureEnabled(actor, tenantContext, "booking.scheduling");
+      const anchorClassSession = await runtime.store.getClassSession(tenantContext, input.id);
+
+      if (!anchorClassSession) {
+        throw new AppError("Les niet gevonden binnen deze tenant.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { classSessionId: input.id },
+        });
+      }
+
+      if (anchorClassSession.version !== input.expectedVersion) {
+        throw new AppError("Les is al gewijzigd; laad eerst opnieuw.", {
+          code: "VERSION_CONFLICT",
+          details: { classSessionId: anchorClassSession.id },
+        });
+      }
+
+      if (!anchorClassSession.seriesId) {
+        throw new AppError("Deze les hoort niet bij een recurring serie.", {
+          code: "INVALID_INPUT",
+          details: { classSessionId: anchorClassSession.id },
+        });
+      }
+
+      const [classSessions, bookings] = await Promise.all([
+        runtime.store.listClassSessions(tenantContext),
+        runtime.store.listBookings(tenantContext),
+      ]);
+      const seriesSessions = classSessions.filter(
+        (classSession) => classSession.seriesId === anchorClassSession.seriesId,
+      );
+      const bookedSessionIds = new Set(bookings.map((booking) => booking.classSessionId));
+      const blockedSession = seriesSessions.find((classSession) =>
+        bookedSessionIds.has(classSession.id),
+      );
+
+      if (blockedSession) {
+        throw new AppError(
+          "Archiveer deze recurring serie eerst; er zijn nog reserveringen aan gekoppeld.",
+          {
+            code: "FORBIDDEN",
+            details: {
+              classSessionId: blockedSession.id,
+              seriesId: anchorClassSession.seriesId,
+            },
+          },
+        );
+      }
+
+      for (const classSession of seriesSessions) {
+        await runtime.store.deleteClassSession(tenantContext, {
+          id: classSession.id,
+          expectedVersion: classSession.version,
+        });
+      }
+
+      await runtime.auditLogger.write({
+        action: "class.series_deleted",
+        category: "classes",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          classSessionId: anchorClassSession.id,
+          seriesId: anchorClassSession.seriesId,
+          deleted: seriesSessions.length,
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return { deleted: seriesSessions.length, seriesId: anchorClassSession.seriesId };
     },
     async createStaffAccount(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);

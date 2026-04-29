@@ -677,6 +677,62 @@ describe("system flow integrations", () => {
         ),
       ),
     );
+    const recurringSeriesId = "system_flow_strength_series";
+    const firstSeriesClass = asVersioned(
+      await expectOk(
+        classesRoute(
+          createJsonRequest("http://localhost/api/platform/classes", {
+            title: "Series Strength",
+            locationId: location.id,
+            trainerId: trainer.id,
+            startsAt: "2026-05-06T18:30:00.000Z",
+            durationMinutes: 45,
+            capacity: 8,
+            level: "mixed",
+            focus: "series",
+            seriesId: recurringSeriesId,
+          }, token),
+        ),
+        201,
+      ),
+    );
+    expect(firstSeriesClass["seriesId"]).toBe(recurringSeriesId);
+    await expectOk(
+      classesRoute(
+        createJsonRequest("http://localhost/api/platform/classes", {
+          title: "Series Strength",
+          locationId: location.id,
+          trainerId: trainer.id,
+          startsAt: "2026-05-13T18:30:00.000Z",
+          durationMinutes: 45,
+          capacity: 8,
+          level: "mixed",
+          focus: "series",
+          seriesId: recurringSeriesId,
+        }, token),
+      ),
+      201,
+    );
+    await expectOk(
+      deleteClassRoute(
+        createJsonRequest(
+          "http://localhost/api/platform/classes",
+          {
+            operation: "delete_series",
+            id: firstSeriesClass.id,
+            expectedVersion: firstSeriesClass.version,
+          },
+          token,
+          "DELETE",
+        ),
+      ),
+    );
+    const classesAfterSeriesDelete = await expectOk<VersionedRecord[]>(
+      getClassesRoute(createGetRequest("http://localhost/api/platform/classes", token)),
+    );
+    expect(
+      classesAfterSeriesDelete.filter((entry) => entry["seriesId"] === recurringSeriesId),
+    ).toHaveLength(0);
 
     const bookingResult = await expectOk<{ booking: VersionedRecord }>(
       bookingsRoute(

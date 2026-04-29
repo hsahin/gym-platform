@@ -9,6 +9,7 @@ import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
 const createClassSchema = z.object({
   title: z.string().min(2),
+  seriesId: z.string().min(1).optional(),
   locationId: z.string().min(1),
   trainerId: z.string().min(1),
   startsAt: z.string().datetime(),
@@ -25,6 +26,9 @@ const updateClassSchema = createClassSchema.extend({
 const entityMutationSchema = z.object({
   id: z.string().min(1),
   expectedVersion: z.number().int().positive(),
+});
+const deleteSeriesMutationSchema = entityMutationSchema.extend({
+  operation: z.literal("delete_series"),
 });
 
 export async function GET(request: NextRequest) {
@@ -83,10 +87,25 @@ export async function DELETE(request: NextRequest) {
     const viewer = await requireViewerFromRequest(request);
     const services = await getGymPlatformServices();
     requireMutationSecurity(request);
+    const payload = await request.json();
+
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "operation" in payload &&
+      payload.operation === "delete_series"
+    ) {
+      return services.deleteClassSessionSeries(
+        viewer.actor,
+        viewer.tenantContext,
+        deleteSeriesMutationSchema.parse(payload),
+      );
+    }
+
     await services.deleteClassSession(
       viewer.actor,
       viewer.tenantContext,
-      entityMutationSchema.parse(await request.json()),
+      entityMutationSchema.parse(payload),
     );
     return { deleted: true };
   });

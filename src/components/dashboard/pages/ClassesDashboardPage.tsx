@@ -579,6 +579,11 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                         <Chip size="sm" variant="tertiary">
                           {session.status}
                         </Chip>
+                        {session.seriesId ? (
+                          <Chip size="sm" variant="soft">
+                            Serie
+                          </Chip>
+                        ) : null}
                       </div>
                       <DashboardEntityActions
                         endpoint="/api/platform/classes"
@@ -595,6 +600,23 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                           id: session.id,
                           expectedVersion: session.version,
                         }}
+                        extraActions={
+                          session.seriesId
+                            ? [
+                                {
+                                  label: "Verwijder serie",
+                                  method: "DELETE",
+                                  payload: {
+                                    operation: "delete_series",
+                                    id: session.id,
+                                    expectedVersion: session.version,
+                                  },
+                                  successMessage: `Recurring serie ${session.title} verwijderd.`,
+                                  tone: "danger",
+                                },
+                              ]
+                            : []
+                        }
                         fields={[
                           { name: "title", label: "Lesnaam", defaultValue: session.title },
                           {

@@ -1049,9 +1049,14 @@ export function PlatformWorkbench({
                           );
                         }
 
+                        const seriesId = classRepeatsWeekly
+                          ? `series_${crypto.randomUUID()}`
+                          : undefined;
+
                         for (const localStart of startsToCreate) {
                           await submitJson("/api/platform/classes", {
                             title: classTitle,
+                            ...(seriesId ? { seriesId } : {}),
                             locationId: classLocationId,
                             trainerId: classTrainerId,
                             startsAt: new Date(localStart).toISOString(),

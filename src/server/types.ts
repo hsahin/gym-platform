@@ -100,6 +100,7 @@ export interface GymTrainer extends TenantOwnedEntity {
 
 export interface ClassSession extends TenantOwnedEntity {
   readonly title: string;
+  readonly seriesId?: string;
   readonly locationId: string;
   readonly trainerId: string;
   readonly startsAt: string;

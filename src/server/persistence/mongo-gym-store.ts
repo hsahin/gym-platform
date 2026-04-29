@@ -895,6 +895,7 @@ export class MongoGymStore implements GymStore {
       createdAt: now,
       updatedAt: now,
       title: input.title,
+      seriesId: input.seriesId?.trim() || undefined,
       locationId: input.locationId,
       trainerId: input.trainerId,
       startsAt: input.startsAt,
@@ -958,11 +959,13 @@ export class MongoGymStore implements GymStore {
     );
 
     const now = new Date().toISOString();
+    const nextSeriesId = input.seriesId ?? normalizedClassSession.seriesId;
     const updateResult = await classSessions.updateOne(
       { id: normalizedClassSession.id, version: input.expectedVersion },
       {
         set: {
           title: input.title,
+          ...(nextSeriesId ? { seriesId: nextSeriesId } : {}),
           locationId: input.locationId,
           trainerId: input.trainerId,
           startsAt: input.startsAt,

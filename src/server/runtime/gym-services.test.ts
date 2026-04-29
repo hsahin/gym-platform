@@ -921,6 +921,70 @@ describe("gym platform services", () => {
     expect(snapshot.membershipPlans[0]?.activeMembers).toBe(0);
   });
 
+  it("deletes all lessons in a recurring series with one owner action", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Oost",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 32,
+      managerName: "Amina Hassan",
+      amenities: ["Rig"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: ["Strength"],
+      certifications: [],
+    });
+    const seriesId = "series_monday_strength";
+    const firstSeriesClass = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Monday Strength",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-04T18:00:00.000Z",
+      durationMinutes: 60,
+      capacity: 12,
+      level: "mixed",
+      focus: "strength",
+      seriesId,
+    });
+    await services.createClassSession(ownerActor, tenantContext, {
+      title: "Monday Strength",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-11T18:00:00.000Z",
+      durationMinutes: 60,
+      capacity: 12,
+      level: "mixed",
+      focus: "strength",
+      seriesId,
+    });
+    const standaloneClass = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Drop-in Mobility",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-12T09:00:00.000Z",
+      durationMinutes: 45,
+      capacity: 10,
+      level: "beginner",
+      focus: "mobility",
+    });
+
+    const result = await services.deleteClassSessionSeries(ownerActor, tenantContext, {
+      id: firstSeriesClass.id,
+      expectedVersion: firstSeriesClass.version,
+    });
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const currentTrainer = snapshot.trainers.find((entry) => entry.id === trainer.id);
+
+    expect(result).toEqual({ deleted: 2, seriesId });
+    expect(snapshot.classSessions.map((entry) => entry.title)).toEqual([
+      standaloneClass.title,
+    ]);
+    expect(currentTrainer?.classIds).toEqual([standaloneClass.id]);
+  });
+
   it("stores legal live-readiness settings per gym", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
