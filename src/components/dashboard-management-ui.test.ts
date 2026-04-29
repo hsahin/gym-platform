@@ -90,6 +90,20 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("shows credit system management on the contracts dashboard", () => {
+    const contracts = readSource("dashboard/pages/ContractsDashboardPage.tsx");
+
+    expect(contracts).toContain('title="Creditsysteem"');
+    expect(contracts).toContain("creditPacks");
+    expect(contracts).toContain("remainingCredits");
+    expect(contracts).toContain("totalCredits");
+    expect(contracts).toContain('operation: "create_pack"');
+    expect(contracts).toContain('submitDashboardMutation("/api/platform/appointments"');
+    expect(contracts).toContain("Pack toevoegen");
+    expect(contracts).toContain("Standaard pack");
+    expect(contracts).toContain("Open credits");
+  });
+
   it("keeps access forms stacked below the remote access overview", () => {
     const access = readSource("dashboard/pages/AccessDashboardPage.tsx");
 

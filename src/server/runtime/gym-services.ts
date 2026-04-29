@@ -2075,6 +2075,7 @@ function slimDashboardSnapshotForPage(
   const keepMembers =
     page === "classes" ||
     page === "members" ||
+    page === "contracts" ||
     page === "coaching" ||
     page === "retention" ||
     page === "payments" ||
@@ -2089,7 +2090,8 @@ function slimDashboardSnapshotForPage(
     page === "mobile" ||
     page === "marketing" ||
     page === "settings";
-  const keepTrainers = page === "classes" || page === "coaching" || page === "settings";
+  const keepTrainers =
+    page === "classes" || page === "contracts" || page === "coaching" || page === "settings";
   const keepMembershipPlans =
     page === "members" ||
     page === "contracts" ||
@@ -2135,7 +2137,7 @@ function slimDashboardSnapshotForPage(
             runs: [],
           },
     appointments:
-      page === "coaching"
+      page === "contracts" || page === "coaching"
         ? snapshot.appointments
         : {
             creditPacks: [],

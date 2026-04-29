@@ -2821,6 +2821,66 @@ describe("gym platform services", () => {
     );
   });
 
+  it("keeps credit packs visible from the contracts dashboard page", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    await enableTenantFeatures(services, ownerActor, tenantContext, [
+      "booking.credit_system",
+    ]);
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside PT Studio",
+      city: "Amsterdam",
+      neighborhood: "Centrum",
+      capacity: 24,
+      managerName: "Saar de Jong",
+      amenities: ["Private studio"],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "PT Hybrid",
+      priceMonthly: 149,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Eva Trainer",
+      homeLocationId: location.id,
+      specialties: ["PT"],
+      certifications: ["NASM-CPT"],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Mila de Boer",
+      email: "mila@northside.test",
+      phone: "0612121212",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+    });
+    const pack = await services.createAppointmentPack(ownerActor, tenantContext, {
+      memberId: member.id,
+      memberName: member.fullName,
+      trainerId: trainer.id,
+      title: "10x PT pack",
+      totalCredits: 10,
+      validUntil: "2026-12-31T00:00:00.000Z",
+    });
+
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext, {
+      page: "contracts",
+    });
+
+    expect(snapshot.members).toEqual([expect.objectContaining({ id: member.id })]);
+    expect(snapshot.trainers).toEqual([expect.objectContaining({ id: trainer.id })]);
+    expect(snapshot.appointments.creditPacks).toEqual([
+      expect.objectContaining({
+        id: pack.id,
+        totalCredits: 10,
+        remainingCredits: 10,
+      }),
+    ]);
+  });
+
   it("blocks coach appointments when the selected PT pack does not have enough credits", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
     await enableTenantFeatures(services, ownerActor, tenantContext, [
