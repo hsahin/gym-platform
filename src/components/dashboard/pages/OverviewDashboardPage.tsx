@@ -101,6 +101,11 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
   const overviewFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "overview",
   );
+  const healthAttentionSummary =
+    openHealthChecks.length === 0
+      ? "Alles staat goed. Er zijn geen open platformchecks."
+      : openHealthChecks.map((check) => check.summary).join(" ");
+  const openHealthCheckNames = openHealthChecks.map((check) => check.name).join(", ");
 
   const highlightedMetrics = [
     {
@@ -218,6 +223,29 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
           ))}
         </KPIGroup>
       </div>
+
+      {openHealthChecks.length > 0 ? (
+        <Card className="rounded-[24px] border border-danger-200/70 bg-danger-50/80 text-danger-900 shadow-none dark:border-danger-400/20 dark:bg-danger-950/20 dark:text-danger-100">
+          <Card.Content className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">Waar stel je Aandacht in?</p>
+              <p className="text-sm leading-6">
+                Dit zijn automatische platformchecks. Open <strong>Integraties</strong> om te zien
+                welke checks nog openstaan en welke actie nodig is.
+              </p>
+              <p className="text-xs opacity-80">
+                Nu open: {openHealthCheckNames}. {healthAttentionSummary}
+              </p>
+            </div>
+            <Link
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-danger-300/70 bg-danger-100 px-4 py-2 text-sm font-semibold text-danger-900 transition hover:bg-danger-200 dark:border-danger-400/30 dark:bg-danger-500/15 dark:text-danger-100"
+              href="/dashboard/integrations"
+            >
+              Open Integraties
+            </Link>
+          </Card.Content>
+        </Card>
+      ) : null}
 
       <PageSection
         title="Platform modules"
@@ -342,6 +370,14 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                         <p className="text-muted text-sm">{item.label}</p>
                         <p className="text-lg font-semibold">{item.value}</p>
                         <p className="text-muted text-sm leading-6">{item.helper}</p>
+                        {item.label === "Gezondheid" && openHealthChecks.length > 0 ? (
+                          <Link
+                            className="mt-1 inline-flex w-fit items-center justify-center rounded-full border border-border/80 px-3 py-1.5 text-sm font-medium transition hover:border-foreground/30 hover:bg-surface-secondary"
+                            href="/dashboard/integrations"
+                          >
+                            Bekijk checks
+                          </Link>
+                        ) : null}
                       </Card.Content>
                     </Card>
                   ))}

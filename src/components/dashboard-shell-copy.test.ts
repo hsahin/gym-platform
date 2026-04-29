@@ -40,6 +40,10 @@ describe("dashboard shell copy", () => {
     expect(overviewSource).toContain("Recente reserveringen");
     expect(overviewSource).toContain("Teamnotities");
     expect(overviewSource).toContain("Notificatievoorbeeld");
+    expect(overviewSource).toContain("Waar stel je Aandacht in?");
+    expect(overviewSource).toContain("Dit zijn automatische platformchecks.");
+    expect(overviewSource).toContain("Open Integraties");
+    expect(overviewSource).toContain("Bekijk checks");
     expect(overviewSource).not.toContain('label: "Members"');
     expect(overviewSource).not.toContain('title="Next sessions"');
     expect(overviewSource).not.toContain("Latest booking activity");
