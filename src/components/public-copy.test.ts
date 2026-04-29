@@ -70,6 +70,8 @@ describe("public surface copy", () => {
     expect(source).toContain("Boeken kan alleen als lid");
     expect(source).toContain("Boek proefles");
     expect(source).toContain("Word lid");
+    expect(source).toContain('action="/api/auth/logout"');
+    expect(source).toContain("Uitloggen");
     expect(source).toContain("Ledenservice");
     expect(source).toContain("Betalingsbewijzen");
     expect(source).not.toContain("Je reserveert direct bij");

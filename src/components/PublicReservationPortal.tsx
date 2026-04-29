@@ -305,18 +305,35 @@ export function PublicReservationPortal({
               {formatClubCount(availableClubs.length)}
             </Chip>
           ) : null}
-          <nav className="app-header__nav text-sm">
-            <Link href="/" prefetch={false} className="text-muted transition hover:text-foreground">
-              Start
-            </Link>
-            <Link
-              href="/login"
-              prefetch={false}
-              className="text-muted transition hover:text-foreground"
-            >
-              Team login
-            </Link>
-          </nav>
+          {isMemberFlow ? (
+            <>
+              <Chip size="sm" variant="tertiary">
+                {snapshot.memberDisplayName}
+              </Chip>
+              <form action="/api/auth/logout" method="post">
+                <Button size="sm" type="submit" variant="outline">
+                  Uitloggen
+                </Button>
+              </form>
+            </>
+          ) : (
+            <nav className="app-header__nav text-sm">
+              <Link
+                href="/"
+                prefetch={false}
+                className="text-muted transition hover:text-foreground"
+              >
+                Start
+              </Link>
+              <Link
+                href="/login"
+                prefetch={false}
+                className="text-muted transition hover:text-foreground"
+              >
+                Team login
+              </Link>
+            </nav>
+          )}
           <LazyThemeModeSwitch />
         </div>
       </header>
