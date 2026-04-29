@@ -335,6 +335,48 @@ describe("gym platform services", () => {
     expect(dashboard.members).toHaveLength(0);
   });
 
+  it("keeps locations and trainers available on the classes dashboard page", async () => {
+    const { ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Oost",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 80,
+      managerName: "Saar de Jong",
+      amenities: ["Rig", "Sauna"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Romy de Wit",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: ["NASM-CPT"],
+    });
+    await services.createClassSession(ownerActor, tenantContext, {
+      title: "Forge HIIT",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-04T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 16,
+      level: "mixed",
+      focus: "engine",
+    });
+
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext, {
+      page: "classes",
+    });
+
+    expect(snapshot.locations).toEqual([expect.objectContaining({ id: location.id })]);
+    expect(snapshot.trainers).toEqual([expect.objectContaining({ id: trainer.id })]);
+    expect(snapshot.classSessions).toEqual([
+      expect.objectContaining({
+        title: "Forge HIIT",
+        locationId: location.id,
+        trainerId: trainer.id,
+      }),
+    ]);
+  });
+
   it("shows only clubs where the signed-in member already exists", async () => {
     const firstTenant = await bootstrapLocalPlatform({
       tenantName: "Northside Athletics",

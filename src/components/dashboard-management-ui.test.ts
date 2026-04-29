@@ -120,6 +120,36 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).not.toContain("for (const localStart of startsToCreate)");
   });
 
+  it("keeps the full class planning form inside the lessons section", () => {
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+
+    expect(classes).toContain('title="Lessen en reserveringen"');
+    expect(classes).toContain("<Card.Title>Les plannen</Card.Title>");
+    expect(classes.indexOf('title="Lessen en reserveringen"')).toBeLessThan(
+      classes.indexOf("<Card.Title>Les plannen</Card.Title>"),
+    );
+    expect(classes).toContain("Wekelijks herhalen");
+    expect(classes).toContain("buildWeeklyRecurringLocalStarts");
+    expect(classes).toContain("classes: startsToCreate.map");
+    expect(classes).not.toContain('<LazyPlatformWorkbench sections={["classes"]}');
+    expect(classes).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
+  });
+
+  it("shows every class field after planning including location and trainer context", () => {
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+
+    expect(classes).toContain("locationNameById");
+    expect(classes).toContain("trainerNameById");
+    expect(classes).toContain("Vestiging ontbreekt");
+    expect(classes).toContain("Trainer ontbreekt");
+    expect(classes).toContain("buildLocationFieldOptions");
+    expect(classes).toContain("buildTrainerFieldOptions");
+    expect(classes).toContain("Vestiging:");
+    expect(classes).toContain("Trainer:");
+    expect(classes).toContain("Duur:");
+    expect(classes).toContain("Capaciteit:");
+  });
+
   it("uses the HeroUI Pro KPI group for overview facts", () => {
     const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
 

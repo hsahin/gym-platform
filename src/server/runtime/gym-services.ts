@@ -2081,12 +2081,15 @@ function slimDashboardSnapshotForPage(
     page === "mobile" ||
     page === "marketing";
   const keepLocations =
+    page === "classes" ||
     page === "members" ||
     page === "coaching" ||
+    page === "access" ||
     page === "payments" ||
     page === "mobile" ||
     page === "marketing" ||
     page === "settings";
+  const keepTrainers = page === "classes" || page === "coaching" || page === "settings";
   const keepMembershipPlans =
     page === "members" ||
     page === "contracts" ||
@@ -2106,7 +2109,7 @@ function slimDashboardSnapshotForPage(
       page === "members" || page === "coaching" || page === "mobile"
         ? snapshot.memberPortalAccessMemberIds
         : [],
-    trainers: page === "coaching" ? snapshot.trainers : [],
+    trainers: keepTrainers ? snapshot.trainers : [],
     classSessions: keepClassSessions ? snapshot.classSessions : [],
     bookings: keepBookings ? snapshot.bookings : [],
     attendance: page === "classes" ? snapshot.attendance : [],
