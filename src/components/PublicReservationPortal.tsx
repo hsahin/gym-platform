@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button, Card, Chip, Input, Label, TextArea } from "@heroui/react";
 import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
-import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type {
@@ -69,18 +68,39 @@ export function PublicReservationPortal({
   snapshot: ReservationPortalSnapshot;
 }) {
   const isMemberFlow = isMemberReservationSnapshot(snapshot);
-  const availableClubs = isMemberFlow ? snapshot.availableClubs : snapshot.availableGyms;
-  const canReserve = !isMemberFlow || snapshot.hasEligibleMembership;
+  const availableClubs = isMemberFlow
+    ? snapshot.availableClubs
+    : snapshot.availableGyms;
+  const canBrowseClasses = !isMemberFlow || snapshot.hasEligibleMembership;
+  const canReserve = isMemberFlow && snapshot.hasEligibleMembership;
   const selfService = isMemberFlow ? snapshot.selfService : null;
+  const publicBookingAccess = isMemberFlow
+    ? null
+    : snapshot.bookingAccess ?? {
+        trialEnabled: false,
+        trialBookingUrl: "",
+        membershipSignupUrl: snapshot.tenantSlug
+          ? `/join?gym=${snapshot.tenantSlug}`
+          : null,
+        contactLabel: "Neem contact op met de gym",
+      };
+  const membershipSignupUrl =
+    publicBookingAccess?.membershipSignupUrl ??
+    (snapshot.tenantSlug ? `/join?gym=${snapshot.tenantSlug}` : "/join");
+  const publicBookingAction = publicBookingAccess
+    ? {
+        href:
+          publicBookingAccess.trialEnabled && publicBookingAccess.trialBookingUrl
+            ? publicBookingAccess.trialBookingUrl
+            : membershipSignupUrl,
+        label: publicBookingAccess.trialEnabled ? "Boek proefles" : "Word lid",
+      }
+    : null;
   const [bookingStep, setBookingStep] = useState<BookingStep>(
     snapshot.tenantSlug ? "classes" : "club",
   );
   const [isSelfServicePending, startSelfServiceTransition] = useTransition();
   const [notes, setNotes] = useState("");
-  const [publicFullName, setPublicFullName] = useState("");
-  const [publicEmail, setPublicEmail] = useState("");
-  const [publicPhoneCountry, setPublicPhoneCountry] = useState("NL");
-  const [publicPhone, setPublicPhone] = useState("");
   const [selectedClassSessionId, setSelectedClassSessionId] = useState(
     snapshot.classSessions[0]?.id ?? "",
   );
@@ -102,10 +122,6 @@ export function PublicReservationPortal({
     setSelectedClassSessionId(snapshot.classSessions[0]?.id ?? "");
     setLastResult(null);
     setNotes("");
-    setPublicFullName("");
-    setPublicEmail("");
-    setPublicPhoneCountry("NL");
-    setPublicPhone("");
     setRequestedMethodLabel("Nieuwe SEPA IBAN");
     setPaymentMethodNote("");
     setPauseStartsAt("");
@@ -141,20 +157,23 @@ export function PublicReservationPortal({
   const pauseRequestReady = Boolean(
     primaryContract && pauseStartsAt && pauseEndsAt && pauseReason.trim(),
   );
-  const publicReservationReady =
-    isMemberFlow ||
-    Boolean(publicFullName.trim() && publicEmail.trim() && publicPhone.trim());
+  const memberReservationReady = canReserve && Boolean(selectedClassSessionId);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!isMemberFlow) {
+      toast.error("Boeken kan alleen als lid. Start een proefles of word lid.");
+      return;
+    }
 
     if (!selectedClassSessionId) {
       toast.error("Kies eerst een les.");
       return;
     }
 
-    if (!publicReservationReady) {
-      toast.error("Vul naam, e-mail en telefoonnummer in voordat je reserveert.");
+    if (!memberReservationReady) {
+      toast.error("Log in als lid voordat je reserveert.");
       return;
     }
 
@@ -170,10 +189,6 @@ export function PublicReservationPortal({
           body: JSON.stringify({
             tenantSlug: snapshot.tenantSlug ?? undefined,
             classSessionId: selectedClassSessionId,
-            fullName: isMemberFlow ? undefined : publicFullName,
-            email: isMemberFlow ? undefined : publicEmail,
-            phone: isMemberFlow ? undefined : publicPhone,
-            phoneCountry: isMemberFlow ? undefined : publicPhoneCountry,
             notes: notes || undefined,
           }),
         });
@@ -278,7 +293,7 @@ export function PublicReservationPortal({
           <p className="text-muted text-sm">
             {snapshot.tenantSlug
               ? snapshot.tenantName
-              : canReserve
+              : canBrowseClasses
                 ? "Kies een club"
                 : "Alleen voor gekoppelde leden"}
           </p>
@@ -341,7 +356,7 @@ export function PublicReservationPortal({
         </Segment>
       ) : null}
 
-      {canReserve && bookingStep === "club" ? (
+      {canBrowseClasses && bookingStep === "club" ? (
         <section className="section-stack">
           <div className="max-w-2xl space-y-3">
             <h1 className="text-4xl font-semibold leading-tight">Kies je club</h1>
@@ -372,7 +387,7 @@ export function PublicReservationPortal({
         </section>
       ) : null}
 
-      {canReserve && bookingStep === "classes" ? (
+      {canBrowseClasses && bookingStep === "classes" ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="section-stack">
             <div className="grid gap-4 sm:grid-cols-3">
@@ -454,14 +469,18 @@ export function PublicReservationPortal({
             )}
           </div>
 
-            <Card className="rounded-[28px] border-border/80">
-              <Card.Header className="space-y-3">
-                <Card.Title>Kies je les</Card.Title>
-                <Card.Description>
-                  {isMemberFlow
-                    ? `Je boekt als bestaand lid van ${snapshot.tenantName}.`
-                    : `Je reserveert direct bij ${snapshot.tenantName}.`}
-                </Card.Description>
+          <Card className="rounded-[28px] border-border/80">
+            <Card.Header className="space-y-3">
+              <Card.Title>
+                {isMemberFlow ? "Kies je les" : "Boeken kan alleen als lid"}
+              </Card.Title>
+              <Card.Description>
+                {isMemberFlow
+                  ? `Je boekt als bestaand lid van ${snapshot.tenantName}.`
+                  : publicBookingAccess?.trialEnabled
+                    ? `Start de proeflesflow van ${snapshot.tenantName} of word eerst lid.`
+                    : `Word eerst lid van ${snapshot.tenantName} of neem contact op met de gym.`}
+              </Card.Description>
             </Card.Header>
             <Card.Content className="section-stack">
               {isMemberFlow ? (
@@ -475,7 +494,9 @@ export function PublicReservationPortal({
                 </div>
               ) : (
                 <p className="text-muted text-sm leading-6">
-                  Je vult je gegevens in bij de bevestiging. De club ziet je reservering direct.
+                  Bezoekers kunnen het rooster bekijken, maar een plek boeken kan
+                  alleen met een actief lidmaatschap. Zo blijft de capaciteit eerlijk
+                  en beheersbaar voor de gym.
                 </p>
               )}
 
@@ -498,12 +519,39 @@ export function PublicReservationPortal({
                       {selectedClass.waitlistCount} wachtlijst
                     </Chip>
                   </div>
-                  <Button
-                    isDisabled={!selectedClassSessionId}
-                    onPress={() => setBookingStep("confirm")}
-                  >
-                    Doorgaan
-                  </Button>
+                  {isMemberFlow ? (
+                    <Button
+                      isDisabled={!selectedClassSessionId}
+                      onPress={() => setBookingStep("confirm")}
+                    >
+                      Doorgaan
+                    </Button>
+                  ) : publicBookingAction ? (
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        isDisabled={!selectedClassSessionId}
+                        onPress={() => window.location.assign(publicBookingAction.href)}
+                      >
+                        {publicBookingAction.label}
+                      </Button>
+                      {publicBookingAccess?.trialEnabled ? (
+                        <Link
+                          href={membershipSignupUrl}
+                          className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
+                        >
+                          Word lid
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {!isMemberFlow ? (
+                    <p className="text-muted text-sm leading-6">
+                      Liever eerst overleggen?{" "}
+                      {publicBookingAccess?.contactLabel ??
+                        "Neem contact op met de gym"}
+                      .
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <p className="text-muted text-sm">Er is nog geen les beschikbaar.</p>
@@ -519,64 +567,29 @@ export function PublicReservationPortal({
             <Card.Header className="space-y-3">
               <Card.Title>Bevestig je plek</Card.Title>
               <Card.Description>
-                {isMemberFlow
-                  ? "Je lidgegevens komen uit je bestaande clubprofiel."
-                  : "Laat je gegevens achter zodat de club je reservering kan bevestigen."}
+                Je lidgegevens komen uit je bestaande clubprofiel.
               </Card.Description>
             </Card.Header>
             <Card.Content>
               <form className="section-stack" onSubmit={handleSubmit}>
-                {isMemberFlow ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="field-stack">
-                      <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                        Lid
-                      </p>
-                      <p className="text-sm font-medium">{snapshot.memberDisplayName}</p>
-                    </div>
-                    <div className="field-stack">
-                      <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                        Account
-                      </p>
-                      <p className="text-sm font-medium">{snapshot.memberEmail}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="section-stack">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="field-stack">
                     <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                      Je gegevens
+                      Lid
                     </p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="field-stack">
-                        <Label>Naam</Label>
-                        <Input
-                          fullWidth
-                          autoComplete="name"
-                          value={publicFullName}
-                          onChange={(event) => setPublicFullName(event.target.value)}
-                        />
-                      </div>
-                      <div className="field-stack">
-                        <Label>E-mail</Label>
-                        <Input
-                          fullWidth
-                          autoComplete="email"
-                          inputMode="email"
-                          type="email"
-                          value={publicEmail}
-                          onChange={(event) => setPublicEmail(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <HeroPhoneNumberField
-                      country={publicPhoneCountry}
-                      onCountryChange={setPublicPhoneCountry}
-                      phone={publicPhone}
-                      onPhoneChange={setPublicPhone}
-                      phoneLabel="Mobiel nummer"
-                    />
+                    <p className="text-sm font-medium">
+                      {isMemberFlow ? snapshot.memberDisplayName : ""}
+                    </p>
                   </div>
-                )}
+                  <div className="field-stack">
+                    <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
+                      Account
+                    </p>
+                    <p className="text-sm font-medium">
+                      {isMemberFlow ? snapshot.memberEmail : ""}
+                    </p>
+                  </div>
+                </div>
 
                 <div className="field-stack">
                   <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
@@ -595,18 +608,13 @@ export function PublicReservationPortal({
                   <Button variant="secondary" onPress={() => setBookingStep("classes")}>
                     Terug
                   </Button>
-                  <Button
-                    isDisabled={
-                      isPending || !selectedClassSessionId || !publicReservationReady
-                    }
-                    type="submit"
-                  >
+                  <Button isDisabled={isPending || !memberReservationReady} type="submit">
                     {isPending ? "Verwerken..." : "Reserveer"}
                   </Button>
                 </div>
-                {!publicReservationReady ? (
+                {!memberReservationReady ? (
                   <p className="text-muted text-sm">
-                    Vul eerst alle velden in voordat je reserveert.
+                    Log in als lid en kies een les voordat je reserveert.
                   </p>
                 ) : null}
               </form>

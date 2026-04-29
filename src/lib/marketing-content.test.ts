@@ -39,7 +39,7 @@ describe("marketing content", () => {
     expect(content.ownerSectionTitle).toBe("Voor gym owners");
     expect(content.memberSectionTitle).toBe("Voor leden");
     expect(content.primaryCta).toBe("Plan je launch");
-    expect(content.secondaryCta).toBe("Boek een les");
+    expect(content.secondaryCta).toBe("Bekijk lessen");
   });
 
   it("derives live proof and class fill labels from the reservation snapshot", () => {

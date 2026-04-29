@@ -700,6 +700,12 @@ export interface PublicReservationSnapshot {
     readonly slug: string;
     readonly name: string;
   }>;
+  readonly bookingAccess?: {
+    readonly trialEnabled: boolean;
+    readonly trialBookingUrl: string;
+    readonly membershipSignupUrl: string | null;
+    readonly contactLabel: string;
+  };
   readonly classSessions: ReadonlyArray<PublicReservationClassSummary>;
 }
 

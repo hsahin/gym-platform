@@ -43,16 +43,6 @@ const createPublicReservationSchema = z.object({
   notes: z.string().max(280).optional(),
 });
 
-function hasPublicContactDetails(
-  payload: z.infer<typeof createPublicReservationSchema>,
-): payload is z.infer<typeof createPublicReservationSchema> & {
-  readonly fullName: string;
-  readonly email: string;
-  readonly phone: string;
-} {
-  return Boolean(payload.fullName && payload.email && payload.phone);
-}
-
 export async function POST(request: NextRequest) {
   return runApiHandler(
     request,
@@ -69,7 +59,7 @@ export async function POST(request: NextRequest) {
       const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
       const viewer = await resolveViewerFromToken(token);
 
-      if (viewer?.roleKey === "member" && !hasPublicContactDetails(payload)) {
+      if (viewer?.roleKey === "member") {
         return services.createMemberReservation(viewer.actor, {
           tenantSlug: payload.tenantSlug,
           classSessionId: payload.classSessionId,
@@ -77,24 +67,12 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (!hasPublicContactDetails(payload)) {
-        throw new AppError(
-          "Vul naam, e-mail en telefoonnummer in om publiek te reserveren.",
-          {
-            code: "INVALID_INPUT",
-          },
-        );
-      }
-
-      return services.createPublicReservation({
-        tenantSlug: payload.tenantSlug,
-        classSessionId: payload.classSessionId,
-        fullName: payload.fullName,
-        email: payload.email,
-        phone: payload.phone,
-        phoneCountry: payload.phoneCountry,
-        notes: payload.notes,
-      });
+      throw new AppError(
+        "Boeken kan alleen als lid. Start een proefles, word lid of neem contact op met de gym.",
+        {
+          code: "FORBIDDEN",
+        },
+      );
     },
     { successStatus: 201 },
   );

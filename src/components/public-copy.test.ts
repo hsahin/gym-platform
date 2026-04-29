@@ -67,10 +67,13 @@ describe("public surface copy", () => {
     expect(source).toContain("Lesreserveringen");
     expect(source).toContain("Team login");
     expect(source).toContain("Kies je les");
-    expect(source).toContain("Je gegevens");
-    expect(source).toContain("Mobiel nummer");
+    expect(source).toContain("Boeken kan alleen als lid");
+    expect(source).toContain("Boek proefles");
+    expect(source).toContain("Word lid");
     expect(source).toContain("Ledenservice");
     expect(source).toContain("Betalingsbewijzen");
+    expect(source).not.toContain("Je reserveert direct bij");
+    expect(source).not.toContain("De club ziet je reservering direct");
     expect(source).not.toContain("Club reservations");
     expect(source).not.toContain("Member self-service");
     expect(source).not.toContain("Receipts");
@@ -98,7 +101,7 @@ describe("public surface copy", () => {
 
     expect(reservationSource).toContain("const paymentMethodRequestReady =");
     expect(reservationSource).toContain("const pauseRequestReady =");
-    expect(reservationSource).toContain("const publicReservationReady =");
+    expect(reservationSource).toContain("const memberReservationReady =");
     expect(reservationSource).toContain("Vul eerst alle velden in voordat je het verzoek verstuurt.");
   });
 });

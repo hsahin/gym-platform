@@ -245,10 +245,78 @@ describe("gym platform services", () => {
 
     expect(firstSnapshot.tenantName).toBe("Northside Athletics");
     expect(firstSnapshot.classSessions).toHaveLength(0);
+    expect(firstSnapshot.bookingAccess).toMatchObject({
+      trialEnabled: true,
+      trialBookingUrl: "",
+      membershipSignupUrl: `/join?gym=${firstTenant.tenant.id}`,
+    });
     expect(secondSnapshot.tenantName).toBe("Atlas Forge Club");
     expect(secondSnapshot.classSessions[0]?.title).toBe("Forge HIIT");
     expect(secondSnapshot.availableGyms).toHaveLength(2);
     expect(firstTenantContext.tenantId).toBe(firstTenant.tenant.id);
+  });
+
+  it("keeps public class booking behind trial or membership onboarding", async () => {
+    const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 50,
+      managerName: "Saar de Jong",
+      amenities: ["Recovery zone"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Romy de Wit",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: ["NASM-CPT"],
+    });
+    const session = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Forge Intro",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-04T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 16,
+      level: "beginner",
+      focus: "intro",
+    });
+
+    await services.updateBookingWorkspace(ownerActor, tenantContext, {
+      oneToOneSessionName: "PT intake",
+      oneToOneDurationMinutes: 60,
+      trialBookingUrl: "https://book.northside.test/trial",
+      defaultCreditPackSize: 10,
+      schedulingWindowDays: 14,
+    });
+
+    const snapshot = await services.getPublicReservationSnapshot({
+      tenantSlug: state.tenant.id,
+    });
+
+    expect(snapshot.bookingAccess).toMatchObject({
+      trialEnabled: true,
+      trialBookingUrl: "https://book.northside.test/trial",
+      membershipSignupUrl: `/join?gym=${state.tenant.id}`,
+    });
+    await expect(
+      services.createPublicReservation({
+        tenantSlug: state.tenant.id,
+        classSessionId: session.id,
+        fullName: "Lena Jansen",
+        email: "lena@northside.test",
+        phone: "0612345678",
+        phoneCountry: "NL",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+
+    const dashboard = await services.getDashboardSnapshot(ownerActor, tenantContext, {
+      page: "members",
+    });
+    expect(dashboard.members).toHaveLength(0);
   });
 
   it("shows only clubs where the signed-in member already exists", async () => {

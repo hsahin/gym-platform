@@ -3621,15 +3621,33 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             slug: tenant.id,
             name: tenant.name,
           })),
+          bookingAccess: {
+            trialEnabled: false,
+            trialBookingUrl: "",
+            membershipSignupUrl: null,
+            contactLabel: "Neem contact op met de gym",
+          },
           classSessions: [],
         });
       }
 
       const tenantContext = createPublicTenantContext(tenantProfile.id);
-      const [locations, trainers, classSessions] = await Promise.all([
+      const publicActor = createFeatureGateActor(
+        tenantProfile.id,
+        "public-reservation:snapshot",
+      );
+      const [
+        locations,
+        trainers,
+        classSessions,
+        bookingWorkspace,
+        trialFeature,
+      ] = await Promise.all([
         runtime.store.listLocations(tenantContext),
         runtime.store.listTrainers(tenantContext),
         runtime.store.listClassSessions(tenantContext),
+        buildBookingWorkspaceSummary(tenantContext),
+        evaluateFeatureFlag(publicActor, tenantContext, "booking.online_trial"),
       ]);
 
       const locationById = new Map(
@@ -3647,6 +3665,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           slug: tenant.id,
           name: tenant.name,
         })),
+        bookingAccess: {
+          trialEnabled: trialFeature.enabled,
+          trialBookingUrl: bookingWorkspace.trialBookingUrl,
+          membershipSignupUrl: `/join?gym=${tenantProfile.id}`,
+          contactLabel: "Neem contact op met de gym",
+        },
         classSessions: [...classSessions]
           .filter((classSession) => classSession.status === "active")
           .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
@@ -6003,112 +6027,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         );
       }
 
-      const tenantContext = createPublicTenantContext(tenantProfile.id);
-      const publicActor = createFeatureGateActor(
-        tenantProfile.id,
-        `public-reservation:${normalizeEmailValue(input.email)}`,
-      );
-      await assertFeatureEnabled(publicActor, tenantContext, "booking.online_trial");
-      const normalizedEmail = normalizeEmailValue(input.email);
-      const normalizedPhone = normalizePhoneForStorage(
-        input.phone,
-        input.phoneCountry ?? "NL",
-      );
-      const [members, classSession] = await Promise.all([
-        runtime.store.listMembers(tenantContext),
-        runtime.store.getClassSession(tenantContext, input.classSessionId),
-      ]);
-
-      if (!classSession) {
-        throw new AppError("Les kon niet gevonden worden.", {
-          code: "RESOURCE_NOT_FOUND",
-        });
-      }
-
-      if (classSession.status !== "active") {
-        throw new AppError("Deze les is niet beschikbaar voor reserveringen.", {
-          code: "FORBIDDEN",
-        });
-      }
-
-      let member = members.find(
-        (entry) =>
-          normalizeEmailValue(entry.email) === normalizedEmail &&
-          entry.phone === normalizedPhone,
-      );
-
-      if (!member) {
-        const membershipPlans = await runtime.store.listMembershipPlans(
-          tenantContext,
-        );
-        const membershipPlan = membershipPlans[0];
-
-        if (!membershipPlan) {
-          throw new AppError(
-            "Deze gym heeft nog geen contracttype voor nieuwe reserveringen.",
-            {
-              code: "RESOURCE_NOT_FOUND",
-            },
-          );
-        }
-
-        const fallbackName = normalizedEmail
-          .split("@")[0]
-          ?.replace(/[._-]+/g, " ")
-          .trim();
-
-        member = await runtime.store.createMember(tenantContext, {
-          fullName: input.fullName?.trim() || fallbackName || "Nieuw lid",
-          email: normalizedEmail,
-          phone: normalizedPhone,
-          phoneCountry: input.phoneCountry ?? "NL",
-          membershipPlanId: membershipPlan.id,
-          homeLocationId: classSession.locationId,
-          status: "trial",
-          tags: ["public-reservation"],
-          waiverStatus: "pending",
-        });
-
-        await runtime.auditLogger.write({
-          action: "member.created",
-          category: "members",
-          actorId: "public-portal",
-          tenantId: tenantContext.tenantId,
-          metadata: {
-            memberId: member.id,
-            source: "public-reservation",
-          },
-        });
-      }
-
-      if (!member) {
-        throw new AppError("Lid kon niet worden aangemaakt.", {
-          code: "RESOURCE_NOT_FOUND",
-        });
-      }
-
-      if (member.status === "paused") {
-        throw new AppError("Dit lidmaatschap staat op pauze en kan nu niet reserveren.", {
-          code: "FORBIDDEN",
-        });
-      }
-
-      const actor = createPublicBookingActor(tenantProfile.id, member);
-
-      return createBookingFlow(
-        actor,
-        tenantContext,
+      throw new AppError(
+        "Boeken kan alleen als lid. Start een proefles, word lid of neem contact op met de gym.",
         {
-          classSessionId: input.classSessionId,
-          memberId: member.id,
-          idempotencyKey: `member-app:${member.id}:${input.classSessionId}`,
-          phone: normalizedPhone,
-          phoneCountry: input.phoneCountry ?? member.phoneCountry,
-          notes: input.notes,
-          source: "member_app",
+          code: "FORBIDDEN",
         },
-        member,
-        classSession,
       );
     },
     async createMemberReservation(actor, input) {

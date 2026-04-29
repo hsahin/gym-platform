@@ -19,7 +19,7 @@ export function getPublicLandingContent(snapshot: PublicReservationSnapshot) {
   return {
     heroTitle: "Run je gym als een merk waar leden direct bij willen horen.",
     primaryCta: "Plan je launch",
-    secondaryCta: "Boek een les",
+    secondaryCta: "Bekijk lessen",
     ownerSectionTitle: "Voor gym owners",
     memberSectionTitle: "Voor leden",
     ownerHighlights: [

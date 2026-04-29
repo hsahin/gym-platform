@@ -399,7 +399,7 @@ describe("api route integrations", () => {
     expect(dashboard.bookings[0]?.source).toBe("member_app");
   });
 
-  it("creates a trial member and reservation for anonymous public visitors", async () => {
+  it("rejects anonymous public reservations and keeps booking member-only", async () => {
     const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -445,18 +445,16 @@ describe("api route integrations", () => {
     );
     const reservationPayload = (await reservationResponse.json()) as {
       ok: boolean;
-      data: {
-        booking: {
-          source: string;
-          classSessionId: string;
-        };
+      error: {
+        code: string;
+        message: string;
       };
     };
 
-    expect(reservationResponse.status).toBe(201);
-    expect(reservationPayload.ok).toBe(true);
-    expect(reservationPayload.data.booking.source).toBe("member_app");
-    expect(reservationPayload.data.booking.classSessionId).toBe(session.id);
+    expect(reservationResponse.status).toBe(403);
+    expect(reservationPayload.ok).toBe(false);
+    expect(reservationPayload.error.code).toBe("FORBIDDEN");
+    expect(reservationPayload.error.message).toContain("Boeken kan alleen als lid");
 
     const refreshedServices = await getGymPlatformServices();
     const refreshedTenantContext = refreshedServices.createRequestTenantContext(
@@ -468,19 +466,11 @@ describe("api route integrations", () => {
       refreshedTenantContext,
       { page: "members" },
     );
-    const createdMember = dashboard.members.find(
-      (member) => member.email === "lena@northside.test",
-    );
-
-    expect(createdMember).toMatchObject({
-      fullName: "Lena Jansen",
-      status: "trial",
-      waiverStatus: "pending",
-    });
-    expect(dashboard.memberPortalAccessMemberIds).not.toContain(createdMember?.id);
+    expect(dashboard.members).toHaveLength(0);
+    expect(dashboard.memberPortalAccessMemberIds).toHaveLength(0);
   });
 
-  it("rejects anonymous public reservations without contact details", async () => {
+  it("rejects anonymous public reservations before validating contact details", async () => {
     const response = await publicReservationsRoute(
       createMutationRequest("http://localhost/api/public/reservations", {
         tenantSlug: "northside-athletics",
@@ -495,10 +485,10 @@ describe("api route integrations", () => {
       };
     };
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
-    expect(payload.error.code).toBe("INVALID_INPUT");
-    expect(payload.error.message).toContain("Vul naam, e-mail en telefoonnummer in");
+    expect(payload.error.code).toBe("FORBIDDEN");
+    expect(payload.error.message).toContain("Boeken kan alleen als lid");
   });
 
   it("rejects invalid public member signups before they enter review", async () => {
