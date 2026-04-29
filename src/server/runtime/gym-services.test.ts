@@ -48,6 +48,10 @@ function clearUploadEnv() {
   delete process.env.SPACES_SECRET_ACCESS_KEY;
 }
 
+function daysFromNow(days: number) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 async function bootstrapOwnerPlatform() {
   const state = await bootstrapLocalPlatform({
     tenantName: "Northside Athletics",
@@ -229,7 +233,17 @@ describe("gym platform services", () => {
       title: "Forge HIIT",
       locationId: location.id,
       trainerId: trainer.id,
-      startsAt: "2026-04-22T18:30:00.000Z",
+      startsAt: daysFromNow(7),
+      durationMinutes: 60,
+      capacity: 16,
+      level: "mixed",
+      focus: "engine",
+    });
+    await services.createClassSession(secondOwner, secondTenantContext, {
+      title: "Forge recurring later",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: daysFromNow(45),
       durationMinutes: 60,
       capacity: 16,
       level: "mixed",
@@ -251,7 +265,9 @@ describe("gym platform services", () => {
       membershipSignupUrl: `/join?gym=${firstTenant.tenant.id}`,
     });
     expect(secondSnapshot.tenantName).toBe("Atlas Forge Club");
-    expect(secondSnapshot.classSessions[0]?.title).toBe("Forge HIIT");
+    expect(secondSnapshot.classSessions.map((classSession) => classSession.title)).toEqual([
+      "Forge HIIT",
+    ]);
     expect(secondSnapshot.availableGyms).toHaveLength(2);
     expect(firstTenantContext.tenantId).toBe(firstTenant.tenant.id);
   });
@@ -414,7 +430,17 @@ describe("gym platform services", () => {
       title: "Forge HIIT",
       locationId: secondLocation.id,
       trainerId: secondTrainer.id,
-      startsAt: "2026-04-22T18:30:00.000Z",
+      startsAt: daysFromNow(8),
+      durationMinutes: 60,
+      capacity: 16,
+      level: "mixed",
+      focus: "engine",
+    });
+    await services.createClassSession(secondOwner, secondTenantContext, {
+      title: "Forge recurring later",
+      locationId: secondLocation.id,
+      trainerId: secondTrainer.id,
+      startsAt: daysFromNow(45),
       durationMinutes: 60,
       capacity: 16,
       level: "mixed",
@@ -424,7 +450,7 @@ describe("gym platform services", () => {
       title: "Northside Lift",
       locationId: firstLocation.id,
       trainerId: firstTrainer.id,
-      startsAt: "2026-04-21T18:30:00.000Z",
+      startsAt: daysFromNow(6),
       durationMinutes: 60,
       capacity: 14,
       level: "mixed",
@@ -449,7 +475,9 @@ describe("gym platform services", () => {
       "Northside Athletics",
     ]);
     expect(secondSnapshot.tenantName).toBe("Atlas Forge Club");
-    expect(secondSnapshot.classSessions[0]?.title).toBe("Forge HIIT");
+    expect(secondSnapshot.classSessions.map((classSession) => classSession.title)).toEqual([
+      "Forge HIIT",
+    ]);
   });
 
   it("starts leeg en kan daarna kerngegevens opbouwen", async () => {

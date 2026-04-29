@@ -1237,6 +1237,29 @@ function formatClassSlot(startsAt: string) {
   }).format(new Date(startsAt));
 }
 
+const RESERVATION_ROSTER_WINDOW_DAYS = 31;
+
+function filterReservationRosterWindow<
+  TClassSession extends { readonly startsAt: string; readonly status: string },
+>(classSessions: ReadonlyArray<TClassSession>) {
+  const windowStart = Date.now();
+  const windowEnd =
+    windowStart + RESERVATION_ROSTER_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  return [...classSessions]
+    .filter((classSession) => {
+      const startsAt = Date.parse(classSession.startsAt);
+
+      return (
+        classSession.status === "active" &&
+        Number.isFinite(startsAt) &&
+        startsAt >= windowStart &&
+        startsAt <= windowEnd
+      );
+    })
+    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+}
+
 function describeBookingStatusForMemberMessage(
   status: ClassBooking["status"],
   alreadyExisted: boolean,
@@ -3125,9 +3148,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         slug: membership.tenant.id,
         name: membership.tenant.name,
       })),
-      classSessions: [...classSessions]
-        .filter((classSession) => classSession.status === "active")
-        .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
+      classSessions: filterReservationRosterWindow(classSessions)
         .map((classSession) => ({
           id: classSession.id,
           title: classSession.title,
@@ -3671,9 +3692,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           membershipSignupUrl: `/join?gym=${tenantProfile.id}`,
           contactLabel: "Neem contact op met de gym",
         },
-        classSessions: [...classSessions]
-          .filter((classSession) => classSession.status === "active")
-          .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
+        classSessions: filterReservationRosterWindow(classSessions)
           .map((classSession) => ({
             id: classSession.id,
             title: classSession.title,

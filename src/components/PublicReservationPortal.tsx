@@ -409,7 +409,7 @@ export function PublicReservationPortal({
           <div className="section-stack">
             <div className="grid gap-4 sm:grid-cols-3">
               {[
-                { label: "Lessen", value: snapshot.classSessions.length },
+                { label: "Lessen komende maand", value: snapshot.classSessions.length },
                 { label: "Capaciteit", value: totalCapacity },
                 { label: "Bezetting", value: `${occupancy}%` },
               ].map((metric) => (
@@ -479,7 +479,7 @@ export function PublicReservationPortal({
               <Card className="rounded-[28px] border-border/80">
                 <Card.Content>
                   <p className="text-muted text-sm">
-                    Voor deze club staan nog geen actieve lessen live.
+                    Voor deze club staan komende maand nog geen actieve lessen live.
                   </p>
                 </Card.Content>
               </Card>
