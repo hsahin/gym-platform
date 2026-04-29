@@ -53,13 +53,6 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Integrations and connected systems"
-        description="Hardware, externe software en equipment-data komen hier samen in één beheerlaag."
-      >
-        <FeatureModuleBoard features={integrationFeatures} snapshot={snapshot} />
-      </PageSection>
-
-      <PageSection
         title="Integration setup"
         description="Leg vast welke vendors, migratiebron en body composition tooling jouw tenant gebruikt."
         actions={
@@ -202,6 +195,13 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
             description="Alle bekende runtime- en koppelingchecks staan momenteel gezond."
           />
         )}
+      </PageSection>
+
+      <PageSection
+        title="Integratiemodules"
+        description="Compact overzicht van hardware, externe software en equipment-data."
+      >
+        <FeatureModuleBoard features={integrationFeatures} snapshot={snapshot} />
       </PageSection>
     </div>
   );

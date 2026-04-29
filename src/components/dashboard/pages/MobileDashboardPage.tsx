@@ -80,13 +80,6 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Mobiele ervaring"
-        description="White-label, mobiele check-in en coaching-apps voor leden lopen allemaal via dezelfde platformlaag."
-      >
-        <FeatureModuleBoard features={mobileFeatures} snapshot={snapshot} />
-      </PageSection>
-
-      <PageSection
         title="Mobiele app instellen"
         description="Configureer je white-label app, onboarding en check-in ervaring voor leden."
         actions={
@@ -522,6 +515,13 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
           </div>
         </PageSection>
       </div>
+
+      <PageSection
+        title="Mobiele modules"
+        description="Compact overzicht van white-label, mobiele check-in en coaching-app uitbreidingen."
+      >
+        <FeatureModuleBoard features={mobileFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

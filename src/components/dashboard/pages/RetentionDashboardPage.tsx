@@ -79,13 +79,6 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Retention modules"
-        description="Bouw community, loyaliteit en churn-preventie bovenop je live leden- en reserveringsdata."
-      >
-        <FeatureModuleBoard features={retentionFeatures} snapshot={snapshot} />
-      </PageSection>
-
-      <PageSection
         title="Retention setup"
         description="Bepaal hoe communities, challenges, surveys en premium content in jouw gym moeten landen."
         actions={
@@ -525,6 +518,13 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
           </div>
         </PageSection>
       </div>
+
+      <PageSection
+        title="Retention modules"
+        description="Compact overzicht van community, loyaliteit en churn-preventie."
+      >
+        <FeatureModuleBoard features={retentionFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

@@ -40,13 +40,6 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <PageSection
-        title="Platforminstellingen"
-        description="Vestigingen, teambeheer en multi-club operatie staan los van feature rollout en blijven helder per tenant."
-      >
-        <FeatureModuleBoard features={settingsFeatures} snapshot={snapshot} />
-      </PageSection>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <PageSection
           title="Instellingen"
@@ -429,6 +422,13 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
           snapshot={snapshot}
         />
       </div>
+
+      <PageSection
+        title="Instellingsmodules"
+        description="Compact overzicht van feature-uitrol voor vestigingen, teambeheer en operatie."
+      >
+        <FeatureModuleBoard features={settingsFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

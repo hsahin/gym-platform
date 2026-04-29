@@ -87,13 +87,6 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Coaching modules"
-        description="Trainings-, voeding- en progressiemodules die je coachingpropositie verbreden."
-      >
-        <FeatureModuleBoard features={coachingFeatures} snapshot={snapshot} />
-      </PageSection>
-
-      <PageSection
         title="Coaching setup"
         description="Leg de vaste coachaanpak, contentbron en AI-coachstijl vast voor alle trainers."
         actions={
@@ -559,6 +552,13 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
           )}
         </PageSection>
       </div>
+
+      <PageSection
+        title="Coaching modules"
+        description="Compact overzicht van training, voeding en progressiemodules."
+      >
+        <FeatureModuleBoard features={coachingFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

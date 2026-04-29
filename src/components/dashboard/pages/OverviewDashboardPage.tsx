@@ -149,15 +149,6 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
         </div>
       </PageSection>
 
-      {overviewFeatures.length > 0 ? (
-        <PageSection
-          title="Owner-inzicht"
-          description="Analytics en operationele signalen staan centraal op het overzicht."
-        >
-          <FeatureModuleBoard features={overviewFeatures} snapshot={snapshot} />
-        </PageSection>
-      ) : null}
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] xl:items-start">
         <PageSection
           title="Volgende lessen"
@@ -299,6 +290,15 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
         showLaunchHeader
         snapshot={snapshot}
       />
+
+      {overviewFeatures.length > 0 ? (
+        <PageSection
+          title="Owner-inzicht"
+          description="Compact overzicht van analytics en operationele signalen."
+        >
+          <FeatureModuleBoard features={overviewFeatures} snapshot={snapshot} />
+        </PageSection>
+      ) : null}
     </div>
   );
 }

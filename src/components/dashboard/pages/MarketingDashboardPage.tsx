@@ -75,13 +75,6 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <PageSection
-        title="Marketing modules"
-        description="Campagnes, promoties en lead flows kunnen los worden uitgerold zonder aparte tooling."
-      >
-        <FeatureModuleBoard features={marketingFeatures} snapshot={snapshot} />
-      </PageSection>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <PageSection
           title="Lead intake"
@@ -607,6 +600,13 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
           </Card>
         </PageSection>
       </div>
+
+      <PageSection
+        title="Marketing modules"
+        description="Compact overzicht van campagnes, promoties en lead flows."
+      >
+        <FeatureModuleBoard features={marketingFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

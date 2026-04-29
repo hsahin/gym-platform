@@ -166,13 +166,6 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Booking stack"
-        description="Rooster, groepsboekingen, trials en check-ins blijven per club afzonderlijk beheersbaar."
-      >
-        <FeatureModuleBoard features={classFeatures} snapshot={snapshot} />
-      </PageSection>
-
-      <PageSection
         title="Booking setup"
         description="Leg PT-booking, trial intake en credit packs vast zodat planners en frontdesk met dezelfde spelregels werken."
         actions={
@@ -737,6 +730,13 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
 
         <LazyPlatformWorkbench sections={["classes"]} showLaunchHeader={false} snapshot={snapshot} />
       </div>
+
+      <PageSection
+        title="Booking modules"
+        description="Compact overzicht van rooster, groepsboekingen, trials en check-ins."
+      >
+        <FeatureModuleBoard features={classFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

@@ -70,7 +70,7 @@ describe("dashboard shell copy", () => {
       "dashboard/pages/PaymentsDashboardPage.tsx",
     );
 
-    expect(contractsSource).toContain('title="Contracten en lidmaatschappen"');
+    expect(contractsSource).toContain('title="Contractmodules"');
     expect(contractsSource).toContain('title="Nog geen lidmaatschappen"');
     expect(contractsSource).not.toContain("Commercial plans and imported member data.");
 
@@ -93,7 +93,7 @@ describe("dashboard shell copy", () => {
   it("keeps the mobile owner page Dutch and action-oriented", () => {
     const source = readComponentSource("dashboard/pages/MobileDashboardPage.tsx");
 
-    expect(source).toContain('title="Mobiele ervaring"');
+    expect(source).toContain('title="Mobiele modules"');
     expect(source).toContain('title="Mobiele app instellen"');
     expect(source).toContain('label: "Portalaccounts"');
     expect(source).toContain('title="Leden klaar voor app-uitrol"');
@@ -110,12 +110,16 @@ describe("dashboard shell copy", () => {
   it("keeps feature cards localized instead of exposing raw rollout labels", () => {
     const source = readComponentSource("dashboard/FeatureModuleBoard.tsx");
 
+    expect(source).toContain("ItemCardGroup");
+    expect(source).toContain("ItemCard");
     expect(source).toContain("getDashboardFeatureUiCopy");
     expect(source).toContain("getDashboardFeatureFlagStateLabel");
     expect(source).toContain("getDashboardFeatureStatusLabel");
     expect(source).toContain("getDashboardFeatureCategoryLabel");
     expect(source).toContain("getDashboardFeatureReasonLabel");
     expect(source).toContain("Module openen");
+    expect(source).toContain("submitDashboardMutation");
+    expect(source).toContain("columns={editable ? 2 : 3}");
     expect(source).not.toContain('"Enabled"');
     expect(source).not.toContain('"Disabled"');
     expect(source).not.toContain("Open module");

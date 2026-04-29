@@ -57,13 +57,6 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <PageSection
-        title="Ledenbeheer"
-        description="Ledenbeheer, intake en membership lifecycle blijven zichtbaar als afzonderlijke modules."
-      >
-        <FeatureModuleBoard features={memberFeatures} snapshot={snapshot} />
-      </PageSection>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <div className="section-stack">
         <PageSection title="Leden" description="Bekijk lidstatus, intake en waiverstatus.">
@@ -400,6 +393,13 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
 
         <LazyPlatformWorkbench sections={["members"]} showLaunchHeader={false} snapshot={snapshot} />
       </div>
+
+      <PageSection
+        title="Ledenmodules"
+        description="Compact overzicht van ledenbeheer, intake en membership lifecycle."
+      >
+        <FeatureModuleBoard features={memberFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

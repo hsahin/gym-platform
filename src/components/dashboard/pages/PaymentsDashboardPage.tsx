@@ -81,13 +81,6 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Billing modules"
-        description="Betaalverwerking, incasso en AutoCollect zijn tenant-level uitbreidingen bovenop je kernbilling."
-      >
-        <FeatureModuleBoard features={paymentFeatures} snapshot={snapshot} />
-      </PageSection>
-
-      <PageSection
         title="Revenue setup"
         description="Maak webshop, PoS en AutoCollect concreet zodat je betaalstack ook operationeel klopt op de vloer."
         actions={
@@ -636,6 +629,13 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
 
         <LazyPlatformWorkbench sections={["payments"]} showLaunchHeader={false} snapshot={snapshot} />
       </div>
+
+      <PageSection
+        title="Billing modules"
+        description="Compact overzicht van betaalverwerking, incasso en AutoCollect."
+      >
+        <FeatureModuleBoard features={paymentFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

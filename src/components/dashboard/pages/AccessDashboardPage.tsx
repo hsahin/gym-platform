@@ -14,13 +14,6 @@ export function AccessDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <PageSection
-        title="Access modules"
-        description="Slimme toegang en owner-controlled open-acties worden tenant-breed zichtbaar beheerd."
-      >
-        <FeatureModuleBoard features={accessFeatures} snapshot={snapshot} />
-      </PageSection>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <PageSection
           title="Remote access"
@@ -65,6 +58,13 @@ export function AccessDashboardPage({ snapshot }: DashboardPageProps) {
 
         <LazyPlatformWorkbench sections={["remote-access"]} showLaunchHeader={false} snapshot={snapshot} />
       </div>
+
+      <PageSection
+        title="Toegangsmodules"
+        description="Compact overzicht van slimme toegang en owner-controlled open-acties."
+      >
+        <FeatureModuleBoard features={accessFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }

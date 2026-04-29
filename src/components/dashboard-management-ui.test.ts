@@ -58,4 +58,31 @@ describe("dashboard management UI wiring", () => {
       expect(source).toContain("Filter");
     }
   });
+
+  it("keeps feature module summaries below the primary owner workflows", () => {
+    const pageOrderChecks = [
+      ["dashboard/pages/ClassesDashboardPage.tsx", 'title="Booking setup"', 'title="Booking modules"'],
+      ["dashboard/pages/MembersDashboardPage.tsx", 'title="Leden"', 'title="Ledenmodules"'],
+      ["dashboard/pages/ContractsDashboardPage.tsx", 'title="Lidmaatschappen"', 'title="Contractmodules"'],
+      ["dashboard/pages/PaymentsDashboardPage.tsx", 'title="Revenue setup"', 'title="Billing modules"'],
+      ["dashboard/pages/AccessDashboardPage.tsx", 'title="Remote access"', 'title="Toegangsmodules"'],
+      ["dashboard/pages/MobileDashboardPage.tsx", 'title="Mobiele app instellen"', 'title="Mobiele modules"'],
+      ["dashboard/pages/RetentionDashboardPage.tsx", 'title="Retention setup"', 'title="Retention modules"'],
+      ["dashboard/pages/CoachingDashboardPage.tsx", 'title="Coaching setup"', 'title="Coaching modules"'],
+      ["dashboard/pages/MarketingDashboardPage.tsx", 'title="Lead intake"', 'title="Marketing modules"'],
+      ["dashboard/pages/IntegrationsDashboardPage.tsx", 'title="Integration setup"', 'title="Integratiemodules"'],
+      ["dashboard/pages/SettingsDashboardPage.tsx", 'title="Instellingen"', 'title="Instellingsmodules"'],
+      ["dashboard/pages/OverviewDashboardPage.tsx", "<LazyPlatformWorkbench", 'title="Owner-inzicht"'],
+    ] as const;
+
+    for (const [page, primaryMarker, moduleMarker] of pageOrderChecks) {
+      const source = readSource(page);
+
+      expect(source.indexOf(primaryMarker), `${page} primary marker`).toBeGreaterThanOrEqual(0);
+      expect(source.indexOf(moduleMarker), `${page} module marker`).toBeGreaterThanOrEqual(0);
+      expect(source.indexOf(moduleMarker), `${page} module position`).toBeGreaterThan(
+        source.indexOf(primaryMarker),
+      );
+    }
+  });
 });

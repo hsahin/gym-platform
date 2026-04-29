@@ -24,13 +24,6 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <PageSection
-        title="Contracten en lidmaatschappen"
-        description="Contractbeheer, credits en imports kunnen per tenant bewust worden vrijgegeven."
-      >
-        <FeatureModuleBoard features={contractFeatures} snapshot={snapshot} />
-      </PageSection>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <PageSection
           title="Lidmaatschappen"
@@ -166,6 +159,13 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
           snapshot={snapshot}
         />
       </div>
+
+      <PageSection
+        title="Contractmodules"
+        description="Compact overzicht van uitbreidingen voor contractbeheer, credits en imports."
+      >
+        <FeatureModuleBoard features={contractFeatures} snapshot={snapshot} />
+      </PageSection>
     </div>
   );
 }
