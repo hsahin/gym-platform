@@ -1053,8 +1053,8 @@ export function PlatformWorkbench({
                           ? `series_${crypto.randomUUID()}`
                           : undefined;
 
-                        for (const localStart of startsToCreate) {
-                          await submitJson("/api/platform/classes", {
+                        await submitJson("/api/platform/classes", {
+                          classes: startsToCreate.map((localStart) => ({
                             title: classTitle,
                             ...(seriesId ? { seriesId } : {}),
                             locationId: classLocationId,
@@ -1064,8 +1064,8 @@ export function PlatformWorkbench({
                             capacity: Number(classCapacity),
                             level: classLevel,
                             focus: classFocus,
-                          });
-                        }
+                          })),
+                        });
 
                         toast.success(
                           startsToCreate.length === 1

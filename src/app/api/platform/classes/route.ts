@@ -18,6 +18,9 @@ const createClassSchema = z.object({
   level: z.enum(["beginner", "mixed", "advanced"]),
   focus: z.string().min(2),
 });
+const createClassBatchSchema = z.object({
+  classes: z.array(createClassSchema).min(1).max(120),
+});
 const updateClassSchema = createClassSchema.extend({
   id: z.string().min(1),
   expectedVersion: z.number().int().positive(),
@@ -46,9 +49,25 @@ export async function POST(request: NextRequest) {
       const viewer = await requireViewerFromRequest(request);
       const services = await getGymPlatformServices();
       requireMutationSecurity(request);
-      const payload = createClassSchema.parse(await request.json());
+      const payload = await request.json();
 
-      return services.createClassSession(viewer.actor, viewer.tenantContext, payload);
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        "classes" in payload
+      ) {
+        return services.createClassSessionBatch(
+          viewer.actor,
+          viewer.tenantContext,
+          createClassBatchSchema.parse(payload).classes,
+        );
+      }
+
+      return services.createClassSession(
+        viewer.actor,
+        viewer.tenantContext,
+        createClassSchema.parse(payload),
+      );
     },
     { successStatus: 201 },
   );

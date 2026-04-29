@@ -2596,6 +2596,11 @@ export interface GymPlatformServices {
     tenantContext: TenantContext,
     input: CreateClassSessionInput,
   ): Promise<GymDashboardSnapshot["classSessions"][number]>;
+  createClassSessionBatch(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: ReadonlyArray<CreateClassSessionInput>,
+  ): Promise<ReadonlyArray<GymDashboardSnapshot["classSessions"][number]>>;
   updateClassSession(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -5165,6 +5170,75 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return classSession;
+    },
+    async createClassSessionBatch(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
+      await assertFeatureEnabled(actor, tenantContext, "booking.scheduling");
+
+      if (input.length === 0) {
+        throw new AppError("Kies minimaal één les om aan te maken.", {
+          code: "INVALID_INPUT",
+        });
+      }
+
+      if (input.length > 120) {
+        throw new AppError("Maak maximaal 120 lessen tegelijk aan.", {
+          code: "INVALID_INPUT",
+          details: { requested: input.length },
+        });
+      }
+
+      const [locations, trainers] = await Promise.all([
+        runtime.store.listLocations(tenantContext),
+        runtime.store.listTrainers(tenantContext),
+      ]);
+      const locationIds = new Set(locations.map((location) => location.id));
+      const trainerIds = new Set(trainers.map((trainer) => trainer.id));
+      const missingReference = input.find(
+        (classSession) =>
+          !locationIds.has(classSession.locationId) ||
+          !trainerIds.has(classSession.trainerId),
+      );
+
+      if (missingReference) {
+        throw new AppError(
+          "Een les in deze batch verwijst naar een onbekende vestiging of trainer.",
+          {
+            code: "RESOURCE_NOT_FOUND",
+            details: {
+              locationId: missingReference.locationId,
+              trainerId: missingReference.trainerId,
+            },
+          },
+        );
+      }
+
+      const classSessions: GymDashboardSnapshot["classSessions"][number][] = [];
+
+      for (const classSessionInput of input) {
+        classSessions.push(
+          await runtime.store.createClassSession(tenantContext, classSessionInput),
+        );
+      }
+
+      await runtime.auditLogger.write({
+        action: "class.batch_created",
+        category: "classes",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          count: classSessions.length,
+          classSessionIds: classSessions.map((classSession) => classSession.id),
+          seriesIds: [
+            ...new Set(
+              classSessions.flatMap((classSession) => classSession.seriesId ?? []),
+            ),
+          ],
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return classSessions;
     },
     async updateClassSession(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);

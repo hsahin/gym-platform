@@ -75,6 +75,14 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).toContain('"grid gap-4 2xl:grid-cols-2"');
   });
 
+  it("creates recurring workbench lessons with one batch request", () => {
+    const workbench = readSource("PlatformWorkbench.tsx");
+
+    expect(workbench).toContain("classes: startsToCreate.map");
+    expect(workbench).toContain('submitJson("/api/platform/classes", {');
+    expect(workbench).not.toContain("for (const localStart of startsToCreate)");
+  });
+
   it("uses the HeroUI Pro KPI group for overview facts", () => {
     const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
 

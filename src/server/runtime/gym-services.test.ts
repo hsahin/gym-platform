@@ -985,6 +985,70 @@ describe("gym platform services", () => {
     expect(currentTrainer?.classIds).toEqual([standaloneClass.id]);
   });
 
+  it("creates recurring lessons through one batch operation", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Oost",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 32,
+      managerName: "Amina Hassan",
+      amenities: ["Rig"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Jay Hassan",
+      homeLocationId: location.id,
+      specialties: ["Strength"],
+      certifications: [],
+    });
+    const seriesId = "series_batch_strength";
+
+    const createdClasses = await services.createClassSessionBatch(ownerActor, tenantContext, [
+      {
+        title: "Batch Strength",
+        locationId: location.id,
+        trainerId: trainer.id,
+        startsAt: "2026-05-04T18:00:00.000Z",
+        durationMinutes: 60,
+        capacity: 12,
+        level: "mixed",
+        focus: "strength",
+        seriesId,
+      },
+      {
+        title: "Batch Strength",
+        locationId: location.id,
+        trainerId: trainer.id,
+        startsAt: "2026-05-11T18:00:00.000Z",
+        durationMinutes: 60,
+        capacity: 12,
+        level: "mixed",
+        focus: "strength",
+        seriesId,
+      },
+      {
+        title: "Batch Strength",
+        locationId: location.id,
+        trainerId: trainer.id,
+        startsAt: "2026-05-18T18:00:00.000Z",
+        durationMinutes: 60,
+        capacity: 12,
+        level: "mixed",
+        focus: "strength",
+        seriesId,
+      },
+    ]);
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(createdClasses).toHaveLength(3);
+    expect(createdClasses.map((classSession) => classSession.seriesId)).toEqual([
+      seriesId,
+      seriesId,
+      seriesId,
+    ]);
+    expect(snapshot.classSessions.filter((entry) => entry.seriesId === seriesId)).toHaveLength(3);
+  });
+
   it("stores legal live-readiness settings per gym", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 

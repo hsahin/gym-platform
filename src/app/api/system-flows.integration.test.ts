@@ -733,6 +733,42 @@ describe("system flow integrations", () => {
     expect(
       classesAfterSeriesDelete.filter((entry) => entry["seriesId"] === recurringSeriesId),
     ).toHaveLength(0);
+    const batchSeriesId = "system_flow_batch_series";
+    const batchClasses = await expectOk<VersionedRecord[]>(
+      classesRoute(
+        createJsonRequest("http://localhost/api/platform/classes", {
+          classes: [
+            {
+              title: "Batch Strength",
+              locationId: location.id,
+              trainerId: trainer.id,
+              startsAt: "2026-05-20T18:30:00.000Z",
+              durationMinutes: 45,
+              capacity: 8,
+              level: "mixed",
+              focus: "series",
+              seriesId: batchSeriesId,
+            },
+            {
+              title: "Batch Strength",
+              locationId: location.id,
+              trainerId: trainer.id,
+              startsAt: "2026-05-27T18:30:00.000Z",
+              durationMinutes: 45,
+              capacity: 8,
+              level: "mixed",
+              focus: "series",
+              seriesId: batchSeriesId,
+            },
+          ],
+        }, token),
+      ),
+      201,
+    );
+    expect(batchClasses.map((entry) => entry["seriesId"])).toEqual([
+      batchSeriesId,
+      batchSeriesId,
+    ]);
 
     const bookingResult = await expectOk<{ booking: VersionedRecord }>(
       bookingsRoute(
