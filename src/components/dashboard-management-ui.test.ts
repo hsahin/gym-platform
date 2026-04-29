@@ -86,6 +86,17 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("keeps access forms stacked below the remote access overview", () => {
+    const access = readSource("dashboard/pages/AccessDashboardPage.tsx");
+
+    expect(access).toContain('title="Remote access"');
+    expect(access).toContain("stackSections");
+    expect(access).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
+    expect(access.indexOf('title="Remote access"')).toBeLessThan(
+      access.indexOf("<LazyPlatformWorkbench"),
+    );
+  });
+
   it("creates recurring workbench lessons with one batch request", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 
