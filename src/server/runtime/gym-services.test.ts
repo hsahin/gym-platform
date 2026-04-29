@@ -1742,6 +1742,21 @@ describe("gym platform services", () => {
     expect(result.booking.memberId).toBe(member.id);
     expect(result.booking.source).toBe("member_app");
     expect(result.booking.status).toBe("confirmed");
+
+    const snapshot = await services.getMemberReservationSnapshot(memberActor, {
+      tenantSlug: tenantContext.tenantId,
+    });
+
+    expect(snapshot.myReservations).toEqual([
+      expect.objectContaining({
+        id: result.booking.id,
+        classSessionId: classSession.id,
+        classTitle: "Sunday Mobility",
+        locationName: "Northside East",
+        trainerName: "Jay Hassan",
+        status: "confirmed",
+      }),
+    ]);
   });
 
   it("allows trial members to reserve trainerless one-hour open gym capacity slots", async () => {

@@ -86,6 +86,7 @@ export function PublicReservationPortal({
   const canBrowseClasses = !isMemberFlow || snapshot.hasEligibleMembership;
   const canReserve = isMemberFlow && snapshot.hasEligibleMembership;
   const selfService = isMemberFlow ? snapshot.selfService : null;
+  const myReservations = isMemberFlow ? snapshot.myReservations : [];
   const publicBookingAccess = isMemberFlow
     ? null
     : snapshot.bookingAccess ?? {
@@ -433,6 +434,59 @@ export function PublicReservationPortal({
                 </Card>
               ))}
             </div>
+
+            {isMemberFlow ? (
+              <Card className="rounded-[28px] border-border/80">
+                <Card.Header className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Card.Title>Mijn reserveringen</Card.Title>
+                    <Chip size="sm" variant="soft">
+                      {myReservations.length} aangemeld
+                    </Chip>
+                  </div>
+                  <Card.Description>
+                    Lessen en gymplekken waarvoor je al bent aangemeld.
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content className="grid gap-3">
+                  {myReservations.length > 0 ? (
+                    myReservations.map((reservation) => (
+                      <div
+                        key={reservation.id}
+                        className="rounded-2xl border border-border/70 bg-surface p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <p className="font-medium">{reservation.classTitle}</p>
+                            <p className="text-muted text-sm">
+                              {formatSessionMoment(reservation.startsAt)} ·{" "}
+                              {reservation.locationName}
+                            </p>
+                            <p className="text-muted text-sm">
+                              {reservation.trainerName} · {reservation.durationMinutes} min
+                            </p>
+                          </div>
+                          <Chip
+                            color={
+                              reservation.status === "waitlisted" ? "warning" : "success"
+                            }
+                            size="sm"
+                            variant="soft"
+                          >
+                            {getBookingStatusLabel(reservation.status)}
+                          </Chip>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted text-sm">
+                      Je hebt nog geen lessen geboekt. Kies hieronder een les om je plek vast te
+                      leggen.
+                    </p>
+                  )}
+                </Card.Content>
+              </Card>
+            ) : null}
 
             {snapshot.classSessions.length > 0 ? (
               <div className="grid gap-4">

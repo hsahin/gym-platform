@@ -3131,6 +3131,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           baseMember?.fullName || actor.displayName || actor.email || "Account",
         memberEmail: baseMember?.email || actor.email || "",
         hasEligibleMembership: memberships.length > 0,
+        myReservations: [],
         selfService: {
           receipts: [],
           paymentMethodRequests: [],
@@ -3141,10 +3142,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     }
 
     const tenantContext = createPublicTenantContext(selectedMembership.tenant.id);
-    const [locations, trainers, classSessions, mobileSelfService] = await Promise.all([
+    const [locations, trainers, classSessions, bookings, mobileSelfService] = await Promise.all([
       runtime.store.listLocations(tenantContext),
       runtime.store.listTrainers(tenantContext),
       runtime.store.listClassSessions(tenantContext),
+      runtime.store.listBookings(tenantContext),
       buildMobileSelfServiceSummary(tenantContext),
     ]);
 
@@ -3154,6 +3156,44 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     const trainerById = new Map(
       trainers.map((trainer) => [trainer.id, trainer] as const),
     );
+    const classSessionById = new Map(
+      classSessions.map((classSession) => [classSession.id, classSession] as const),
+    );
+    const myReservations = bookings
+      .filter(
+        (booking) =>
+          booking.memberId === selectedMembership.member.id &&
+          booking.status !== "cancelled",
+      )
+      .map((booking) => {
+        const classSession = classSessionById.get(booking.classSessionId);
+
+        if (!classSession) {
+          return null;
+        }
+
+        return {
+          id: booking.id,
+          classSessionId: booking.classSessionId,
+          classTitle: classSession.title,
+          startsAt: classSession.startsAt,
+          durationMinutes: classSession.durationMinutes,
+          locationName:
+            locationById.get(classSession.locationId)?.name ?? "Onbekende locatie",
+          trainerName:
+            classSession.bookingKind === "open_gym"
+              ? "Geen trainer"
+              : trainerById.get(classSession.trainerId)?.fullName ?? "Onbekende trainer",
+          bookingKind: classSession.bookingKind ?? "class",
+          status: booking.status,
+          waitlistCount: classSession.waitlistCount,
+          createdAt: booking.createdAt,
+        };
+      })
+      .filter((reservation): reservation is NonNullable<typeof reservation> =>
+        Boolean(reservation),
+      )
+      .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
 
     return toClientPlain({
       tenantName: selectedMembership.tenant.name,
@@ -3189,6 +3229,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         "Lid",
       memberEmail: selectedMembership.member.email || actor.email || "",
       hasEligibleMembership: true,
+      myReservations,
       selfService: {
         receipts: mobileSelfService.receipts.filter(
           (receipt) => receipt.memberId === selectedMembership.member.id,

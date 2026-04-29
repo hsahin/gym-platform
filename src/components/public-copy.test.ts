@@ -75,6 +75,9 @@ describe("public surface copy", () => {
     expect(source).toContain("Geen trainer");
     expect(source).toContain('action="/api/auth/logout"');
     expect(source).toContain("Uitloggen");
+    expect(source).toContain("Mijn reserveringen");
+    expect(source).toContain("aangemeld");
+    expect(source).toContain("Lessen en gymplekken waarvoor je al bent aangemeld.");
     expect(source).toContain("Ledenservice");
     expect(source).toContain("Betalingsbewijzen");
     expect(source).not.toContain("Je reserveert direct bij");

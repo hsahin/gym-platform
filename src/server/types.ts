@@ -696,6 +696,20 @@ export interface PublicReservationClassSummary {
   readonly focus: string;
 }
 
+export interface MemberReservationSummary {
+  readonly id: string;
+  readonly classSessionId: string;
+  readonly classTitle: string;
+  readonly bookingKind: ClassSessionBookingKind;
+  readonly startsAt: string;
+  readonly durationMinutes: number;
+  readonly locationName: string;
+  readonly trainerName: string;
+  readonly status: BookingStatus;
+  readonly waitlistCount: number;
+  readonly createdAt: string;
+}
+
 export interface PublicReservationSnapshot {
   readonly tenantName: string;
   readonly tenantSlug: string | null;
@@ -756,6 +770,7 @@ export interface MemberReservationSnapshot {
   readonly memberDisplayName: string;
   readonly memberEmail: string;
   readonly hasEligibleMembership: boolean;
+  readonly myReservations: ReadonlyArray<MemberReservationSummary>;
   readonly selfService: MobileSelfServiceSummary;
 }
 
