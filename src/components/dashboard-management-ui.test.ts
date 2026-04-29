@@ -205,6 +205,23 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("shows platform health checks only to platform superadmins", () => {
+    const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
+    const integrations = readSource("dashboard/pages/IntegrationsDashboardPage.tsx");
+
+    expect(overview).toContain(
+      "const canViewPlatformChecks = snapshot.uiCapabilities.canViewPlatformChecks;",
+    );
+    expect(overview).toContain("canViewPlatformChecks && openHealthChecks.length > 0");
+    expect(overview).toContain("if (canViewPlatformChecks)");
+    expect(overview).toContain('label: "Aandacht"');
+    expect(integrations).toContain(
+      "const canViewPlatformChecks = snapshot.uiCapabilities.canViewPlatformChecks;",
+    );
+    expect(integrations).toContain("{canViewPlatformChecks ? (");
+    expect(integrations).toContain("label: \"Aandacht checks\"");
+  });
+
   it("uses HeroUI Pro Kanban for gym setup progress with direct CTAs", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 

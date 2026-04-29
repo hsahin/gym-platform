@@ -28,6 +28,7 @@ function createSnapshotFixture() {
       canManagePayments: true,
       canManageFeatureFlags: true,
       canManageOwnerAccounts: false,
+      canViewPlatformChecks: false,
     },
     remoteAccess: {
       enabled: true,

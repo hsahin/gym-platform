@@ -763,6 +763,14 @@ function resolveStorageMode(): StorageMode {
   return "not_configured";
 }
 
+function createHiddenPlatformHealthReport(): GymDashboardSnapshot["healthReport"] {
+  return {
+    status: "healthy",
+    checkedAt: new Date().toISOString(),
+    checks: [],
+  };
+}
+
 async function createRuntime(): Promise<GymPlatformRuntime> {
   assertLiveInfrastructureConfiguration();
 
@@ -3430,6 +3438,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async getDashboardSnapshot(actor, tenantContext, options) {
       assertAccess(runtime, actor, tenantContext, ["dashboard.read"]);
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+      const canViewPlatformChecks = runtime.permissionRegistry.hasPermissions(
+        actor,
+        ["platform.accounts.manage"],
+        tenantContext,
+      );
 
       const cache = createTenantAwareCache(runtime, tenantContext);
       const cached = await cache.getJson<GymDashboardSnapshot>(
@@ -3466,13 +3479,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         runtime.store.listAttendance(tenantContext),
         runtime.store.listWaivers(tenantContext),
         runtime.auditLogger.list({ tenantId: tenantContext.tenantId }),
-        runtime.healthRegistry.run({ tenantContext }),
+        canViewPlatformChecks
+          ? runtime.healthRegistry.run({ tenantContext })
+          : Promise.resolve(createHiddenPlatformHealthReport()),
         buildStaffSummaries(runtime, tenantContext),
-        runtime.permissionRegistry.hasPermissions(
-          actor,
-          ["platform.accounts.manage"],
-          tenantContext,
-        )
+        canViewPlatformChecks
           ? buildSuperadminSummary()
           : Promise.resolve({
               tenantsCount: 0,
@@ -3608,6 +3619,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             ["platform.accounts.manage"],
             tenantContext,
           ),
+          canViewPlatformChecks,
         },
         remoteAccess,
         payments,
@@ -6465,7 +6477,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       return booking;
     },
     async getHealthReport(actor, tenantContext) {
-      assertAccess(runtime, actor, tenantContext, ["dashboard.read"]);
+      assertAccess(runtime, actor, tenantContext, ["platform.accounts.manage"]);
       return runtime.healthRegistry.run({ tenantContext });
     },
   };

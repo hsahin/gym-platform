@@ -100,6 +100,18 @@ function createMemberViewer(email: string, tenantId: string, displayName = "Memb
   });
 }
 
+function createSuperadminViewer(tenantId: string) {
+  return buildPlatformActor(
+    {
+      userId: "staff_superadmin",
+      email: "superadmin@gym-platform.test",
+      displayName: "Platform Superadmin",
+      roleKey: "superadmin",
+    },
+    tenantId,
+  );
+}
+
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
@@ -583,7 +595,7 @@ describe("gym platform services", () => {
   });
 
   it("uses explicit not-configured receipts instead of preview messaging or upload paths", async () => {
-    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -634,6 +646,12 @@ describe("gym platform services", () => {
       source: "frontdesk",
     });
     const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const superadminActor = createSuperadminViewer(state.tenant.id);
+    const superadminContext = services.createRequestTenantContext(
+      superadminActor,
+      state.tenant.id,
+    );
+    const healthReport = await services.getHealthReport(superadminActor, superadminContext);
 
     expect(booking.messageReceipt).toMatchObject({
       accepted: false,
@@ -646,23 +664,38 @@ describe("gym platform services", () => {
     expect(snapshot.runtime.messagingMode).toBe("not_configured");
     expect(snapshot.runtime.storageMode).toBe("not_configured");
     expect(snapshot.waiverUploadPath).toBe("");
-    expect(snapshot.healthReport.checks.find((check) => check.name === "Berichten")).toMatchObject({
+    expect(snapshot.uiCapabilities.canViewPlatformChecks).toBe(false);
+    expect(snapshot.healthReport.checks).toEqual([]);
+    expect(healthReport.checks.find((check) => check.name === "Berichten")).toMatchObject({
       status: "healthy",
       summary: expect.not.stringContaining("preview"),
     });
-    expect(snapshot.healthReport.checks.find((check) => check.name === "Documenten")).toMatchObject({
+    expect(healthReport.checks.find((check) => check.name === "Documenten")).toMatchObject({
       status: "healthy",
       summary: expect.not.stringContaining("preview"),
     });
   });
 
   it("reports local fallback runtime honestly without production-only degradation", async () => {
-    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
 
-    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const ownerSnapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const superadminActor = createSuperadminViewer(state.tenant.id);
+    const superadminContext = services.createRequestTenantContext(
+      superadminActor,
+      state.tenant.id,
+    );
+    const snapshot = await services.getDashboardSnapshot(superadminActor, superadminContext);
     const getCheck = (name: string) =>
       snapshot.healthReport.checks.find((check) => check.name === name);
 
+    expect(ownerSnapshot.uiCapabilities.canViewPlatformChecks).toBe(false);
+    expect(ownerSnapshot.healthReport.checks).toEqual([]);
+    await expect(services.getHealthReport(ownerActor, tenantContext)).rejects.toThrow(
+      "mist permissies",
+    );
+    expect(snapshot.uiCapabilities.canViewPlatformChecks).toBe(true);
+    expect(snapshot.healthReport.checks.length).toBeGreaterThan(0);
     expect(snapshot.runtime).toMatchObject({
       storeMode: "memory",
       cacheMode: "memory",
@@ -1092,7 +1125,7 @@ describe("gym platform services", () => {
   });
 
   it("stores legal live-readiness settings per gym", async () => {
-    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
 
     const legal = await services.updateLegalSettings(ownerActor, tenantContext, {
       termsUrl: "https://northside.test/voorwaarden",
@@ -1104,10 +1137,17 @@ describe("gym platform services", () => {
       waiverStorageKey: "waivers/northside/signed/",
       waiverRetentionMonths: 84,
     });
-    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const superadminActor = createSuperadminViewer(state.tenant.id);
+    const superadminContext = services.createRequestTenantContext(
+      superadminActor,
+      state.tenant.id,
+    );
+    const ownerSnapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const snapshot = await services.getDashboardSnapshot(superadminActor, superadminContext);
 
     expect(legal.statusLabel).toBe("Juridisch klaar");
-    expect(snapshot.legal.sepaCreditorId).toBe("NL00ZZZ123456780000");
+    expect(ownerSnapshot.legal.sepaCreditorId).toBe("NL00ZZZ123456780000");
+    expect(ownerSnapshot.healthReport.checks).toEqual([]);
     expect(snapshot.healthReport.checks.some((check) => check.name === "Juridisch")).toBe(true);
   });
 

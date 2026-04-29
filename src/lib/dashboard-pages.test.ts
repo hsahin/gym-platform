@@ -29,6 +29,7 @@ function createDashboardPagesInput(overrides?: Partial<Parameters<typeof getDash
     integrationFeaturesEnabled: 2,
     canManageFeatureFlags: true,
     canManageOwnerAccounts: false,
+    canViewPlatformChecks: false,
     ...overrides,
   };
 }
@@ -145,7 +146,8 @@ describe("dashboard pages", () => {
     });
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
       title: "Gym instellingen",
-      value: "2 checks",
+      value: "2 vestigingen",
+      helper: expect.not.stringContaining("platformstatus"),
     });
     expect(pages.find((page) => page.key === "overview")).toMatchObject({
       value: "0 leden",
@@ -162,12 +164,39 @@ describe("dashboard pages", () => {
     const pages = getDashboardPages(
       createDashboardPagesInput({
         canManageOwnerAccounts: true,
+        canViewPlatformChecks: true,
       }),
     );
 
     expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
       value: "Owner beheer",
       helper: expect.stringContaining("Owner accounts"),
+    });
+  });
+
+  it("shows platform check counts only to platform superadmins", () => {
+    const ownerPages = getDashboardPages(
+      createDashboardPagesInput({
+        healthAttentionCount: 3,
+        canManageOwnerAccounts: false,
+        canViewPlatformChecks: false,
+      }),
+    );
+    const superadminPages = getDashboardPages(
+      createDashboardPagesInput({
+        healthAttentionCount: 3,
+        canManageOwnerAccounts: true,
+        canViewPlatformChecks: true,
+      }),
+    );
+
+    expect(ownerPages.find((page) => page.key === "settings")).toMatchObject({
+      value: "2 vestigingen",
+      helper: "Vestigingen, personeel, imports en owner-instellingen.",
+    });
+    expect(superadminPages.find((page) => page.key === "settings")).toMatchObject({
+      value: "3 checks",
+      helper: expect.stringContaining("platformstatus"),
     });
   });
 
@@ -224,6 +253,7 @@ describe("dashboard pages", () => {
         bookingsCount: 1,
         staffCount: 1,
         healthAttentionCount: 1,
+        canViewPlatformChecks: true,
         remoteAccessStatusLabel: "Nuki live",
         coachingFeaturesEnabled: 1,
         retentionFeaturesEnabled: 1,

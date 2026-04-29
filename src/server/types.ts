@@ -533,6 +533,7 @@ export interface DashboardUiCapabilities {
   readonly canManagePayments: boolean;
   readonly canManageFeatureFlags: boolean;
   readonly canManageOwnerAccounts: boolean;
+  readonly canViewPlatformChecks: boolean;
 }
 
 export interface RemoteAccessSummary {

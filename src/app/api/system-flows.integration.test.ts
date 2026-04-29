@@ -108,7 +108,10 @@ import {
   MUTATION_CSRF_HEADER,
   MUTATION_CSRF_TOKEN,
 } from "@/server/http/platform-api";
-import { bootstrapLocalPlatform } from "@/server/persistence/platform-state";
+import {
+  bootstrapLocalPlatform,
+  upsertLocalSuperadminAccount,
+} from "@/server/persistence/platform-state";
 import { SESSION_COOKIE_NAME } from "@/server/runtime/demo-session";
 
 type VersionedRecord = {
@@ -279,6 +282,19 @@ async function bootstrapOwner() {
   });
 
   return loginAndExtractSession();
+}
+
+async function bootstrapSuperadmin() {
+  await upsertLocalSuperadminAccount({
+    displayName: "Platform Superadmin",
+    email: "superadmin@gym-platform.test",
+    password: "SuperAdminPass123!",
+  });
+
+  return loginAndExtractSession(
+    "superadmin@gym-platform.test",
+    "SuperAdminPass123!",
+  );
 }
 
 async function createCoreDataset(token: string) {
@@ -1383,8 +1399,13 @@ describe("system flow integrations", () => {
       ),
       201,
     );
+    const ownerHealthResponse = await healthRoute(
+      createGetRequest("http://localhost/api/platform/health", token),
+    );
+    expect(ownerHealthResponse.status).toBe(403);
+    const superadminToken = await bootstrapSuperadmin();
     const health = await expectOk<{ checks: unknown[] }>(
-      healthRoute(createGetRequest("http://localhost/api/platform/health", token)),
+      healthRoute(createGetRequest("http://localhost/api/platform/health", superadminToken)),
     );
     expect(Array.isArray(health.checks)).toBe(true);
   });

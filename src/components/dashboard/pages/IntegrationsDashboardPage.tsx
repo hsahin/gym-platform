@@ -38,9 +38,10 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
   const [bodyCompositionProvider, setBodyCompositionProvider] = useState(
     snapshot.integrationWorkspace.bodyCompositionProvider,
   );
-  const attentionChecks = snapshot.healthReport.checks.filter(
-    (check) => check.status !== "healthy",
-  );
+  const canViewPlatformChecks = snapshot.uiCapabilities.canViewPlatformChecks;
+  const attentionChecks = canViewPlatformChecks
+    ? snapshot.healthReport.checks.filter((check) => check.status !== "healthy")
+    : [];
 
   useEffect(() => {
     setHardwareVendors(snapshot.integrationWorkspace.hardwareVendors.join(", "));
@@ -145,18 +146,23 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
             value: snapshot.payments.statusLabel,
             helper: "Betaalprovider en incassostatus kunnen als integratiebron fungeren.",
           },
-          {
-            icon: Link2,
-            label: "Runtime cache",
-            value: snapshot.runtime.cacheMode,
-            helper: "Cache-, messaging- en storage-modes bepalen integratiebetrouwbaarheid.",
-          },
-          {
-            icon: ActivitySquare,
-            label: "Aandacht checks",
-            value: String(attentionChecks.length),
-            helper: "Gebruik health-checks om koppelingen veilig live te houden.",
-          },
+          ...(canViewPlatformChecks
+            ? [
+                {
+                  icon: Link2,
+                  label: "Runtime cache",
+                  value: snapshot.runtime.cacheMode,
+                  helper:
+                    "Cache-, messaging- en storage-modes bepalen integratiebetrouwbaarheid.",
+                },
+                {
+                  icon: ActivitySquare,
+                  label: "Aandacht checks",
+                  value: String(attentionChecks.length),
+                  helper: "Gebruik health-checks om koppelingen veilig live te houden.",
+                },
+              ]
+            : []),
         ].map((item) => (
           <Card key={item.label} className="rounded-[24px] border border-border/80 bg-surface shadow-none">
             <Card.Content className="space-y-3">
@@ -171,31 +177,33 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
         ))}
       </div>
 
-      <PageSection
-        title="Integration health"
-        description="Checks met aandacht tonen welke koppelingen of runtime onderdelen nog opvolging nodig hebben."
-      >
-        {attentionChecks.length > 0 ? (
-          <ListView aria-label="Integration health checks" items={attentionChecks}>
-            {(check) => (
-              <ListView.Item id={check.name} textValue={check.name}>
-                <ListView.ItemContent>
-                  <ListView.Title>{check.name}</ListView.Title>
-                  <ListView.Description>{check.summary}</ListView.Description>
-                </ListView.ItemContent>
-                <Chip size="sm" variant="tertiary">
-                  {check.status}
-                </Chip>
-              </ListView.Item>
-            )}
-          </ListView>
-        ) : (
-          <EmptyPanel
-            title="Geen open integratieproblemen"
-            description="Alle bekende runtime- en koppelingchecks staan momenteel gezond."
-          />
-        )}
-      </PageSection>
+      {canViewPlatformChecks ? (
+        <PageSection
+          title="Integration health"
+          description="Checks met aandacht tonen welke koppelingen of runtime onderdelen nog opvolging nodig hebben."
+        >
+          {attentionChecks.length > 0 ? (
+            <ListView aria-label="Integration health checks" items={attentionChecks}>
+              {(check) => (
+                <ListView.Item id={check.name} textValue={check.name}>
+                  <ListView.ItemContent>
+                    <ListView.Title>{check.name}</ListView.Title>
+                    <ListView.Description>{check.summary}</ListView.Description>
+                  </ListView.ItemContent>
+                  <Chip size="sm" variant="tertiary">
+                    {check.status}
+                  </Chip>
+                </ListView.Item>
+              )}
+            </ListView>
+          ) : (
+            <EmptyPanel
+              title="Geen open integratieproblemen"
+              description="Alle bekende runtime- en koppelingchecks staan momenteel gezond."
+            />
+          )}
+        </PageSection>
+      ) : null}
 
       <PageSection
         title="Integratiemodules"

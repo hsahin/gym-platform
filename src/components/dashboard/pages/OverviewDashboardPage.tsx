@@ -10,6 +10,7 @@ import {
   DoorOpen,
   Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card, Chip } from "@heroui/react";
 import { KPI, KPIGroup } from "@heroui-pro/react";
 import { Segment } from "@heroui-pro/react/segment";
@@ -25,10 +26,24 @@ import {
 } from "@/components/dashboard/shared";
 import { getDashboardPages } from "@/lib/dashboard-pages";
 
+type HighlightedDashboardMetric = {
+  readonly icon: LucideIcon;
+  readonly iconStatus: "success" | "warning" | "danger";
+  readonly label: string;
+  readonly trend: "up" | "neutral" | "down";
+  readonly trendLabel: string;
+  readonly value: number;
+  readonly valueKind: "currency" | "decimal" | "percent";
+  readonly helper: string;
+  readonly progress?: number;
+  readonly progressStatus?: "success" | "warning" | "danger";
+};
+
 export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
   const [overviewActivityTab, setOverviewActivityTab] = useState<
     "lessons" | "status" | "reservations" | "notes"
   >("lessons");
+  const canViewPlatformChecks = snapshot.uiCapabilities.canViewPlatformChecks;
   const upcomingSessions = [...snapshot.classSessions].sort((left, right) =>
     left.startsAt.localeCompare(right.startsAt),
   );
@@ -36,9 +51,9 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
     right.updatedAt.localeCompare(left.updatedAt),
   );
   const recentAuditEntries = snapshot.auditEntries.slice(0, 6);
-  const openHealthChecks = snapshot.healthReport.checks.filter(
-    (check) => check.status !== "healthy",
-  );
+  const openHealthChecks = canViewPlatformChecks
+    ? snapshot.healthReport.checks.filter((check) => check.status !== "healthy")
+    : [];
   const totalCapacity = snapshot.classSessions.reduce(
     (sum, classSession) => sum + classSession.capacity,
     0,
@@ -97,6 +112,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
     integrationFeaturesEnabled,
     canManageFeatureFlags: snapshot.uiCapabilities.canManageFeatureFlags,
     canManageOwnerAccounts: snapshot.uiCapabilities.canManageOwnerAccounts,
+    canViewPlatformChecks,
   });
   const overviewFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "overview",
@@ -107,7 +123,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
       : openHealthChecks.map((check) => check.summary).join(" ");
   const openHealthCheckNames = openHealthChecks.map((check) => check.name).join(", ");
 
-  const highlightedMetrics = [
+  const highlightedMetrics: HighlightedDashboardMetric[] = [
     {
       icon: Users,
       iconStatus: activeMembers.length > 0 ? "success" : "warning",
@@ -150,7 +166,9 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
       valueKind: "currency",
       helper: `${snapshot.projectedRevenueLabel} verwachte maandwaarde.`,
     },
-    {
+  ];
+  if (canViewPlatformChecks) {
+    highlightedMetrics.push({
       icon: AlertTriangle,
       iconStatus: openHealthChecks.length === 0 ? "success" : "danger",
       label: "Aandacht",
@@ -161,8 +179,8 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
       helper:
         openHealthChecks[0]?.summary ??
         "Geen open healthchecks, waivers of runtime-acties op de overview.",
-    },
-  ] as const;
+    });
+  }
   const overviewActivityTabs = [
     { id: "lessons", label: "Volgende lessen", count: upcomingSessions.length },
     {
@@ -214,7 +232,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                     {metric.trendLabel}
                   </KPI.Trend>
                 </KPI.Content>
-                {"progress" in metric ? (
+                {metric.progress !== undefined ? (
                   <KPI.Progress status={metric.progressStatus} value={metric.progress} />
                 ) : null}
                 <KPI.Footer className="text-muted text-sm leading-6">{metric.helper}</KPI.Footer>
@@ -224,7 +242,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
         </KPIGroup>
       </div>
 
-      {openHealthChecks.length > 0 ? (
+      {canViewPlatformChecks && openHealthChecks.length > 0 ? (
         <Card className="rounded-[24px] border border-danger-200/70 bg-danger-50/80 text-danger-900 shadow-none dark:border-danger-400/20 dark:bg-danger-950/20 dark:text-danger-100">
           <Card.Content className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1">
@@ -352,15 +370,20 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                       value: snapshot.remoteAccess.statusLabel,
                       helper: snapshot.remoteAccess.helpText,
                     },
-                    {
-                      label: "Gezondheid",
-                      value:
-                        openHealthChecks.length === 0
-                          ? "Alles gezond"
-                          : `${openHealthChecks.length} aandachtspunt${openHealthChecks.length === 1 ? "" : "en"}`,
-                      helper:
-                        openHealthChecks[0]?.summary ?? "Runtime en synchronisatiechecks.",
-                    },
+                    ...(canViewPlatformChecks
+                      ? [
+                          {
+                            label: "Gezondheid",
+                            value:
+                              openHealthChecks.length === 0
+                                ? "Alles gezond"
+                                : `${openHealthChecks.length} aandachtspunt${openHealthChecks.length === 1 ? "" : "en"}`,
+                            helper:
+                              openHealthChecks[0]?.summary ??
+                              "Runtime en synchronisatiechecks.",
+                          },
+                        ]
+                      : []),
                   ].map((item) => (
                     <Card
                       key={item.label}

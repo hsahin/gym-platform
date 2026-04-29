@@ -44,6 +44,7 @@ export interface DashboardPagesInput {
   readonly integrationFeaturesEnabled: number;
   readonly canManageFeatureFlags: boolean;
   readonly canManageOwnerAccounts: boolean;
+  readonly canViewPlatformChecks: boolean;
 }
 
 export interface DashboardPageDefinition {
@@ -219,11 +220,14 @@ export function getDashboardPages(
     {
       key: "settings",
       title: "Gym instellingen",
-      value:
-        input.healthAttentionCount === 0
+      value: input.canViewPlatformChecks
+        ? input.healthAttentionCount === 0
           ? "Alles gezond"
-          : formatCountLabel(input.healthAttentionCount, "check", "checks"),
-      helper: "Vestigingen, personeel, imports, platformstatus en owner-instellingen.",
+          : formatCountLabel(input.healthAttentionCount, "check", "checks")
+        : formatCountLabel(input.locationsCount, "vestiging", "vestigingen"),
+      helper: input.canViewPlatformChecks
+        ? "Vestigingen, personeel, imports, platformstatus en owner-instellingen."
+        : "Vestigingen, personeel, imports en owner-instellingen.",
     },
     {
       key: "superadmin",
