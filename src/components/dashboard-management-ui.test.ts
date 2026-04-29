@@ -171,6 +171,7 @@ describe("dashboard management UI wiring", () => {
     expect(overview).toContain("<KPIGroup");
     expect(overview).toContain("KPIGroup.Separator");
     expect(overview).toContain("KPI.Trend");
+    expect(overview).toContain("HydrationSafeKpiProgress");
     expect(overview).toContain("KPI.Progress");
     expect(overview).toContain("projectedMonthlyRevenue");
     expect(overview).toContain('currency="EUR"');

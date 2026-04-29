@@ -384,4 +384,22 @@ describe("dashboard feature presence", () => {
       buildFeaturePresenceSummary({ key: "integrations.virtuagym_connect" }, snapshot),
     ).toContain("Virtuagym");
   });
+
+  it("does not expose platform checks in owner-facing analytics summaries", () => {
+    const ownerSnapshot = createSnapshotFixture();
+    const superadminSnapshot = {
+      ...ownerSnapshot,
+      uiCapabilities: {
+        ...ownerSnapshot.uiCapabilities,
+        canViewPlatformChecks: true,
+      },
+    };
+
+    expect(buildFeaturePresenceSummary({ key: "analytics.advanced" }, ownerSnapshot)).toBe(
+      "2 KPI's live op de overview.",
+    );
+    expect(buildFeaturePresenceSummary({ key: "analytics.advanced" }, superadminSnapshot)).toBe(
+      "2 KPI's en 1 platformcheck live op de overview.",
+    );
+  });
 });

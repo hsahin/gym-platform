@@ -68,7 +68,9 @@ const FEATURE_PRESENCE_BUILDERS: Record<DashboardFeatureKey, FeaturePresenceBuil
   "checkin.studio": (snapshot) =>
     `${formatCount(snapshot.attendance.length, "check-in", "check-ins")} verwerkt op ${formatCount(snapshot.classSessions.length, "les", "lessen")}.`,
   "analytics.advanced": (snapshot) =>
-    `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} en ${formatCount(snapshot.healthReport.checks.length, "health check", "health checks")} live op de overview.`,
+    snapshot.uiCapabilities.canViewPlatformChecks
+      ? `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} en ${formatCount(snapshot.healthReport.checks.length, "platformcheck", "platformchecks")} live op de overview.`
+      : `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} live op de overview.`,
   "clubs.multi_location": (snapshot) =>
     `${formatCount(snapshot.locations.length, "vestiging", "vestigingen")} actief onder dezelfde tenant.`,
   "commerce.webshop_pos": (snapshot) =>

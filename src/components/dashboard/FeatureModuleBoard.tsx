@@ -132,13 +132,13 @@ export function FeatureModuleBoard({
                   </Chip>
                 ) : null}
               </ItemCard.Title>
-              <ItemCard.Description className="max-w-none text-xs leading-5">
+              <div className="text-muted max-w-none text-xs leading-5">
                 <TruncatedTooltipText text={featureCopy.description} />
-              </ItemCard.Description>
+              </div>
               {presenceSummary ? (
-                <p className="text-muted text-xs leading-5">
+                <div className="text-muted text-xs leading-5">
                   <TruncatedTooltipText text={presenceSummary} />
-                </p>
+                </div>
               ) : null}
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                 <Chip size="sm" variant="tertiary">

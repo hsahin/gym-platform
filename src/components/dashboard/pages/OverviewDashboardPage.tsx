@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -38,6 +38,42 @@ type HighlightedDashboardMetric = {
   readonly progress?: number;
   readonly progressStatus?: "success" | "warning" | "danger";
 };
+
+function HydrationSafeKpiProgress({
+  status,
+  value,
+}: {
+  readonly status: "success" | "warning" | "danger";
+  readonly value: number;
+}) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (isMounted) {
+    return <KPI.Progress status={status} value={value} />;
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className="h-1.5 overflow-hidden rounded-full bg-surface-secondary"
+    >
+      <div
+        className={`h-full rounded-full ${
+          status === "success"
+            ? "bg-success"
+            : status === "warning"
+              ? "bg-warning"
+              : "bg-danger"
+        }`}
+        style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
+      />
+    </div>
+  );
+}
 
 export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
   const [overviewActivityTab, setOverviewActivityTab] = useState<
@@ -233,7 +269,10 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                   </KPI.Trend>
                 </KPI.Content>
                 {metric.progress !== undefined ? (
-                  <KPI.Progress status={metric.progressStatus} value={metric.progress} />
+                  <HydrationSafeKpiProgress
+                    status={metric.progressStatus ?? "danger"}
+                    value={metric.progress}
+                  />
                 ) : null}
                 <KPI.Footer className="text-muted text-sm leading-6">{metric.helper}</KPI.Footer>
               </KPI>

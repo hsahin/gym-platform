@@ -130,6 +130,8 @@ describe("dashboard shell copy", () => {
     expect(source).toContain("getDashboardFeatureReasonLabel");
     expect(source).toContain("Tooltip");
     expect(source).toContain("TruncatedTooltipText");
+    expect(source).not.toContain("<ItemCard.Description");
+    expect(source).not.toContain('<p className="text-muted text-xs leading-5">');
     expect(source).toContain("currentPage");
     expect(source).toContain("shouldShowOpenAction");
     expect(source).toContain("Module openen");
