@@ -31,7 +31,9 @@ describe("dashboard shell copy", () => {
     const workbenchSource = readComponentSource("PlatformWorkbench.tsx");
     const dashboardSource = readComponentSource("GymDashboard.tsx");
 
-    expect(overviewSource).toContain('label: "Leden"');
+    expect(overviewSource).toContain('label: "Actieve leden"');
+    expect(overviewSource).toContain('label: "Omzet MRR"');
+    expect(overviewSource).toContain('label: "Bezetting"');
     expect(overviewSource).toContain('title="Volgende lessen"');
     expect(overviewSource).toContain('title="Recente reserveringen"');
     expect(overviewSource).toContain("Notificatievoorbeeld");

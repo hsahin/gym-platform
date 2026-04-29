@@ -119,9 +119,16 @@ describe("dashboard management UI wiring", () => {
   it("uses the HeroUI Pro KPI group for overview facts", () => {
     const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
 
-    expect(overview).toContain('from "@heroui-pro/react/kpi-group"');
+    expect(overview).toContain('import { KPI, KPIGroup } from "@heroui-pro/react";');
     expect(overview).toContain("<KPIGroup");
     expect(overview).toContain("KPIGroup.Separator");
+    expect(overview).toContain("KPI.Trend");
+    expect(overview).toContain("KPI.Progress");
+    expect(overview).toContain("projectedMonthlyRevenue");
+    expect(overview).toContain('currency="EUR"');
+    expect(overview).toContain('label: "Actieve leden"');
+    expect(overview).toContain('label: "Omzet MRR"');
+    expect(overview).toContain('label: "Bezetting"');
     expect(overview).toContain('aria-label="Belangrijkste dashboardcijfers"');
     expect(overview.indexOf("<KPIGroup")).toBeLessThan(
       overview.indexOf('title="Platform modules"'),

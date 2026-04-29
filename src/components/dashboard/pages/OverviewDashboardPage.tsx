@@ -2,10 +2,16 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, CreditCard, DoorOpen, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CreditCard,
+  DoorOpen,
+  Users,
+} from "lucide-react";
 import { Card, Chip } from "@heroui/react";
-import { KPI } from "@heroui-pro/react/kpi";
-import { KPIGroup } from "@heroui-pro/react/kpi-group";
+import { KPI, KPIGroup } from "@heroui-pro/react";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
@@ -33,13 +39,28 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
     (sum, classSession) => sum + classSession.capacity,
     0,
   );
-  const confirmedBookings = snapshot.bookings.filter((booking) =>
-    ["confirmed", "checked_in"].includes(booking.status),
+  const bookedSpots = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.bookedCount,
+    0,
+  );
+  const waitlistSpots = snapshot.classSessions.reduce(
+    (sum, classSession) => sum + classSession.waitlistCount,
+    0,
+  );
+  const activeMembers = snapshot.members.filter((member) =>
+    ["active", "trial"].includes(member.status),
+  );
+  const trialMembers = activeMembers.filter((member) => member.status === "trial").length;
+  const projectedMonthlyRevenue = snapshot.membershipPlans.reduce(
+    (sum, plan) => sum + plan.priceMonthly * plan.activeMembers,
+    0,
   );
   const occupancy =
     totalCapacity === 0
       ? 0
-      : Math.round((confirmedBookings.length / totalCapacity) * 100);
+      : Math.round((bookedSpots / totalCapacity) * 100);
+  const occupancyRatio = totalCapacity === 0 ? 0 : bookedSpots / totalCapacity;
+  const activePlans = snapshot.membershipPlans.filter((plan) => plan.status === "active");
   const coachingFeaturesEnabled = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "coaching" && feature.enabled,
   ).length;
@@ -80,51 +101,104 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
   const highlightedMetrics = [
     {
       icon: Users,
-      label: "Leden",
-      value: snapshot.members.length,
-      helper: "Actieve en trial-leden in deze gym.",
+      iconStatus: activeMembers.length > 0 ? "success" : "warning",
+      label: "Actieve leden",
+      trend: trialMembers > 0 ? "up" : "neutral",
+      trendLabel: trialMembers > 0 ? `${trialMembers} trial` : "Geen trials",
+      value: activeMembers.length,
+      valueKind: "decimal",
+      helper: `${snapshot.members.length} ledenprofielen totaal in deze gym.`,
     },
     {
       icon: CalendarDays,
-      label: "Lessen",
+      iconStatus: snapshot.classSessions.length > 0 ? "success" : "warning",
+      label: "Live lessen",
+      trend: snapshot.bookings.length > 0 ? "up" : "neutral",
+      trendLabel: `${snapshot.bookings.length} reserveringen`,
       value: snapshot.classSessions.length,
-      helper: "Live sessies in het rooster.",
+      valueKind: "decimal",
+      helper: `${bookedSpots} geboekte plekken en ${waitlistSpots} wachtlijstplekken.`,
     },
     {
       icon: DoorOpen,
+      iconStatus: occupancy > 0 ? "success" : "warning",
       label: "Bezetting",
-      value: occupancy,
-      helper: `${confirmedBookings.length} bevestigd van ${totalCapacity} beschikbare plekken.`,
+      progress: occupancy,
+      progressStatus: occupancy >= 85 ? "success" : occupancy >= 45 ? "warning" : "danger",
+      trend: occupancy >= 70 ? "up" : occupancy > 0 ? "neutral" : "down",
+      trendLabel: `${occupancy}% gevuld`,
+      value: occupancyRatio,
+      valueKind: "percent",
+      helper: `${bookedSpots} van ${totalCapacity} beschikbare plekken gevuld.`,
     },
     {
       icon: CreditCard,
-      label: "Aandacht",
-      value: openHealthChecks.length,
-      helper: "Checks die nu aandacht vragen.",
+      iconStatus: projectedMonthlyRevenue > 0 ? "success" : "warning",
+      label: "Omzet MRR",
+      trend: projectedMonthlyRevenue > 0 ? "up" : "neutral",
+      trendLabel: `${activePlans.length} actieve plannen`,
+      value: projectedMonthlyRevenue,
+      valueKind: "currency",
+      helper: `${snapshot.projectedRevenueLabel} verwachte maandwaarde.`,
     },
-  ];
+    {
+      icon: AlertTriangle,
+      iconStatus: openHealthChecks.length === 0 ? "success" : "danger",
+      label: "Aandacht",
+      trend: openHealthChecks.length === 0 ? "up" : "down",
+      trendLabel: openHealthChecks.length === 0 ? "Op schema" : "Actie nodig",
+      value: openHealthChecks.length,
+      valueKind: "decimal",
+      helper:
+        openHealthChecks[0]?.summary ??
+        "Geen open healthchecks, waivers of runtime-acties op de overview.",
+    },
+  ] as const;
 
   return (
     <div className="section-stack">
       <div className="overflow-x-auto pb-1">
         <KPIGroup
           aria-label="Belangrijkste dashboardcijfers"
-          className="min-w-[760px] rounded-[28px] border border-border/80 bg-surface shadow-none"
+          className="min-w-[1040px] rounded-[30px] border border-border/80 bg-surface/95 shadow-[0_24px_80px_rgba(15,23,42,0.08)]"
         >
           {highlightedMetrics.map((metric, index) => (
             <Fragment key={metric.label}>
               {index > 0 ? <KPIGroup.Separator /> : null}
-              <KPI className="bg-transparent">
+              <KPI className="min-w-[190px] bg-transparent shadow-none">
                 <KPI.Header>
-                  <KPI.Icon>
-                    <metric.icon className="text-muted h-4 w-4" />
+                  <KPI.Icon status={metric.iconStatus}>
+                    <metric.icon className="h-4 w-4" />
                   </KPI.Icon>
                   <KPI.Title>{metric.label}</KPI.Title>
                 </KPI.Header>
-                <KPI.Content>
-                  <KPI.Value value={metric.value} />
+                <KPI.Content className="grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                  {metric.valueKind === "currency" ? (
+                    <KPI.Value
+                      className="text-3xl"
+                      currency="EUR"
+                      maximumFractionDigits={0}
+                      style="currency"
+                      value={metric.value}
+                    />
+                  ) : metric.valueKind === "percent" ? (
+                    <KPI.Value
+                      className="text-3xl"
+                      maximumFractionDigits={0}
+                      style="percent"
+                      value={metric.value}
+                    />
+                  ) : (
+                    <KPI.Value className="text-3xl" maximumFractionDigits={0} value={metric.value} />
+                  )}
+                  <KPI.Trend trend={metric.trend} variant="tertiary">
+                    {metric.trendLabel}
+                  </KPI.Trend>
                 </KPI.Content>
-                <KPI.Footer>{metric.helper}</KPI.Footer>
+                {"progress" in metric ? (
+                  <KPI.Progress status={metric.progressStatus} value={metric.progress} />
+                ) : null}
+                <KPI.Footer className="text-muted text-sm leading-6">{metric.helper}</KPI.Footer>
               </KPI>
             </Fragment>
           ))}
