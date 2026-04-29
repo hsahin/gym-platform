@@ -144,6 +144,7 @@ describe("dashboard pages", () => {
       value: "Geen toegang",
     });
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
+      title: "Gym instellingen",
       value: "2 checks",
     });
     expect(pages.find((page) => page.key === "overview")).toMatchObject({
@@ -256,6 +257,7 @@ describe("dashboard pages", () => {
       value: "Segmenten klaar",
     });
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
+      title: "Gym instellingen",
       value: "1 check",
     });
   });

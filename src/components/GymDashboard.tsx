@@ -106,7 +106,7 @@ const SettingsDashboardPage = dynamic<DashboardPageProps>(
     import("@/components/dashboard/pages/SettingsDashboardPage").then(
       (module) => module.SettingsDashboardPage,
     ),
-  { loading: () => pageLoadingState("Instellingen") },
+  { loading: () => pageLoadingState("Gym instellingen") },
 );
 
 const SuperadminDashboardPage = dynamic<DashboardPageProps>(

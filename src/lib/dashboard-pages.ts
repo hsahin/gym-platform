@@ -218,7 +218,7 @@ export function getDashboardPages(
     },
     {
       key: "settings",
-      title: "Instellingen",
+      title: "Gym instellingen",
       value:
         input.healthAttentionCount === 0
           ? "Alles gezond"

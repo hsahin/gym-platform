@@ -239,11 +239,13 @@ export function PlatformWorkbench({
   highlightStepKey,
   sections = ALL_PLATFORM_WORKBENCH_SECTIONS,
   showLaunchHeader = true,
+  stackSections = false,
 }: {
   snapshot: GymDashboardSnapshot;
   highlightStepKey?: string | null;
   sections?: ReadonlyArray<PlatformWorkbenchSection>;
   showLaunchHeader?: boolean;
+  stackSections?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -571,6 +573,10 @@ export function PlatformWorkbench({
   const nextStep = workbenchExperience.steps.find(
     (step) => step.statusTone === "current" || step.statusTone === "upcoming",
   );
+  const sectionGridClass =
+    stackSections || visibleSections.size === 1
+      ? "grid gap-4"
+      : "grid gap-4 2xl:grid-cols-2";
   const launchStats = [
     { label: "Vestigingen", value: snapshot.locations.length },
     { label: "Lidmaatschappen", value: snapshot.membershipPlans.length },
@@ -729,7 +735,7 @@ export function PlatformWorkbench({
         </>
       ) : null}
 
-      <div className={`grid gap-4 ${visibleSections.size === 1 ? "" : "2xl:grid-cols-2"}`}>
+      <div className={sectionGridClass}>
         {shouldShowSection("locations") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.locations.length, "vestiging", "vestigingen")}
@@ -1763,7 +1769,7 @@ export function PlatformWorkbench({
         {shouldShowSection("legal") ? (
           <SectionCard
             countLabel={snapshot.legal.statusLabel}
-            description="Store the legal URLs, SEPA mandate text, contract template, and waiver retention before going live with billing."
+            description="Leg voorwaarden, privacy, SEPA-machtiging, contracttemplate en waiver-bewaartermijn vast voordat betalingen live gaan."
             highlighted={isHighlighted("legal")}
             statusLabel={snapshot.legal.statusLabel}
             statusTone={

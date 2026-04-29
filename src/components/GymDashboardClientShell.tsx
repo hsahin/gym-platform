@@ -77,7 +77,7 @@ const pageCopy: Record<
     description: "Hardware, software, equipment en migratiekoppelingen rondom je gymstack.",
   },
   settings: {
-    title: "Instellingen",
+    title: "Gym instellingen",
     description: "Vestigingen, team, juridische status en runtimegezondheid.",
   },
   superadmin: {
@@ -98,7 +98,7 @@ const navigationItems = [
   { key: "mobile", label: "Mobiele app", href: "/dashboard/mobile", icon: AppWindow },
   { key: "marketing", label: "Marketing", href: "/dashboard/marketing", icon: Megaphone },
   { key: "integrations", label: "Integraties", href: "/dashboard/integrations", icon: Link2 },
-  { key: "settings", label: "Instellingen", href: "/dashboard/settings", icon: Settings },
+  { key: "settings", label: "Gym instellingen", href: "/dashboard/settings", icon: Settings },
   { key: "superadmin", label: "Superadmin", href: "/dashboard/superadmin", icon: Cog },
 ] satisfies ReadonlyArray<{
   key: DashboardPageKey;

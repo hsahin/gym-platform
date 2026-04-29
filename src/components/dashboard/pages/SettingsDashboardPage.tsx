@@ -40,12 +40,11 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
-        <PageSection
-          title="Instellingen"
-          description="Vestigingen, runtime, team en juridische gereedheid."
-        >
-          <div className="grid content-start gap-3">
+      <PageSection
+        title="Gym instellingen"
+        description="Vestigingen, runtime, team en juridische gereedheid."
+      >
+        <div className="grid content-start gap-3">
             <Segment
               className="w-full max-w-[28rem]"
               selectedKey={settingsView}
@@ -413,18 +412,18 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                 </Card>
               </div>
             )}
-          </div>
-        </PageSection>
+        </div>
+      </PageSection>
 
-        <LazyPlatformWorkbench
-          sections={["locations", "trainers", "staff", "legal"]}
-          showLaunchHeader={false}
-          snapshot={snapshot}
-        />
-      </div>
+      <LazyPlatformWorkbench
+        sections={["locations", "trainers", "staff", "legal"]}
+        showLaunchHeader={false}
+        snapshot={snapshot}
+        stackSections
+      />
 
       <PageSection
-        title="Instellingsmodules"
+        title="Gym instellingsmodules"
         description="Compact overzicht van feature-uitrol voor vestigingen, teambeheer en operatie."
       >
         <FeatureModuleBoard features={settingsFeatures} snapshot={snapshot} />

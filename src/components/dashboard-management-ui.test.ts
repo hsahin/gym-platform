@@ -59,6 +59,19 @@ describe("dashboard management UI wiring", () => {
     }
   });
 
+  it("keeps gym settings forms stacked below the settings overview", () => {
+    const settings = readSource("dashboard/pages/SettingsDashboardPage.tsx");
+    const lazyWorkbench = readSource("dashboard/LazyPlatformWorkbench.tsx");
+    const workbench = readSource("PlatformWorkbench.tsx");
+
+    expect(settings).toContain('title="Gym instellingen"');
+    expect(settings).toContain("stackSections");
+    expect(settings).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
+    expect(lazyWorkbench).toContain("stackSections");
+    expect(workbench).toContain("stackSections = false");
+    expect(workbench).toContain('"grid gap-4 2xl:grid-cols-2"');
+  });
+
   it("uses the HeroUI Pro KPI group for overview facts", () => {
     const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
 
@@ -95,7 +108,7 @@ describe("dashboard management UI wiring", () => {
       ["dashboard/pages/CoachingDashboardPage.tsx", 'title="Coaching setup"', 'title="Coaching modules"'],
       ["dashboard/pages/MarketingDashboardPage.tsx", 'title="Lead intake"', 'title="Marketing modules"'],
       ["dashboard/pages/IntegrationsDashboardPage.tsx", 'title="Integration setup"', 'title="Integratiemodules"'],
-      ["dashboard/pages/SettingsDashboardPage.tsx", 'title="Instellingen"', 'title="Instellingsmodules"'],
+      ["dashboard/pages/SettingsDashboardPage.tsx", 'title="Gym instellingen"', 'title="Gym instellingsmodules"'],
       ["dashboard/pages/OverviewDashboardPage.tsx", "<LazyPlatformWorkbench", 'title="Owner-inzicht"'],
     ] as const;
 

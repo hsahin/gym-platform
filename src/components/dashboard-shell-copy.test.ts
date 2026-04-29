@@ -15,7 +15,7 @@ describe("dashboard shell copy", () => {
     expect(source).toContain('label: "Lessen"');
     expect(source).toContain('label: "Leden"');
     expect(source).toContain('label: "Betalingen"');
-    expect(source).toContain('label: "Instellingen"');
+    expect(source).toContain('label: "Gym instellingen"');
     expect(source).toContain("Werkruimte voor dagelijkse operatie");
     expect(source).toContain('aria-label="Dashboardnavigatie"');
     expect(source).not.toContain('title: "Overview"');
@@ -84,7 +84,7 @@ describe("dashboard shell copy", () => {
     expect(membersSource).toContain('title="Nog geen leden"');
     expect(membersSource).not.toContain("Review member state and waiver completion.");
 
-    expect(settingsSource).toContain('title="Instellingen"');
+    expect(settingsSource).toContain('title="Gym instellingen"');
     expect(settingsSource).toContain('title="Nog geen teamaccounts"');
     expect(settingsSource).not.toContain("Locations, runtime state, staff, and legal readiness.");
 

@@ -120,7 +120,7 @@ const navItems = [
   { href: "/dashboard/access", label: "Access Control", key: "access", icon: LockIcon },
   { href: "/dashboard/payments", label: "Payments", key: "payments", icon: CardIcon },
   { href: "/dashboard/marketing", label: "Marketing", key: "marketing", icon: MegaphoneIcon },
-  { href: "/dashboard/settings", label: "Settings", key: "settings", icon: SettingsIcon },
+  { href: "/dashboard/settings", label: "Gym instellingen", key: "settings", icon: SettingsIcon },
 ] satisfies ReadonlyArray<{
   href: string;
   label: string;

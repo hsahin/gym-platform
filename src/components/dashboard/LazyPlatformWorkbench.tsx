@@ -24,11 +24,13 @@ export function LazyPlatformWorkbench({
   highlightStepKey,
   sections,
   showLaunchHeader,
+  stackSections,
 }: {
   readonly snapshot: GymDashboardSnapshot;
   readonly highlightStepKey?: string | null;
   readonly sections?: ReadonlyArray<PlatformWorkbenchSection>;
   readonly showLaunchHeader?: boolean;
+  readonly stackSections?: boolean;
 }) {
   return (
     <PlatformWorkbench
@@ -36,6 +38,7 @@ export function LazyPlatformWorkbench({
       sections={sections}
       showLaunchHeader={showLaunchHeader}
       snapshot={snapshot}
+      stackSections={stackSections}
     />
   );
 }
