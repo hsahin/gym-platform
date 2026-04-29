@@ -1,5 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppError, createPrefixedIdGenerator } from "@claimtech/core";
 import {
@@ -2010,7 +2011,7 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
   }
 
   try {
-    const raw = await readFile(getStateFilePath(), "utf8");
+    const raw = readFileSync(getStateFilePath(), "utf8");
 
     if (!raw.trim()) {
       return null;

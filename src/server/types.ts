@@ -772,6 +772,7 @@ export interface MemberReservationSnapshot {
   readonly memberEmail: string;
   readonly hasEligibleMembership: boolean;
   readonly myReservations: ReadonlyArray<MemberReservationSummary>;
+  readonly selfServiceEnabled: boolean;
   readonly selfService: MobileSelfServiceSummary;
 }
 

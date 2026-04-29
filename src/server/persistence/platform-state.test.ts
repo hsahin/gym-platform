@@ -73,6 +73,17 @@ afterEach(async () => {
 });
 
 describe("platform state", () => {
+  it("keeps local fallback reads out of async RSC payload instrumentation", async () => {
+    const source = await readFile(
+      path.join(process.cwd(), "src/server/persistence/platform-state.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain('import { readFileSync } from "node:fs";');
+    expect(source).not.toContain("import { mkdir, readFile, rename, writeFile }");
+    expect(source).not.toContain("await readFile(getStateFilePath()");
+  });
+
   it("starts empty and derives stable tenant slugs", async () => {
     await expect(readLocalPlatformState()).resolves.toBeNull();
     await expect(hasLocalPlatformSetup()).resolves.toBe(false);

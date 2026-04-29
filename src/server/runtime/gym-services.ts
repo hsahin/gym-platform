@@ -3140,6 +3140,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         memberEmail: baseMember?.email || actor.email || "",
         hasEligibleMembership: memberships.length > 0,
         myReservations: [],
+        selfServiceEnabled: false,
         selfService: {
           receipts: [],
           paymentMethodRequests: [],
@@ -3150,12 +3151,20 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     }
 
     const tenantContext = createPublicTenantContext(selectedMembership.tenant.id);
-    const [locations, trainers, classSessions, bookings, mobileSelfService] = await Promise.all([
+    const [
+      locations,
+      trainers,
+      classSessions,
+      bookings,
+      mobileSelfService,
+      selfServiceFeature,
+    ] = await Promise.all([
       runtime.store.listLocations(tenantContext),
       runtime.store.listTrainers(tenantContext),
       runtime.store.listClassSessions(tenantContext),
       runtime.store.listBookings(tenantContext),
       buildMobileSelfServiceSummary(tenantContext),
+      evaluateFeatureFlag(actor, tenantContext, "mobile.white_label"),
     ]);
 
     const locationById = new Map(
@@ -3238,6 +3247,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       memberEmail: selectedMembership.member.email || actor.email || "",
       hasEligibleMembership: true,
       myReservations,
+      selfServiceEnabled: selfServiceFeature.enabled,
       selfService: {
         receipts: mobileSelfService.receipts.filter(
           (receipt) => receipt.memberId === selectedMembership.member.id,

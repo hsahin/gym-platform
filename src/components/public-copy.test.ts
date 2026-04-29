@@ -78,6 +78,9 @@ describe("public surface copy", () => {
     expect(source).toContain("Mijn reserveringen");
     expect(source).toContain("aangemeld");
     expect(source).toContain("Lessen en gymplekken waarvoor je al bent aangemeld.");
+    expect(source).toContain("canUseSelfService");
+    expect(source).toContain("snapshot.selfServiceEnabled");
+    expect(source).toContain("shouldShowSelfService");
     expect(source).toContain("Ledenservice");
     expect(source).toContain("Betalingsbewijzen");
     expect(source).not.toContain("Je reserveert direct bij");

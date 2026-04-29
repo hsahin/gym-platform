@@ -3356,6 +3356,53 @@ describe("gym platform services", () => {
     expect(reservationSnapshot.selfService.paymentMethodRequests).toHaveLength(1);
   });
 
+  it("marks member self-service unavailable until the matching feature is enabled", async () => {
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: [],
+    });
+
+    await services.createMember(ownerActor, tenantContext, {
+      fullName: "Kim Vos",
+      email: "kim@northside.test",
+      phone: "0615151515",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+      portalPassword: "kim-member-123",
+    });
+
+    const memberActor = createMemberViewer("kim@northside.test", state.tenant.id, "Kim Vos");
+    const disabledSnapshot = await services.getMemberReservationSnapshot(memberActor, {
+      tenantSlug: state.tenant.id,
+    });
+
+    expect(disabledSnapshot.selfServiceEnabled).toBe(false);
+
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["mobile.white_label"]);
+
+    const enabledSnapshot = await services.getMemberReservationSnapshot(memberActor, {
+      tenantSlug: state.tenant.id,
+    });
+
+    expect(enabledSnapshot.selfServiceEnabled).toBe(true);
+  });
+
   it("rejects attendance updates with an outdated version", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 

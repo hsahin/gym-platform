@@ -86,6 +86,13 @@ export function PublicReservationPortal({
   const canBrowseClasses = !isMemberFlow || snapshot.hasEligibleMembership;
   const canReserve = isMemberFlow && snapshot.hasEligibleMembership;
   const selfService = isMemberFlow ? snapshot.selfService : null;
+  const canUseSelfService = isMemberFlow && snapshot.selfServiceEnabled;
+  const shouldShowSelfService =
+    isMemberFlow &&
+    snapshot.hasEligibleMembership &&
+    Boolean(snapshot.tenantSlug) &&
+    canUseSelfService &&
+    Boolean(selfService);
   const myReservations = isMemberFlow ? snapshot.myReservations : [];
   const publicBookingAccess = isMemberFlow
     ? null
@@ -781,7 +788,7 @@ export function PublicReservationPortal({
         </Card>
       ) : null}
 
-      {isMemberFlow && snapshot.hasEligibleMembership && snapshot.tenantSlug && selfService ? (
+      {shouldShowSelfService && selfService ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <Card className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
