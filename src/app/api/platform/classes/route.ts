@@ -7,25 +7,66 @@ import {
 import { requireViewerFromRequest } from "@/server/http/claimtech-request";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
-const createClassSchema = z.object({
+const optionalTrainerIdSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().min(1).optional(),
+);
+const classSchemaBase = z.object({
   title: z.string().min(2),
   seriesId: z.string().min(1).optional(),
+  bookingKind: z.enum(["class", "open_gym"]).default("class"),
   locationId: z.string().min(1),
-  trainerId: z.string().min(1),
+  trainerId: optionalTrainerIdSchema,
   startsAt: z.string().datetime(),
   durationMinutes: z.number().int().positive(),
   capacity: z.number().int().positive(),
   level: z.enum(["beginner", "mixed", "advanced"]),
   focus: z.string().min(2),
 });
+
+function requireTrainerForClass(
+  value: z.infer<typeof classSchemaBase>,
+  context: z.RefinementCtx,
+) {
+  if (value.bookingKind !== "open_gym" && !value.trainerId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Kies een trainer of plan een gymplek zonder trainer.",
+      path: ["trainerId"],
+    });
+  }
+}
+
+function normalizeClassPayload(value: z.infer<typeof classSchemaBase>) {
+  return {
+    ...value,
+    trainerId: value.bookingKind === "open_gym" ? "" : value.trainerId ?? "",
+  };
+}
+
+const createClassSchema = classSchemaBase
+  .superRefine((value, context) => {
+    requireTrainerForClass(value, context);
+  })
+  .transform(normalizeClassPayload);
 const createClassBatchSchema = z.object({
   classes: z.array(createClassSchema).min(1).max(120),
 });
-const updateClassSchema = createClassSchema.extend({
-  id: z.string().min(1),
-  expectedVersion: z.number().int().positive(),
-  status: z.enum(["active", "paused", "archived"]),
-});
+const updateClassSchema = classSchemaBase
+  .extend({
+    id: z.string().min(1),
+    expectedVersion: z.number().int().positive(),
+    status: z.enum(["active", "paused", "archived"]),
+  })
+  .superRefine((value, context) => {
+    requireTrainerForClass(value, context);
+  })
+  .transform((value) => ({
+    ...normalizeClassPayload(value),
+    id: value.id,
+    expectedVersion: value.expectedVersion,
+    status: value.status,
+  }));
 const entityMutationSchema = z.object({
   id: z.string().min(1),
   expectedVersion: z.number().int().positive(),

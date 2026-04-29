@@ -16,6 +16,7 @@ const snapshot: PublicReservationSnapshot = {
     {
       id: "class-1",
       title: "Sunrise Strength",
+      bookingKind: "class",
       startsAt: "2026-05-01T06:30:00.000Z",
       durationMinutes: 50,
       locationName: "Atlas Centrum",

@@ -32,6 +32,10 @@ describe("dashboard management UI wiring", () => {
     expect(classes).toContain("buildClassTypeTabs");
     expect(classes).toContain("selectedClassTypeKey");
     expect(classes).toContain("Soort les kiezen");
+    expect(classes).toContain("OPEN_GYM_CLASS_TYPE_KEY");
+    expect(classes).toContain("bookingKind");
+    expect(classes).toContain("Boekbare gymplek");
+    expect(classes).toContain("Geen trainer nodig");
     expect(classes).toContain('submitDashboardMutation("/api/platform/classes"');
     expect(classes).toContain("extraActions");
     expect(classes).toContain("Verwijder serie");

@@ -71,6 +71,8 @@ describe("public surface copy", () => {
     expect(source).toContain("komende maand");
     expect(source).toContain("Boek proefles");
     expect(source).toContain("Word lid");
+    expect(source).toContain("Vrij trainen");
+    expect(source).toContain("Geen trainer");
     expect(source).toContain('action="/api/auth/logout"');
     expect(source).toContain("Uitloggen");
     expect(source).toContain("Ledenservice");

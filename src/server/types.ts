@@ -6,6 +6,7 @@ export type EntityStatus = "active" | "paused" | "archived";
 export type MemberStatus = "active" | "trial" | "paused" | "archived";
 export type BookingStatus = "confirmed" | "waitlisted" | "checked_in" | "cancelled";
 export type BookingSource = "frontdesk" | "coach" | "member_app";
+export type ClassSessionBookingKind = "class" | "open_gym";
 export type AttendanceChannel = "qr" | "frontdesk" | "coach";
 export type RemoteAccessProvider = "nuki" | "salto_ks" | "tedee" | "yale_smart";
 export type RemoteAccessBridgeType = "cloud_api" | "bridge" | "hub";
@@ -101,6 +102,7 @@ export interface GymTrainer extends TenantOwnedEntity {
 export interface ClassSession extends TenantOwnedEntity {
   readonly title: string;
   readonly seriesId?: string;
+  readonly bookingKind: ClassSessionBookingKind;
   readonly locationId: string;
   readonly trainerId: string;
   readonly startsAt: string;
@@ -682,6 +684,7 @@ export interface IntegrationWorkspaceSummary {
 export interface PublicReservationClassSummary {
   readonly id: string;
   readonly title: string;
+  readonly bookingKind: ClassSessionBookingKind;
   readonly startsAt: string;
   readonly durationMinutes: number;
   readonly locationName: string;

@@ -56,6 +56,18 @@ function getBookingStatusLabel(status: string) {
   }
 }
 
+function getReservationTypeLabel(
+  classSession: ReservationPortalSnapshot["classSessions"][number],
+) {
+  return classSession.bookingKind === "open_gym" ? "Vrij trainen" : classSession.focus;
+}
+
+function getReservationCoachLabel(
+  classSession: ReservationPortalSnapshot["classSessions"][number],
+) {
+  return classSession.bookingKind === "open_gym" ? "Geen trainer" : classSession.trainerName;
+}
+
 function isMemberReservationSnapshot(
   snapshot: ReservationPortalSnapshot,
 ): snapshot is MemberReservationSnapshot {
@@ -461,10 +473,10 @@ export function PublicReservationPortal({
                         </Card.Header>
                         <Card.Content className="flex flex-wrap gap-2">
                           <Chip size="sm" variant="tertiary">
-                            {classSession.trainerName}
+                            {getReservationCoachLabel(classSession)}
                           </Chip>
                           <Chip size="sm" variant="tertiary">
-                            {classSession.focus}
+                            {getReservationTypeLabel(classSession)}
                           </Chip>
                           <Chip size="sm" variant="tertiary">
                             {classSession.level}
@@ -527,6 +539,11 @@ export function PublicReservationPortal({
                     <p className="text-muted text-sm">
                       {selectedClass.locationName} · {selectedClass.trainerName}
                     </p>
+                    {selectedClass.bookingKind === "open_gym" ? (
+                      <Chip size="sm" variant="soft">
+                        Vrij trainen · Geen trainer
+                      </Chip>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Chip size="sm" variant="soft">
@@ -653,6 +670,11 @@ export function PublicReservationPortal({
                     <p className="text-muted text-sm">
                       {selectedClass.locationName} · {selectedClass.trainerName}
                     </p>
+                    {selectedClass.bookingKind === "open_gym" ? (
+                      <Chip size="sm" variant="soft">
+                        Vrij trainen · Geen trainer
+                      </Chip>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Chip size="sm" variant="soft">

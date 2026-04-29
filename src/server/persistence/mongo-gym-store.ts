@@ -92,6 +92,7 @@ function withTrainerDefaults(trainer: CollectionDocument<GymTrainer>) {
 function withClassSessionDefaults(classSession: CollectionDocument<ClassSession>) {
   return {
     ...toEntity(classSession),
+    bookingKind: classSession.bookingKind ?? "class",
     status: classSession.status ?? "active",
   } satisfies ClassSession;
 }
@@ -872,12 +873,15 @@ export class MongoGymStore implements GymStore {
       CollectionDocument<GymLocation>
     >(collections.locations);
 
+    const bookingKind = input.bookingKind ?? "class";
     const [trainer, location] = await Promise.all([
-      trainers.findOne({ id: input.trainerId }),
+      bookingKind === "open_gym"
+        ? Promise.resolve(null)
+        : trainers.findOne({ id: input.trainerId ?? "" }),
       locations.findOne({ id: input.locationId }),
     ]);
 
-    if (!trainer || !location) {
+    if ((!trainer && bookingKind !== "open_gym") || !location) {
       throw new AppError("Les kon niet worden opgeslagen.", {
         code: "RESOURCE_NOT_FOUND",
         details: {
@@ -896,8 +900,9 @@ export class MongoGymStore implements GymStore {
       updatedAt: now,
       title: input.title,
       seriesId: input.seriesId?.trim() || undefined,
+      bookingKind,
       locationId: input.locationId,
-      trainerId: input.trainerId,
+      trainerId: bookingKind === "open_gym" ? "" : input.trainerId ?? "",
       startsAt: input.startsAt,
       durationMinutes: input.durationMinutes,
       capacity: input.capacity,
@@ -909,13 +914,15 @@ export class MongoGymStore implements GymStore {
     };
 
     await classSessions.insertOne(classSession);
-    await trainers.updateOne(
-      { id: trainer.id, version: trainer.version },
-      {
-        set: { updatedAt: now, classIds: [...trainer.classIds, classSession.id] },
-        increment: { version: 1 },
-      },
-    );
+    if (trainer) {
+      await trainers.updateOne(
+        { id: trainer.id, version: trainer.version },
+        {
+          set: { updatedAt: now, classIds: [...trainer.classIds, classSession.id] },
+          increment: { version: 1 },
+        },
+      );
+    }
 
     return classSession;
   }
@@ -933,18 +940,16 @@ export class MongoGymStore implements GymStore {
       collections.locations,
     );
 
-    const [classSession, trainer, location] = await Promise.all([
+    const [classSession, location] = await Promise.all([
       classSessions.findOne({ id: input.id }),
-      trainers.findOne({ id: input.trainerId }),
       locations.findOne({ id: input.locationId }),
     ]);
 
-    if (!classSession || !trainer || !location) {
+    if (!classSession || !location) {
       throw new AppError("Les kon niet worden opgeslagen.", {
         code: "RESOURCE_NOT_FOUND",
         details: {
           classSessionFound: Boolean(classSession),
-          trainerFound: Boolean(trainer),
           locationFound: Boolean(location),
         },
       });
@@ -958,16 +963,35 @@ export class MongoGymStore implements GymStore {
       input.expectedVersion,
     );
 
+    const bookingKind = input.bookingKind ?? normalizedClassSession.bookingKind ?? "class";
+    const trainer =
+      bookingKind === "open_gym"
+        ? null
+        : await trainers.findOne({ id: input.trainerId ?? "" });
+
+    if (bookingKind !== "open_gym" && !trainer) {
+      throw new AppError("Les kon niet worden opgeslagen.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: {
+          classSessionFound: true,
+          trainerFound: false,
+          locationFound: true,
+        },
+      });
+    }
+
     const now = new Date().toISOString();
     const nextSeriesId = input.seriesId ?? normalizedClassSession.seriesId;
+    const nextTrainerId = bookingKind === "open_gym" ? "" : input.trainerId ?? "";
     const updateResult = await classSessions.updateOne(
       { id: normalizedClassSession.id, version: input.expectedVersion },
       {
         set: {
           title: input.title,
           ...(nextSeriesId ? { seriesId: nextSeriesId } : {}),
+          bookingKind,
           locationId: input.locationId,
-          trainerId: input.trainerId,
+          trainerId: nextTrainerId,
           startsAt: input.startsAt,
           durationMinutes: input.durationMinutes,
           capacity: input.capacity,
@@ -987,7 +1011,7 @@ export class MongoGymStore implements GymStore {
       });
     }
 
-    if (normalizedClassSession.trainerId !== input.trainerId) {
+    if (normalizedClassSession.trainerId !== nextTrainerId) {
       const previousTrainer = await trainers.findOne({
         id: normalizedClassSession.trainerId,
       });
@@ -1007,7 +1031,7 @@ export class MongoGymStore implements GymStore {
         );
       }
 
-      if (!trainer.classIds.includes(normalizedClassSession.id)) {
+      if (trainer && !trainer.classIds.includes(normalizedClassSession.id)) {
         await trainers.updateOne(
           { id: trainer.id },
           {

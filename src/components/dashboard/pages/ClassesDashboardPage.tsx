@@ -15,6 +15,7 @@ import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import {
   ALL_CLASS_TYPE_KEY,
+  OPEN_GYM_CLASS_TYPE_KEY,
   buildClassTypeTabs,
   filterClassSessionsByType,
   getClassTypeKeyForSession,
@@ -115,6 +116,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const classFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "classes",
   );
+  const isOpenGymClassType = selectedClassType.key === OPEN_GYM_CLASS_TYPE_KEY;
 
   function createTypedClassSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,15 +128,20 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
       try {
         await submitDashboardMutation("/api/platform/classes", {
           title: String(formData.get("title") ?? ""),
+          bookingKind: isOpenGymClassType ? "open_gym" : "class",
           locationId: String(formData.get("locationId") ?? ""),
-          trainerId: String(formData.get("trainerId") ?? ""),
+          trainerId: isOpenGymClassType ? "" : String(formData.get("trainerId") ?? ""),
           startsAt: new Date(rawStartsAt).toISOString(),
-          durationMinutes: Number(formData.get("durationMinutes") ?? "45"),
+          durationMinutes: Number(formData.get("durationMinutes") ?? (isOpenGymClassType ? "60" : "45")),
           capacity: Number(formData.get("capacity") ?? "16"),
           level: String(formData.get("level") ?? "mixed"),
           focus: selectedClassType.focus,
         });
-        toast.success(`${selectedClassType.label} les gepland.`);
+        toast.success(
+          isOpenGymClassType
+            ? "Boekbare gymplek gepland."
+            : `${selectedClassType.label} les gepland.`,
+        );
         form.reset();
         router.refresh();
       } catch (error) {
@@ -423,7 +430,8 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                   </div>
 
                   {classesView === "schedule" && selectedClassType.key !== ALL_CLASS_TYPE_KEY ? (
-                    snapshot.locations.length > 0 && snapshot.trainers.length > 0 ? (
+                    snapshot.locations.length > 0 &&
+                    (snapshot.trainers.length > 0 || isOpenGymClassType) ? (
                       <form
                         key={selectedClassType.key}
                         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
@@ -468,20 +476,33 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                             ))}
                           </select>
                         </label>
-                        <label className="field-stack">
-                          <span className="text-sm font-medium">Trainer</span>
-                          <select
-                            className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
-                            name="trainerId"
-                            required
-                          >
-                            {snapshot.trainers.map((trainer) => (
-                              <option key={trainer.id} value={trainer.id}>
-                                {trainer.fullName}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        {isOpenGymClassType ? (
+                          <div className="field-stack">
+                            <input name="trainerId" type="hidden" value="" />
+                            <Label>Boekbare gymplek</Label>
+                            <div className="rounded-2xl border border-border bg-surface-secondary p-3 text-sm">
+                              <p className="font-medium">Geen trainer nodig</p>
+                              <p className="text-muted mt-1 leading-6">
+                                Members en trial users boeken zelfstandig één uur op de ingestelde capaciteit.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="field-stack">
+                            <span className="text-sm font-medium">Trainer</span>
+                            <select
+                              className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                              name="trainerId"
+                              required
+                            >
+                              {snapshot.trainers.map((trainer) => (
+                                <option key={trainer.id} value={trainer.id}>
+                                  {trainer.fullName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
                         <div className="field-stack">
                           <Label>Starttijd</Label>
                           <Input
@@ -498,7 +519,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                             fullWidth
                             min={15}
                             name="durationMinutes"
-                            defaultValue="45"
+                            defaultValue={isOpenGymClassType ? "60" : "45"}
                             required
                             type="number"
                           />
@@ -522,7 +543,9 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                       </form>
                     ) : (
                       <p className="text-muted mt-3 text-sm leading-6">
-                        Voeg eerst minimaal één vestiging en trainer toe via Instellingen voordat je lessen plant.
+                        {isOpenGymClassType
+                          ? "Voeg eerst minimaal één vestiging toe via Gym instellingen voordat je gymplekken plant."
+                          : "Voeg eerst minimaal één vestiging en trainer toe via Gym instellingen voordat je lessen plant."}
                       </p>
                     )
                   ) : classesView === "schedule" ? (
@@ -620,6 +643,16 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                         fields={[
                           { name: "title", label: "Lesnaam", defaultValue: session.title },
                           {
+                            name: "bookingKind",
+                            label: "Boekingstype",
+                            defaultValue: session.bookingKind ?? "class",
+                            type: "select",
+                            options: [
+                              { value: "class", label: "Les met trainer" },
+                              { value: "open_gym", label: "Boekbare gymplek" },
+                            ],
+                          },
+                          {
                             name: "locationId",
                             label: "Vestiging",
                             defaultValue: session.locationId,
@@ -634,10 +667,13 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                             label: "Trainer",
                             defaultValue: session.trainerId,
                             type: "select",
-                            options: snapshot.trainers.map((trainer) => ({
-                              value: trainer.id,
-                              label: trainer.fullName,
-                            })),
+                            options: [
+                              { value: "", label: "Geen trainer nodig" },
+                              ...snapshot.trainers.map((trainer) => ({
+                                value: trainer.id,
+                                label: trainer.fullName,
+                              })),
+                            ],
                           },
                           {
                             name: "startsAt",

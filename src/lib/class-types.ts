@@ -1,6 +1,8 @@
 export const ALL_CLASS_TYPE_KEY = "all";
+export const OPEN_GYM_CLASS_TYPE_KEY = "open-gym";
 
 export interface ClassTypeSession {
+  readonly bookingKind?: "class" | "open_gym";
   readonly focus: string;
   readonly title: string;
 }
@@ -45,6 +47,13 @@ const defaultClassTypes = [
     defaultTitle: "PT sessie",
     description: "Privé, intake of 1-op-1 coaching.",
   },
+  {
+    key: OPEN_GYM_CLASS_TYPE_KEY,
+    label: "Gymplek",
+    focus: "Open gym",
+    defaultTitle: "Vrij trainen",
+    description: "Boekbare gymplek zonder trainer, standaard één uur op capaciteit.",
+  },
 ] as const;
 
 export function normalizeClassTypeKey(value: string) {
@@ -70,6 +79,10 @@ function getCustomClassTypeLabel(labels: ReadonlyMap<string, string>, key: strin
 }
 
 export function getClassTypeKeyForSession(session: ClassTypeSession) {
+  if (session.bookingKind === "open_gym") {
+    return OPEN_GYM_CLASS_TYPE_KEY;
+  }
+
   return normalizeClassTypeKey(session.focus || session.title);
 }
 
@@ -95,11 +108,11 @@ export function buildClassTypeTabs(
       count: sessions.length,
     },
     ...defaultClassTypes.map((classType) => {
-      const key = normalizeClassTypeKey(classType.focus);
+      const key = "key" in classType ? classType.key : normalizeClassTypeKey(classType.focus);
 
       return {
         key,
-        label: classType.focus,
+        label: "label" in classType ? classType.label : classType.focus,
         focus: classType.focus,
         defaultTitle: classType.defaultTitle,
         description: classType.description,

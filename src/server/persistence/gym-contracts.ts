@@ -97,8 +97,9 @@ export interface UpdateMemberInput extends CreateMemberInput {
 export interface CreateClassSessionInput {
   readonly title: string;
   readonly seriesId?: string;
+  readonly bookingKind?: ClassSession["bookingKind"];
   readonly locationId: string;
-  readonly trainerId: string;
+  readonly trainerId?: string;
   readonly startsAt: string;
   readonly durationMinutes: number;
   readonly capacity: number;

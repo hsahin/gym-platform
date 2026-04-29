@@ -3167,7 +3167,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           locationName:
             locationById.get(classSession.locationId)?.name ?? "Onbekende locatie",
           trainerName:
-            trainerById.get(classSession.trainerId)?.fullName ?? "Onbekende trainer",
+            classSession.bookingKind === "open_gym"
+              ? "Geen trainer"
+              : trainerById.get(classSession.trainerId)?.fullName ?? "Onbekende trainer",
+          bookingKind: classSession.bookingKind ?? "class",
           capacity: classSession.capacity,
           bookedCount: classSession.bookedCount,
           waitlistCount: classSession.waitlistCount,
@@ -3711,7 +3714,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             locationName:
               locationById.get(classSession.locationId)?.name ?? "Onbekende locatie",
             trainerName:
-              trainerById.get(classSession.trainerId)?.fullName ?? "Onbekende trainer",
+              classSession.bookingKind === "open_gym"
+                ? "Geen trainer"
+                : trainerById.get(classSession.trainerId)?.fullName ?? "Onbekende trainer",
+            bookingKind: classSession.bookingKind ?? "class",
             capacity: classSession.capacity,
             bookedCount: classSession.bookedCount,
             waitlistCount: classSession.waitlistCount,
@@ -5197,7 +5203,8 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       const missingReference = input.find(
         (classSession) =>
           !locationIds.has(classSession.locationId) ||
-          !trainerIds.has(classSession.trainerId),
+          ((classSession.bookingKind ?? "class") !== "open_gym" &&
+            !trainerIds.has(classSession.trainerId ?? "")),
       );
 
       if (missingReference) {

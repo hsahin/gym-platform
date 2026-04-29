@@ -106,6 +106,7 @@ export function normalizeGymStoreState(state: MemoryGymStoreState): MemoryGymSto
     })),
     classSessions: state.classSessions.map((classSession) => ({
       ...classSession,
+      bookingKind: classSession.bookingKind ?? "class",
       status: classSession.status ?? "active",
     })),
     bookings: state.bookings,
@@ -836,7 +837,11 @@ export function createMemoryGymStore(
     },
     async createClassSession(tenantContext, input) {
       requireLocation(tenantContext, input.locationId);
-      const trainer = requireTrainer(tenantContext, input.trainerId);
+      const bookingKind = input.bookingKind ?? "class";
+      const trainer =
+        bookingKind === "open_gym"
+          ? null
+          : requireTrainer(tenantContext, input.trainerId ?? "");
 
       const now = new Date().toISOString();
       const classSession: ClassSession = {
@@ -847,8 +852,9 @@ export function createMemoryGymStore(
         updatedAt: now,
         title: input.title,
         seriesId: input.seriesId?.trim() || undefined,
+        bookingKind,
         locationId: input.locationId,
-        trainerId: input.trainerId,
+        trainerId: bookingKind === "open_gym" ? "" : input.trainerId ?? "",
         startsAt: input.startsAt,
         durationMinutes: input.durationMinutes,
         capacity: input.capacity,
@@ -861,12 +867,14 @@ export function createMemoryGymStore(
 
       state.classSessions.push(classSession);
 
-      const trainerIndex = state.trainers.findIndex(
-        (entry) =>
-          entry.tenantId === tenantContext.tenantId && entry.id === trainer.id,
-      );
+      const trainerIndex = trainer
+        ? state.trainers.findIndex(
+            (entry) =>
+              entry.tenantId === tenantContext.tenantId && entry.id === trainer.id,
+          )
+        : -1;
 
-      if (trainerIndex >= 0) {
+      if (trainer && trainerIndex >= 0) {
         state.trainers[trainerIndex] = {
           ...trainer,
           version: trainer.version + 1,
@@ -880,8 +888,6 @@ export function createMemoryGymStore(
     },
     async updateClassSession(tenantContext, input) {
       requireLocation(tenantContext, input.locationId);
-      const trainer = requireTrainer(tenantContext, input.trainerId);
-
       const classSessionIndex = state.classSessions.findIndex(
         (entry) =>
           entry.tenantId === tenantContext.tenantId && entry.id === input.id,
@@ -896,6 +902,11 @@ export function createMemoryGymStore(
 
       const classSession = state.classSessions[classSessionIndex]!;
       assertExpectedVersion("Les", classSession.id, classSession.version, input.expectedVersion);
+      const bookingKind = input.bookingKind ?? classSession.bookingKind ?? "class";
+      const trainer =
+        bookingKind === "open_gym"
+          ? null
+          : requireTrainer(tenantContext, input.trainerId ?? "");
 
       const now = new Date().toISOString();
       const updatedClassSession: ClassSession = {
@@ -904,8 +915,9 @@ export function createMemoryGymStore(
         updatedAt: now,
         title: input.title,
         ...(input.seriesId ? { seriesId: input.seriesId } : {}),
+        bookingKind,
         locationId: input.locationId,
-        trainerId: input.trainerId,
+        trainerId: bookingKind === "open_gym" ? "" : input.trainerId ?? "",
         startsAt: input.startsAt,
         durationMinutes: input.durationMinutes,
         capacity: input.capacity,
@@ -916,7 +928,7 @@ export function createMemoryGymStore(
 
       state.classSessions[classSessionIndex] = updatedClassSession;
 
-      if (classSession.trainerId !== input.trainerId) {
+      if (classSession.trainerId !== updatedClassSession.trainerId) {
         const previousTrainerIndex = state.trainers.findIndex(
           (entry) =>
             entry.tenantId === tenantContext.tenantId &&
@@ -933,12 +945,14 @@ export function createMemoryGymStore(
           };
         }
 
-        const nextTrainerIndex = state.trainers.findIndex(
-          (entry) =>
-            entry.tenantId === tenantContext.tenantId && entry.id === trainer.id,
-        );
+        const nextTrainerIndex = trainer
+          ? state.trainers.findIndex(
+              (entry) =>
+                entry.tenantId === tenantContext.tenantId && entry.id === trainer.id,
+            )
+          : -1;
 
-        if (nextTrainerIndex >= 0 && !trainer.classIds.includes(classSession.id)) {
+        if (trainer && nextTrainerIndex >= 0 && !trainer.classIds.includes(classSession.id)) {
           state.trainers[nextTrainerIndex] = {
             ...trainer,
             version: trainer.version + 1,

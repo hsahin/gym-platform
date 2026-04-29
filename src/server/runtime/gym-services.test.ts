@@ -1702,6 +1702,80 @@ describe("gym platform services", () => {
     expect(result.booking.status).toBe("confirmed");
   });
 
+  it("allows trial members to reserve trainerless one-hour open gym capacity slots", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Open Floor",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 80,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym", "Krachtzone"],
+    });
+    const membershipPlan = await services.createMembershipPlan(
+      ownerActor,
+      tenantContext,
+      {
+        name: "Trial toegang",
+        priceMonthly: 0,
+        billingCycle: "monthly",
+        perks: ["Vrij trainen reserveren"],
+      },
+    );
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Lina Trial",
+      email: "lina@northside.test",
+      phone: "0611112222",
+      phoneCountry: "NL",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "trial",
+      tags: ["open-gym"],
+      waiverStatus: "complete",
+      portalPassword: "member-pass-123",
+    });
+    const openGymSlot = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Vrij trainen",
+      bookingKind: "open_gym",
+      locationId: location.id,
+      trainerId: "",
+      startsAt: daysFromNow(3),
+      durationMinutes: 60,
+      capacity: 6,
+      level: "mixed",
+      focus: "Open gym",
+    });
+    const memberActor = createMemberViewer(member.email, tenantContext.tenantId, member.fullName);
+    const snapshot = await services.getMemberReservationSnapshot(memberActor, {
+      tenantSlug: tenantContext.tenantId,
+    });
+
+    expect(openGymSlot).toMatchObject({
+      bookingKind: "open_gym",
+      trainerId: "",
+      durationMinutes: 60,
+      capacity: 6,
+    });
+    expect(snapshot.classSessions[0]).toMatchObject({
+      id: openGymSlot.id,
+      bookingKind: "open_gym",
+      title: "Vrij trainen",
+      trainerName: "Geen trainer",
+      durationMinutes: 60,
+    });
+
+    const result = await services.createMemberReservation(memberActor, {
+      tenantSlug: tenantContext.tenantId,
+      classSessionId: openGymSlot.id,
+      notes: "Ik wil een uur zelfstandig trainen.",
+    });
+
+    expect(result.booking.memberId).toBe(member.id);
+    expect(result.booking.classSessionId).toBe(openGymSlot.id);
+    expect(result.booking.status).toBe("confirmed");
+  });
+
   it("blocks reservations for accounts without a membership in that club", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
