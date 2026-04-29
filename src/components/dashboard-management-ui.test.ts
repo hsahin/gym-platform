@@ -59,6 +59,18 @@ describe("dashboard management UI wiring", () => {
     }
   });
 
+  it("uses the HeroUI Pro KPI group for overview facts", () => {
+    const overview = readSource("dashboard/pages/OverviewDashboardPage.tsx");
+
+    expect(overview).toContain('from "@heroui-pro/react/kpi-group"');
+    expect(overview).toContain("<KPIGroup");
+    expect(overview).toContain("KPIGroup.Separator");
+    expect(overview).toContain('aria-label="Belangrijkste dashboardcijfers"');
+    expect(overview.indexOf("<KPIGroup")).toBeLessThan(
+      overview.indexOf('title="Platform modules"'),
+    );
+  });
+
   it("keeps feature module summaries below the primary owner workflows", () => {
     const pageOrderChecks = [
       ["dashboard/pages/ClassesDashboardPage.tsx", 'title="Booking setup"', 'title="Booking modules"'],

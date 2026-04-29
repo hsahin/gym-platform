@@ -1,9 +1,11 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { ArrowRight, CalendarDays, CreditCard, DoorOpen, Users } from "lucide-react";
 import { Card, Chip } from "@heroui/react";
 import { KPI } from "@heroui-pro/react/kpi";
+import { KPIGroup } from "@heroui-pro/react/kpi-group";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
@@ -104,24 +106,29 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-        {highlightedMetrics.map((metric) => (
-          <KPI
-            key={metric.label}
-            className="rounded-[24px] border border-border/80 bg-surface shadow-none"
-          >
-            <KPI.Header>
-              <KPI.Icon>
-                <metric.icon className="text-muted h-4 w-4" />
-              </KPI.Icon>
-            </KPI.Header>
-            <KPI.Content>
-              <KPI.Title>{metric.label}</KPI.Title>
-              <KPI.Value value={metric.value} />
-            </KPI.Content>
-            <KPI.Footer>{metric.helper}</KPI.Footer>
-          </KPI>
-        ))}
+      <div className="overflow-x-auto pb-1">
+        <KPIGroup
+          aria-label="Belangrijkste dashboardcijfers"
+          className="min-w-[760px] rounded-[28px] border border-border/80 bg-surface shadow-none"
+        >
+          {highlightedMetrics.map((metric, index) => (
+            <Fragment key={metric.label}>
+              {index > 0 ? <KPIGroup.Separator /> : null}
+              <KPI className="bg-transparent">
+                <KPI.Header>
+                  <KPI.Icon>
+                    <metric.icon className="text-muted h-4 w-4" />
+                  </KPI.Icon>
+                  <KPI.Title>{metric.label}</KPI.Title>
+                </KPI.Header>
+                <KPI.Content>
+                  <KPI.Value value={metric.value} />
+                </KPI.Content>
+                <KPI.Footer>{metric.helper}</KPI.Footer>
+              </KPI>
+            </Fragment>
+          ))}
+        </KPIGroup>
       </div>
 
       <PageSection
