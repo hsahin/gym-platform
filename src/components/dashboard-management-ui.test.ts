@@ -75,6 +75,17 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).toContain('"grid gap-4 2xl:grid-cols-2"');
   });
 
+  it("keeps contract forms stacked below the memberships overview", () => {
+    const contracts = readSource("dashboard/pages/ContractsDashboardPage.tsx");
+
+    expect(contracts).toContain('title="Lidmaatschappen"');
+    expect(contracts).toContain("stackSections");
+    expect(contracts).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
+    expect(contracts.indexOf('title="Lidmaatschappen"')).toBeLessThan(
+      contracts.indexOf("<LazyPlatformWorkbench"),
+    );
+  });
+
   it("creates recurring workbench lessons with one batch request", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 
