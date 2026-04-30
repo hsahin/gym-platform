@@ -190,8 +190,8 @@ describe("mollie connect routes", () => {
       ),
     );
     expect(redirectResponse.status).toBe(307);
-    expect(redirectResponse.headers.get("location")).toContain(
-      "/dashboard/payments?mollie=connected",
+    expect(redirectResponse.headers.get("location")).toBe(
+      "https://gym-platform-vc9yk.ondigitalocean.app/dashboard/payments?mollie=connected",
     );
 
     const services = await getGymPlatformServices();

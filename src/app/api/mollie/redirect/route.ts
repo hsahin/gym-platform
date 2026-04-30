@@ -1,8 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
+function readForwardedHeader(value: string | null) {
+  return value?.split(",")[0]?.trim() || "";
+}
+
+function resolvePublicOrigin(request: NextRequest) {
+  const configuredBaseUrl = process.env.APP_BASE_URL?.trim().replace(/\/+$/g, "");
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  const forwardedHost =
+    readForwardedHeader(request.headers.get("x-forwarded-host")) ||
+    request.headers.get("host")?.trim();
+
+  if (forwardedHost) {
+    const forwardedProto =
+      readForwardedHeader(request.headers.get("x-forwarded-proto")) ||
+      new URL(request.url).protocol.replace(/:$/g, "");
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  return new URL(request.url).origin;
+}
+
 function buildDashboardRedirect(request: NextRequest, status: string, detail?: string) {
-  const url = new URL("/dashboard/payments", request.url);
+  const url = new URL("/dashboard/payments", resolvePublicOrigin(request));
   url.searchParams.set("mollie", status);
 
   if (detail) {
