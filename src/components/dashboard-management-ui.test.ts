@@ -171,9 +171,14 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).toContain("Mollie-profiel gekoppeld");
     expect(workbench).toContain("Mollie-account koppelen of onboarden");
     expect(workbench).toContain("Koppeling verwijderen");
+    expect(workbench).toContain("GymOS betaalflows");
+    expect(workbench).toContain("Bepaal welke betaalroutes GymOS");
+    expect(workbench).toContain("Betaallink testen");
     expect(workbench).toContain("Client Link maken");
     expect(workbench).toContain("SEPA mandates scannen");
     expect(workbench).toContain("mollieConnectMigrationHint");
+    expect(workbench).not.toContain("OAuth-koppeling");
+    expect(workbench).not.toContain("Live betaalflow testen");
   });
 
   it("creates recurring workbench lessons with one batch request", () => {

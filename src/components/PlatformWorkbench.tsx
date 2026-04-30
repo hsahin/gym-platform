@@ -32,7 +32,6 @@ import {
 } from "@/lib/class-recurrence";
 import {
   BILLING_PAYMENT_METHOD_OPTIONS,
-  BILLING_PROVIDER_OPTIONS,
 } from "@/lib/billing";
 import {
   CONTRACT_IMPORT_REQUIRED_CSV_HEADER,
@@ -655,6 +654,17 @@ export function PlatformWorkbench({
     { label: "Lessen", value: snapshot.classSessions.length },
   ];
   const isMollieConnectConnected = snapshot.payments.mollieConnectConnected;
+  const checkoutPreviewMethodOptions = BILLING_PAYMENT_METHOD_OPTIONS.filter(
+    (paymentMethod) =>
+      paymentMethod.key === "one_time" || paymentMethod.key === "payment_request",
+  );
+  const selectedBillingPreviewMethod = checkoutPreviewMethodOptions.some(
+    (paymentMethod) => paymentMethod.key === billingPreviewMethod,
+  )
+    ? billingPreviewMethod
+    : "one_time";
+  const canCreateBillingTestLink =
+    isMollieConnectConnected || !snapshot.payments.previewMode;
 
   if (!snapshot.uiCapabilities.canManagePlatform) {
     return (
@@ -1753,7 +1763,7 @@ export function PlatformWorkbench({
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
                             <p className="text-sm font-medium">Betalingen apart activeren</p>
                             <p className="text-muted mt-1 text-sm leading-6">
-                              De OAuth-koppeling is klaar. Zet betalingen pas actief nadat betaalflows, supportmail en notities kloppen.
+                              Het Mollie-account is klaar. Zet betalingen pas actief nadat betaalflows, supportmail en notities kloppen.
                             </p>
                           </div>
                         </>
@@ -1762,7 +1772,7 @@ export function PlatformWorkbench({
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
                             <p className="text-sm font-medium">Bestaand Mollie-account</p>
                             <p className="text-muted mt-1 text-sm leading-6">
-                              Koppel de gym via OAuth. Bestaande SEPA-mandates uit hetzelfde Mollie-account kunnen daarna gecontroleerd worden voor migratie.
+                              Koppel het bestaande Mollie-account van de gym. Bestaande SEPA-mandates uit hetzelfde account kunnen daarna gecontroleerd worden voor migratie.
                             </p>
                           </div>
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
@@ -1859,7 +1869,7 @@ export function PlatformWorkbench({
                     </p>
                     <p className="text-muted text-sm leading-6">
                       {isMollieConnectConnected
-                        ? "De OAuth-koppeling geeft GymOS toegang tot Mollie. De schakelaar hieronder bepaalt of deze gym daadwerkelijk betaalverzoeken en incasso's mag verwerken."
+                        ? "De Mollie-koppeling geeft GymOS toegang tot het gekoppelde betaalprofiel. De schakelaar hieronder bepaalt of deze gym daadwerkelijk betaalverzoeken en incasso's mag verwerken."
                         : "Zodra Mollie gekoppeld is, vult GymOS profielnaam en profiel-ID vanuit Mollie in. Daarna kies je de betaalflows en activeer je verwerking."}
                     </p>
                   </Card.Content>
@@ -1875,20 +1885,17 @@ export function PlatformWorkbench({
                 </Switch>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <SelectField
-                    label="Provider"
-                    options={BILLING_PROVIDER_OPTIONS.map((provider) => ({
-                      value: provider.key,
-                      label: provider.label,
-                    }))}
-                    value={billingProvider}
-                    onChange={(value) => setBillingProvider(value as typeof billingProvider)}
-                  />
-                  <Field label="Profielnaam">
-                    <Input fullWidth placeholder="Atlas Forge Payments" value={billingProfileLabel} onChange={(event) => setBillingProfileLabel(event.target.value)} />
+                  <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
+                    <p className="text-sm font-medium">Betaalprovider</p>
+                    <p className="text-muted mt-1 text-sm leading-6">
+                      {snapshot.payments.providerLabel}
+                    </p>
+                  </div>
+                  <Field label="Gekoppeld Mollie-profiel">
+                    <Input fullWidth readOnly value={billingProfileLabel || "Nog niet gekoppeld"} />
                   </Field>
-                  <Field label="Mollie profiel-ID">
-                    <Input fullWidth placeholder="pfl_live_..." value={billingProfileId} onChange={(event) => setBillingProfileId(event.target.value)} />
+                  <Field label="Technisch profiel-ID">
+                    <Input fullWidth readOnly value={billingProfileId || "Nog niet bekend"} />
                   </Field>
                   <Field label="Uitbetalingslabel">
                     <Input fullWidth placeholder="Atlas Forge Club" value={billingSettlementLabel} onChange={(event) => setBillingSettlementLabel(event.target.value)} />
@@ -1902,7 +1909,12 @@ export function PlatformWorkbench({
 
                 <div className="section-stack rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="font-medium">Betaalflows</p>
+                    <div className="space-y-1">
+                      <p className="font-medium">GymOS betaalflows</p>
+                      <p className="text-muted text-sm leading-6">
+                        Bepaal welke betaalroutes GymOS voor deze gym mag gebruiken. Mollie moet de onderliggende betaalmethode ook ondersteunen.
+                      </p>
+                    </div>
                     <Chip size="sm" variant="tertiary">
                       {billingPaymentMethods.length} geselecteerd
                     </Chip>
@@ -2027,22 +2039,19 @@ export function PlatformWorkbench({
 
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Header>
-                    <Card.Title>Live betaalflow testen</Card.Title>
+                    <Card.Title>Betaallink testen</Card.Title>
                     <Card.Description>
-                      Maak een echte Mollie betaallink aan en controleer de checkout voordat leden deze gebruiken.
+                      Maak een Mollie testlink voor een eenmalige betaling of betaalverzoek. Automatische incasso controleer je via SEPA-mandates.
                     </Card.Description>
                   </Card.Header>
                   <Card.Content className="grid gap-4 md:grid-cols-2">
                     <SelectField
                       label="Flow"
-                      options={billingPaymentMethods.map((paymentMethod) => ({
-                        value: paymentMethod,
-                        label:
-                          BILLING_PAYMENT_METHOD_OPTIONS.find(
-                            (option) => option.key === paymentMethod,
-                          )?.label ?? paymentMethod,
+                      options={checkoutPreviewMethodOptions.map((paymentMethod) => ({
+                        value: paymentMethod.key,
+                        label: paymentMethod.label,
                       }))}
-                      value={billingPreviewMethod}
+                      value={selectedBillingPreviewMethod}
                       onChange={(value) => setBillingPreviewMethod(value as typeof billingPreviewMethod)}
                     />
                     <Field label="Bedrag in centen">
@@ -2067,9 +2076,9 @@ export function PlatformWorkbench({
                   <Button
                     isDisabled={
                       isPending ||
-                      !snapshot.payments.enabled ||
-                      snapshot.payments.connectionStatus !== "configured" ||
-                      billingPaymentMethods.length === 0
+                      !canCreateBillingTestLink ||
+                      Number(billingPreviewAmount) <= 0 ||
+                      billingPreviewDescription.trim().length < 2
                     }
                     type="button"
                     variant="outline"
@@ -2081,7 +2090,7 @@ export function PlatformWorkbench({
                         }>(
                           "/api/platform/billing/preview",
                           {
-                            paymentMethod: billingPreviewMethod,
+                            paymentMethod: selectedBillingPreviewMethod,
                             amountCents: Number(billingPreviewAmount),
                             currency: "EUR",
                             description: billingPreviewDescription,
@@ -2096,7 +2105,7 @@ export function PlatformWorkbench({
                       })
                     }
                   >
-                    Live link maken
+                    Testlink maken
                   </Button>
                 </div>
               </form>

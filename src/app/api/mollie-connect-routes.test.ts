@@ -4,6 +4,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { POST as billingPreviewRoute } from "@/app/api/platform/billing/preview/route";
 import { POST as clientLinkRoute } from "@/app/api/platform/billing/mollie/client-link/route";
 import { GET as connectRoute } from "@/app/api/platform/billing/mollie/connect/route";
 import { POST as disconnectRoute } from "@/app/api/platform/billing/mollie/disconnect/route";
@@ -206,6 +207,51 @@ describe("mollie connect routes", () => {
     expect(snapshot.payments.mollieConnectTestMode).toBe(true);
     expect(snapshot.payments.profileId).toBe("pfl_test_northside");
     expect(snapshot.payments.profileLabel).toBe("Northside Athletics Payments");
+
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      expect(target).toBe("https://api.mollie.com/v2/payments?testmode=true");
+      expect(init?.headers).toMatchObject({
+        authorization: "Bearer access_123",
+      });
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        description: "Proefbetaling",
+        profileId: "pfl_test_northside",
+      });
+
+      return new Response(
+        JSON.stringify({
+          id: "tr_test_checkout",
+          status: "open",
+          _links: {
+            checkout: {
+              href: "https://pay.mollie.com/p/test-checkout",
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const previewResponse = await billingPreviewRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/billing/preview",
+        token,
+        {
+          paymentMethod: "one_time",
+          amountCents: 2495,
+          currency: "EUR",
+          description: "Proefbetaling",
+        },
+      ),
+    );
+    expect(previewResponse.status).toBe(200);
+    const previewPayload = await previewResponse.json();
+    expect(previewPayload.data.checkoutUrl).toBe(
+      "https://pay.mollie.com/p/test-checkout",
+    );
+    expect(previewPayload.data.summary).toContain("Testlink");
 
     const disconnectResponse = await disconnectRoute(
       createMutationRequest(

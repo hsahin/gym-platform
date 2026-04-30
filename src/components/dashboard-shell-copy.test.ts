@@ -53,7 +53,7 @@ describe("dashboard shell copy", () => {
     expect(workbenchSource).toContain("Elke kaart heeft een actieknop");
     expect(workbenchSource).toContain("Lidmaatschap toevoegen");
     expect(workbenchSource).toContain("Plan een losse les");
-    expect(workbenchSource).toContain("Maak een echte Mollie betaallink");
+    expect(workbenchSource).toContain("Maak een Mollie testlink");
     expect(workbenchSource).not.toContain("Build the live dataset");
     expect(workbenchSource).not.toContain("Schedule one-off sessions");
     expect(workbenchSource).not.toContain("Test one flow before");

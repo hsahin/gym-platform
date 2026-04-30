@@ -46,6 +46,7 @@ import {
 import {
   createMolliePaymentProvider,
   isMolliePaymentConfigured,
+  type MolliePaymentProvider,
   type MolliePaymentStatus,
 } from "@/server/runtime/mollie-payments";
 import {
@@ -1756,6 +1757,50 @@ async function createLiveBillingProvider(
   });
 }
 
+async function createBillingTestPaymentProvider(
+  tenantId: string,
+  billing: StoredBillingSettings | null | undefined,
+) {
+  if (!billing) {
+    throw new AppError("Koppel eerst Mollie voordat je een testbetaling maakt.", {
+      code: "FORBIDDEN",
+    });
+  }
+
+  const hasProviderCredentials =
+    isMolliePaymentConfigured() || hasMollieConnectTokens(billing);
+
+  if (!hasProviderCredentials) {
+    throw new AppError("Koppel eerst Mollie voordat je een testbetaling maakt.", {
+      code: "FORBIDDEN",
+    });
+  }
+
+  if (!resolveConfiguredAppBaseUrl()) {
+    throw new AppError(
+      "De publieke app-url ontbreekt. Vul APP_BASE_URL in voordat je een betaallink test.",
+      {
+        code: "INVALID_INPUT",
+        details: {
+          provider: "mollie",
+          env: "APP_BASE_URL",
+        },
+      },
+    );
+  }
+
+  if (isMolliePaymentConfigured()) {
+    return createMolliePaymentProvider();
+  }
+
+  const connectAccess = await resolveMollieConnectAccessToken(tenantId, billing);
+
+  return createMolliePaymentProvider({
+    accessToken: connectAccess.accessToken,
+    testMode: connectAccess.testMode,
+  });
+}
+
 function selectBillingPaymentMethod(
   billing: StoredBillingSettings,
   invoiceSource: GymDashboardSnapshot["billingBackoffice"]["invoices"][number]["source"],
@@ -1779,9 +1824,12 @@ async function attachMolliePaymentToInvoice(
     readonly paymentMethod?: GymDashboardSnapshot["payments"]["paymentMethods"][number];
     readonly description?: string;
     readonly eventLabel?: string;
+    readonly provider?: MolliePaymentProvider;
   },
 ) {
-  const provider = await createLiveBillingProvider(tenantContext.tenantId, billing);
+  const provider =
+    options?.provider ??
+    (await createLiveBillingProvider(tenantContext.tenantId, billing));
 
   if (!provider) {
     return {
@@ -6587,22 +6635,26 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
       const billing = tenantProfile?.billing;
 
-      if (!billing || !isBillingReady(billing)) {
+      if (!billing) {
+        throw new AppError("Koppel eerst Mollie voordat je een testbetaling maakt.", {
+          code: "FORBIDDEN",
+        });
+      }
+
+      if (input.paymentMethod === "direct_debit") {
         throw new AppError(
-          "Koppel en activeer eerst Mollie voordat je een betaalflow start.",
+          "Automatische incasso test je via SEPA-mandates en leden met een machtiging. Maak hier een testlink voor een eenmalige betaling of betaalverzoek.",
           {
-            code: "FORBIDDEN",
+            code: "INVALID_INPUT",
+            details: { paymentMethod: input.paymentMethod },
           },
         );
       }
 
-      if (!billing.paymentMethods.includes(input.paymentMethod)) {
-        throw new AppError("Deze betaalflow is nog niet geactiveerd voor deze gym.", {
-          code: "FORBIDDEN",
-          details: { paymentMethod: input.paymentMethod },
-        });
-      }
-      await createLiveBillingProvider(tenantContext.tenantId, billing);
+      const provider = await createBillingTestPaymentProvider(
+        tenantContext.tenantId,
+        billing,
+      );
 
       const requestedAt = new Date().toISOString();
       const paymentMethodLabel = getBillingPaymentMethodLabel(input.paymentMethod);
@@ -6621,7 +6673,8 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         invoice,
         {
           paymentMethod: input.paymentMethod,
-          eventLabel: "payment.link_created",
+          eventLabel: "payment.test_link_created",
+          provider,
         },
       );
 
@@ -6639,7 +6692,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       }
 
       const summary = runtime.templateRenderer.render(
-        "Live {{paymentMethod}} van {{amountLabel}} aangemaakt via {{provider}} voor {{description}}{{memberSuffix}}.",
+        "Testlink voor {{paymentMethod}} van {{amountLabel}} aangemaakt via {{provider}} voor {{description}}{{memberSuffix}}.",
         {
           paymentMethod: paymentMethodLabel.toLowerCase(),
           amountLabel,
