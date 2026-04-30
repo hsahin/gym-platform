@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as clientLinkRoute } from "@/app/api/platform/billing/mollie/client-link/route";
 import { GET as connectRoute } from "@/app/api/platform/billing/mollie/connect/route";
+import { POST as disconnectRoute } from "@/app/api/platform/billing/mollie/disconnect/route";
 import { POST as mandatesRoute } from "@/app/api/platform/billing/mollie/mandates/route";
 import { GET as redirectRoute } from "@/app/api/mollie/redirect/route";
 import {
@@ -205,6 +206,24 @@ describe("mollie connect routes", () => {
     expect(snapshot.payments.mollieConnectTestMode).toBe(true);
     expect(snapshot.payments.profileId).toBe("pfl_test_northside");
     expect(snapshot.payments.profileLabel).toBe("Northside Athletics Payments");
+
+    const disconnectResponse = await disconnectRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/billing/mollie/disconnect",
+        token,
+        {},
+      ),
+    );
+    expect(disconnectResponse.status).toBe(200);
+    const disconnectPayload = await disconnectResponse.json();
+    expect(disconnectPayload.data.mollieConnectConnected).toBe(false);
+
+    const disconnectedSnapshot = await services.getDashboardSnapshot(
+      ownerActor,
+      services.createRequestTenantContext(ownerActor, state.tenant.id),
+    );
+    expect(disconnectedSnapshot.payments.mollieConnectConnected).toBe(false);
+    expect(disconnectedSnapshot.payments.profileId).toBe("");
   });
 
   it("creates a Mollie client link for gyms that do not have a Mollie account yet", async () => {

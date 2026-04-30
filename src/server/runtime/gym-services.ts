@@ -145,6 +145,7 @@ import {
   createLocalPlatformAccount,
   deleteLocalMemberPortalAccountByMemberId,
   deleteLocalPlatformAccount,
+  disconnectLocalTenantMollieConnect,
   completeLocalTenantMollieConnect,
   findLocalTenantByMollieConnectState,
   getLocalTenantProfileBySlug,
@@ -2916,6 +2917,10 @@ export interface GymPlatformServices {
     readonly clientLinkUrl: string;
     readonly onboardingUrl: string;
   }>;
+  disconnectMollieConnect(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+  ): Promise<GymDashboardSnapshot["payments"]>;
   previewMollieMandateMigration(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -6027,6 +6032,22 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
 
       return receipt;
+    },
+    async disconnectMollieConnect(actor, tenantContext) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      await disconnectLocalTenantMollieConnect(tenantContext.tenantId);
+      await runtime.auditLogger.write({
+        action: "billing.mollie_connect_disconnected",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          provider: "mollie",
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return buildBillingSummary(tenantContext);
     },
     async previewMollieMandateMigration(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);

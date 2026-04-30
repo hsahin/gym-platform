@@ -2885,6 +2885,48 @@ export async function startLocalTenantMollieConnect(
   });
 }
 
+export async function disconnectLocalTenantMollieConnect(tenantId: string) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je Mollie ontkoppelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor Mollie Connect.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextBilling = normalizeStoredBillingSettings({
+      ...tenant.billing,
+      profileId: "",
+      profileLabel: "",
+      mollieConnect: undefined,
+    });
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              billing: nextBilling,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
 export async function recordLocalTenantMollieClientLink(
   tenantId: string,
   input: {

@@ -164,8 +164,10 @@ describe("dashboard management UI wiring", () => {
 
     expect(workbench).toContain("/api/platform/billing/mollie/connect");
     expect(workbench).toContain("/api/platform/billing/mollie/client-link");
+    expect(workbench).toContain("/api/platform/billing/mollie/disconnect");
     expect(workbench).toContain("/api/platform/billing/mollie/mandates");
     expect(workbench).toContain("Bestaand account koppelen");
+    expect(workbench).toContain("Koppeling verwijderen");
     expect(workbench).toContain("Client Link maken");
     expect(workbench).toContain("SEPA mandates scannen");
     expect(workbench).toContain("mollieConnectMigrationHint");

@@ -1797,6 +1797,26 @@ export function PlatformWorkbench({
                       >
                         SEPA mandates scannen
                       </Button>
+                      <Button
+                        isDisabled={isPending || !snapshot.payments.mollieConnectConnected}
+                        type="button"
+                        variant="danger"
+                        onPress={() => {
+                          if (!window.confirm("Mollie-koppeling verwijderen?")) {
+                            return;
+                          }
+
+                          runAction(async () => {
+                            await submitJson(
+                              "/api/platform/billing/mollie/disconnect",
+                              {},
+                            );
+                            toast.success("Mollie-koppeling verwijderd.");
+                          });
+                        }}
+                      >
+                        Koppeling verwijderen
+                      </Button>
                     </div>
                   </Card.Content>
                 </Card>
