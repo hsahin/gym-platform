@@ -107,6 +107,11 @@ Aanbevolen live-instellingen:
 - `MONGODB_BACKUP_POLICY=enabled` nadat automatische backups/PITR aanstaan
 - `MIGRATIONS_LOCKED=true` wanneer database-migraties onderdeel zijn van de releaseflow
 - `MONITORING_WEBHOOK_URL` of `SENTRY_DSN` voor error reporting
+- `ENABLE_REAL_UPLOADS=true` plus `SPACES_BUCKET`, `SPACES_ENDPOINT`,
+  `SPACES_REGION`, `SPACES_ACCESS_KEY_ID` en `SPACES_SECRET_ACCESS_KEY` voor
+  DigitalOcean Spaces. De app accepteert ook de DigitalOcean aliases
+  `SPACES_ACCESS_KEY` en `SPACES_SECRET_KEY`, en normaliseert een endpoint
+  zonder `https://`.
 - juridische instellingen in `/dashboard/settings`: voorwaarden, privacy, SEPA,
   contract-PDF template en waiver-opslag
 

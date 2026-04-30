@@ -1,4 +1,5 @@
 import { AppError } from "@claimtech/core";
+import { getSpacesStorageConfigurationStatus } from "@/server/runtime/spaces-config";
 
 const productionMarkers = ["production", "prod", "live"] as const;
 const runtimeDataStoreEnvNames = ["MONGODB_URI", "REDIS_URL"] as const;
@@ -7,14 +8,6 @@ const whatsappCloudEnvNames = [
   "WHATSAPP_PHONE_NUMBER_ID",
   "WHATSAPP_ACCESS_TOKEN",
 ] as const;
-const spacesEnvNames = [
-  "SPACES_BUCKET",
-  "SPACES_ENDPOINT",
-  "SPACES_REGION",
-  "SPACES_ACCESS_KEY_ID",
-  "SPACES_SECRET_ACCESS_KEY",
-] as const;
-
 export interface ProductionReadinessCheck {
   readonly key: string;
   readonly label: string;
@@ -109,9 +102,9 @@ function getStorageConfigurationIssue(): LiveInfrastructureConfigurationIssue | 
     return null;
   }
 
-  const missingEnv = getMissingEnvNames(spacesEnvNames);
+  const { configured, missingEnv } = getSpacesStorageConfigurationStatus();
 
-  if (missingEnv.length === 0) {
+  if (configured) {
     return null;
   }
 

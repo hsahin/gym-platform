@@ -28,6 +28,8 @@ const originalSpacesEndpoint = process.env.SPACES_ENDPOINT;
 const originalSpacesRegion = process.env.SPACES_REGION;
 const originalSpacesAccessKeyId = process.env.SPACES_ACCESS_KEY_ID;
 const originalSpacesSecretAccessKey = process.env.SPACES_SECRET_ACCESS_KEY;
+const originalSpacesAccessKey = process.env.SPACES_ACCESS_KEY;
+const originalSpacesSecretKey = process.env.SPACES_SECRET_KEY;
 const originalFetch = globalThis.fetch;
 
 function clearMessagingEnv() {
@@ -46,6 +48,8 @@ function clearUploadEnv() {
   delete process.env.SPACES_REGION;
   delete process.env.SPACES_ACCESS_KEY_ID;
   delete process.env.SPACES_SECRET_ACCESS_KEY;
+  delete process.env.SPACES_ACCESS_KEY;
+  delete process.env.SPACES_SECRET_KEY;
 }
 
 function daysFromNow(days: number) {
@@ -195,6 +199,16 @@ afterEach(async () => {
     delete process.env.SPACES_SECRET_ACCESS_KEY;
   } else {
     process.env.SPACES_SECRET_ACCESS_KEY = originalSpacesSecretAccessKey;
+  }
+  if (originalSpacesAccessKey === undefined) {
+    delete process.env.SPACES_ACCESS_KEY;
+  } else {
+    process.env.SPACES_ACCESS_KEY = originalSpacesAccessKey;
+  }
+  if (originalSpacesSecretKey === undefined) {
+    delete process.env.SPACES_SECRET_KEY;
+  } else {
+    process.env.SPACES_SECRET_KEY = originalSpacesSecretKey;
   }
   globalThis.fetch = originalFetch;
   await rm(tempDir, { recursive: true, force: true });
@@ -844,6 +858,20 @@ describe("gym platform services", () => {
     expect(snapshot.runtime.storageMode).toBe("spaces");
     expect(snapshot.waiverUploadPath).toContain("waivers");
     expect(snapshot.waiverUploadPath).toContain("signed-liability-waiver.pdf");
+  });
+
+  it("accepts DigitalOcean Spaces env aliases and bare endpoints", async () => {
+    process.env.SPACES_BUCKET = "gym-files";
+    process.env.SPACES_ENDPOINT = "ams3.digitaloceanspaces.com";
+    process.env.SPACES_REGION = "ams3";
+    process.env.SPACES_ACCESS_KEY = "spaces-key";
+    process.env.SPACES_SECRET_KEY = "spaces-secret";
+
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+
+    expect(snapshot.runtime.storageMode).toBe("spaces");
+    expect(snapshot.waiverUploadPath).toContain("waivers");
   });
 
   it("can enable member portal access and authenticate the linked member account", async () => {

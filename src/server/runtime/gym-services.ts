@@ -191,6 +191,7 @@ import {
   allowsRuntimeFallbacks,
   getProductionReadinessChecks,
 } from "@/server/runtime/production-readiness";
+import { resolveSpacesStorageConfiguration } from "@/server/runtime/spaces-config";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
 import type {
   BillingActionReceipt,
@@ -801,13 +802,7 @@ function resolveMessagingProvider(): Pick<
 }
 
 function resolveStorageMode(): StorageMode {
-  if (
-    process.env.SPACES_BUCKET &&
-    process.env.SPACES_ENDPOINT &&
-    process.env.SPACES_REGION &&
-    process.env.SPACES_ACCESS_KEY_ID &&
-    process.env.SPACES_SECRET_ACCESS_KEY
-  ) {
+  if (resolveSpacesStorageConfiguration()) {
     return "spaces";
   }
 

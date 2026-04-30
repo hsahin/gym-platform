@@ -159,6 +159,20 @@ describe("production readiness", () => {
     );
   });
 
+  it("accepts DigitalOcean Spaces access key aliases for live uploads", () => {
+    vi.stubEnv("ENABLE_REAL_UPLOADS", "true");
+    vi.stubEnv("SPACES_BUCKET", "gym-files");
+    vi.stubEnv("SPACES_ENDPOINT", "ams3.digitaloceanspaces.com");
+    vi.stubEnv("SPACES_REGION", "ams3");
+    vi.stubEnv("SPACES_ACCESS_KEY", "spaces-key");
+    vi.stubEnv("SPACES_SECRET_KEY", "spaces-secret");
+
+    expect(() => assertLiveInfrastructureConfiguration()).not.toThrow();
+    expect(
+      getLiveInfrastructureConfigurationIssues().some((issue) => issue.key === "storage"),
+    ).toBe(false);
+  });
+
   it("does not block live runtime on partial Spaces env unless uploads are explicitly enabled", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("APP_ENV", "production");
