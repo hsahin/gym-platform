@@ -272,6 +272,7 @@ const dashboardFeatureDefinitionMap = new Map(
 
 const defaultCacheOperationTimeoutMs = 750;
 const defaultCacheCircuitBreakerMs = 30_000;
+const defaultRedisKeepAliveIntervalMs = 240_000;
 
 function shouldUseRuntimeFallbacks() {
   return allowsRuntimeFallbacks();
@@ -531,6 +532,39 @@ function attachRedisErrorHandler(cacheClient: KeyValueCacheClient) {
   });
 }
 
+export function getRedisKeepAliveIntervalMs() {
+  return getPositiveIntegerEnv(
+    "CLAIMTECH_REDIS_KEEP_ALIVE_INTERVAL_MS",
+    defaultRedisKeepAliveIntervalMs,
+  );
+}
+
+export function startRedisKeepAlive(cacheClient: KeyValueCacheClient) {
+  const redisClient = (
+    cacheClient as unknown as {
+      readonly client?: {
+        ping?: () => Promise<unknown>;
+      };
+    }
+  ).client;
+
+  if (!redisClient?.ping) {
+    return undefined;
+  }
+
+  const keepAliveTimer = setInterval(() => {
+    void redisClient.ping?.().catch((error: unknown) => {
+      console.warn("Redis cache keep-alive mislukt", {
+        reason: error instanceof Error ? error.message : "Onbekende cachefout",
+      });
+    });
+  }, getRedisKeepAliveIntervalMs());
+
+  keepAliveTimer.unref?.();
+
+  return keepAliveTimer;
+}
+
 class NotConfiguredMessagingProvider implements MessagingProvider {
   async send(): Promise<MessageReceipt> {
     return {
@@ -697,6 +731,7 @@ async function resolveCacheClient(): Promise<
       },
     });
     attachRedisErrorHandler(redisClient);
+    startRedisKeepAlive(redisClient);
 
     return {
       cacheClient: new ResilientCacheClient(redisClient),
