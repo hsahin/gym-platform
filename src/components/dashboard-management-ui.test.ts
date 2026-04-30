@@ -159,6 +159,18 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("exposes Mollie Connect OAuth and Client Link onboarding from the billing workbench", () => {
+    const workbench = readSource("PlatformWorkbench.tsx");
+
+    expect(workbench).toContain("/api/platform/billing/mollie/connect");
+    expect(workbench).toContain("/api/platform/billing/mollie/client-link");
+    expect(workbench).toContain("/api/platform/billing/mollie/mandates");
+    expect(workbench).toContain("Bestaand account koppelen");
+    expect(workbench).toContain("Client Link maken");
+    expect(workbench).toContain("SEPA mandates scannen");
+    expect(workbench).toContain("mollieConnectMigrationHint");
+  });
+
   it("creates recurring workbench lessons with one batch request", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 

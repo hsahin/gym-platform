@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import {
   createAuthActor,
   getTenantMembership,
@@ -47,6 +48,17 @@ import {
   isMolliePaymentConfigured,
   type MolliePaymentStatus,
 } from "@/server/runtime/mollie-payments";
+import {
+  MOLLIE_CONNECT_SCOPES,
+  buildMollieConnectAuthorizationUrl,
+  createMollieConnectClient,
+  getMollieConnectScopeString,
+  isMollieClientLinksConfigured,
+  isMollieConnectConfigured,
+  isMollieTestMode,
+  resolveMollieConnectRedirectUrl,
+  type MollieClientLinkOwnerInput,
+} from "@/server/runtime/mollie-connect";
 import {
   getRemoteAccessConnectionStatus,
   getRemoteAccessHelpText,
@@ -133,6 +145,8 @@ import {
   createLocalPlatformAccount,
   deleteLocalMemberPortalAccountByMemberId,
   deleteLocalPlatformAccount,
+  completeLocalTenantMollieConnect,
+  findLocalTenantByMollieConnectState,
   getLocalTenantProfileBySlug,
   getLocalTenantProfile,
   listLocalMemberPortalAccountsByEmail,
@@ -140,7 +154,9 @@ import {
   listLocalTenants,
   markLocalTenantBillingAction,
   markLocalTenantRemoteAccessAction,
+  recordLocalTenantMollieClientLink,
   readLocalPlatformState,
+  startLocalTenantMollieConnect,
   updateLocalTenantBookingSettings,
   syncLocalMemberPortalAccount,
   upsertLocalMemberPortalAccount,
@@ -968,7 +984,7 @@ async function createRuntime(): Promise<GymPlatformRuntime> {
 
         const connectionStatus = getBillingConnectionStatus(billing);
 
-        if (isBillingReady(billing) && isLiveBillingProviderConfigured()) {
+        if (isBillingReady(billing) && isLiveBillingProviderConfigured(billing)) {
           return {
             status: "healthy",
             summary: `${getBillingProviderLabel(billing.provider)} verwerkt live ${billing.paymentMethods
@@ -1522,8 +1538,24 @@ function resolveConfiguredAppBaseUrl() {
   ).trim();
 }
 
-function isLiveBillingProviderConfigured() {
-  return isMolliePaymentConfigured() && Boolean(resolveConfiguredAppBaseUrl());
+function hasMollieConnectTokens(billing: StoredBillingSettings | null | undefined) {
+  return Boolean(
+    billing?.mollieConnect?.refreshToken?.trim() &&
+      billing.mollieConnect.accessToken?.trim(),
+  );
+}
+
+function isLiveBillingProviderConfigured(
+  billing?: StoredBillingSettings | null,
+) {
+  if (!resolveConfiguredAppBaseUrl()) {
+    return false;
+  }
+
+  return (
+    isMolliePaymentConfigured() ||
+    Boolean(hasMollieConnectTokens(billing) && isMollieConnectConfigured())
+  );
 }
 
 function buildMollieWebhookUrl(tenantContext: TenantContext) {
@@ -1588,7 +1620,90 @@ function getMembershipCheckoutAmountCents(
   );
 }
 
-function getLiveBillingProvider(
+function buildMollieOauthState(tenantId: string, purpose: string) {
+  return `${tenantId}:${purpose}:${randomBytes(24).toString("hex")}`;
+}
+
+function parseMollieScope(scope: string | undefined) {
+  return Array.from(
+    new Set(
+      (scope || "")
+        .split(/\s+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function isMollieAccessTokenFresh(expiresAt: string | undefined) {
+  if (!expiresAt) {
+    return false;
+  }
+
+  return new Date(expiresAt).getTime() - Date.now() > 5 * 60 * 1000;
+}
+
+async function resolveMollieConnectAccessToken(
+  tenantId: string,
+  billing: StoredBillingSettings,
+) {
+  const connect = billing.mollieConnect;
+
+  if (!connect?.refreshToken || !connect.accessToken) {
+    throw new AppError("Mollie Connect is nog niet gekoppeld.", {
+      code: "INVALID_INPUT",
+    });
+  }
+
+  if (!isMollieConnectConfigured()) {
+    throw new AppError(
+      "Mollie OAuth credentials ontbreken. Vul MOLLIE_CLIENT_ID en MOLLIE_CLIENT_SECRET in.",
+      {
+        code: "INVALID_INPUT",
+        details: {
+          provider: "mollie",
+          env: "MOLLIE_CLIENT_ID,MOLLIE_CLIENT_SECRET",
+        },
+      },
+    );
+  }
+
+  if (isMollieAccessTokenFresh(connect.expiresAt)) {
+    return {
+      accessToken: connect.accessToken,
+      testMode: connect.testMode ?? isMollieTestMode(),
+    };
+  }
+
+  const tokenSet = await createMollieConnectClient({
+    testMode: connect.testMode ?? isMollieTestMode(),
+  }).refreshAccessToken(connect.refreshToken);
+  await updateLocalTenantBillingSettings(tenantId, {
+    enabled: billing.enabled,
+    provider: billing.provider,
+    profileLabel: billing.profileLabel,
+    profileId: billing.profileId,
+    settlementLabel: billing.settlementLabel,
+    supportEmail: billing.supportEmail,
+    paymentMethods: billing.paymentMethods,
+    notes: billing.notes,
+    mollieConnect: {
+      ...connect,
+      accessToken: tokenSet.accessToken,
+      refreshToken: tokenSet.refreshToken,
+      expiresAt: tokenSet.expiresAt,
+      scope: tokenSet.scope || connect.scope,
+    },
+  });
+
+  return {
+    accessToken: tokenSet.accessToken,
+    testMode: connect.testMode ?? isMollieTestMode(),
+  };
+}
+
+async function createLiveBillingProvider(
+  tenantId: string,
   billing: StoredBillingSettings | null | undefined,
 ) {
   if (!billing || !billing.enabled) {
@@ -1604,14 +1719,17 @@ function getLiveBillingProvider(
     });
   }
 
-  if (!isMolliePaymentConfigured()) {
+  const hasProviderCredentials =
+    isMolliePaymentConfigured() || hasMollieConnectTokens(billing);
+
+  if (!hasProviderCredentials) {
     throw new AppError(
-      "Mollie live credentials ontbreken. Vul MOLLIE_API_KEY in voordat je betalingen verwerkt.",
+      "Mollie live credentials ontbreken. Vul MOLLIE_API_KEY in of koppel Mollie Connect voordat je betalingen verwerkt.",
       {
         code: "INVALID_INPUT",
         details: {
           provider: "mollie",
-          env: "MOLLIE_API_KEY",
+          env: "MOLLIE_API_KEY or MOLLIE_CLIENT_ID,MOLLIE_CLIENT_SECRET",
         },
       },
     );
@@ -1630,7 +1748,16 @@ function getLiveBillingProvider(
     );
   }
 
-  return createMolliePaymentProvider();
+  if (isMolliePaymentConfigured()) {
+    return createMolliePaymentProvider();
+  }
+
+  const connectAccess = await resolveMollieConnectAccessToken(tenantId, billing);
+
+  return createMolliePaymentProvider({
+    accessToken: connectAccess.accessToken,
+    testMode: connectAccess.testMode,
+  });
 }
 
 function selectBillingPaymentMethod(
@@ -1658,7 +1785,7 @@ async function attachMolliePaymentToInvoice(
     readonly eventLabel?: string;
   },
 ) {
-  const provider = getLiveBillingProvider(billing);
+  const provider = await createLiveBillingProvider(tenantContext.tenantId, billing);
 
   if (!provider) {
     return {
@@ -1672,6 +1799,7 @@ async function attachMolliePaymentToInvoice(
     currency: invoice.currency,
     description: options?.description ?? invoice.description,
     paymentMethod: options?.paymentMethod ?? selectBillingPaymentMethod(billing, invoice.source),
+    profileId: billing.profileId,
     redirectUrl: buildBillingRedirectUrl(invoice.id),
     webhookUrl: buildMollieWebhookUrl(tenantContext),
     metadata: {
@@ -1774,7 +1902,11 @@ async function buildBillingSummary(
 ): Promise<GymDashboardSnapshot["payments"]> {
   const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
   const billing = tenantProfile?.billing;
-  const liveProviderConfigured = isLiveBillingProviderConfigured();
+  const liveProviderConfigured = isLiveBillingProviderConfigured(billing);
+  const connect = billing?.mollieConnect;
+  const connectScopes = parseMollieScope(connect?.scope);
+  const migrationHint =
+    "Heeft de gym al SEPA-incasso via Virtuagym/Mollie? Koppel hetzelfde Mollie-account; GymOS kan daarna met customers.read en mandates.read bestaande klanten en mandates herkennen voor migratiecontrole.";
 
   if (!billing) {
     return {
@@ -1791,6 +1923,12 @@ async function buildBillingSummary(
       helpText:
         "Koppel Mollie per gym om automatische incasso, eenmalige betalingen en deelbare betaalverzoeken voor te bereiden.",
       previewMode: true,
+      mollieConnectClientConfigured: isMollieConnectConfigured(),
+      mollieClientLinksConfigured: isMollieClientLinksConfigured(),
+      mollieConnectConnected: false,
+      mollieConnectTestMode: isMollieTestMode(),
+      mollieConnectScopes: [...MOLLIE_CONNECT_SCOPES],
+      mollieConnectMigrationHint: migrationHint,
     };
   }
 
@@ -1811,6 +1949,16 @@ async function buildBillingSummary(
     lastValidatedAt: billing.lastValidatedAt,
     lastPaymentActionAt: billing.lastPaymentActionAt,
     lastPaymentActionBy: billing.lastPaymentActionBy,
+    mollieConnectClientConfigured: isMollieConnectConfigured(),
+    mollieClientLinksConfigured: isMollieClientLinksConfigured(),
+    mollieConnectConnected: Boolean(connect?.refreshToken),
+    mollieConnectTestMode: connect?.testMode ?? isMollieTestMode(),
+    mollieConnectScopes:
+      connectScopes.length > 0 ? connectScopes : [...MOLLIE_CONNECT_SCOPES],
+    mollieConnectConnectedAt: connect?.connectedAt,
+    mollieConnectProfileStatus: connect?.profileStatus,
+    mollieConnectOnboardingUrl: connect?.onboardingUrl,
+    mollieConnectMigrationHint: migrationHint,
   };
 }
 
@@ -2756,6 +2904,48 @@ export interface GymPlatformServices {
       readonly notes?: string;
     },
   ): Promise<GymDashboardSnapshot["payments"]>;
+  startMollieConnect(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+  ): Promise<{
+    readonly authorizationUrl: string;
+  }>;
+  createMollieClientLink(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly owner: MollieClientLinkOwnerInput;
+    },
+  ): Promise<{
+    readonly id: string;
+    readonly clientLinkUrl: string;
+    readonly onboardingUrl: string;
+  }>;
+  previewMollieMandateMigration(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+  ): Promise<{
+    readonly totalCustomers: number;
+    readonly totalMandates: number;
+    readonly reusableMandates: number;
+    readonly matches: ReadonlyArray<{
+      readonly memberId: string;
+      readonly memberName: string;
+      readonly memberEmail: string;
+      readonly mollieCustomerId: string;
+      readonly mollieCustomerName: string;
+      readonly mandateId: string;
+      readonly mandateStatus: string;
+      readonly mandateMethod: string;
+      readonly reusable: boolean;
+    }>;
+  }>;
+  completeMollieConnectCallback(input: {
+    readonly state: string;
+    readonly code: string;
+  }): Promise<{
+    readonly tenantId: string;
+  }>;
   updateLegalSettings(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -3357,7 +3547,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
     }
 
-    getLiveBillingProvider(billing);
+    await createLiveBillingProvider(tenantContext.tenantId, billing);
 
     const missingLegalFields = getMissingLegalCheckoutFields(legal);
     if (missingLegalFields.length > 0) {
@@ -4241,7 +4431,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await assertFeatureEnabled(actor, tenantContext, "billing.processing");
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
       const billing = tenantProfile?.billing;
-      getLiveBillingProvider(billing);
+      await createLiveBillingProvider(tenantContext.tenantId, billing);
       if (billing) {
         await assertBillingPaymentMethodEnabled(
           actor,
@@ -4277,7 +4467,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await assertFeatureEnabled(actor, tenantContext, "billing.autocollect");
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
       const billing = tenantProfile?.billing;
-      getLiveBillingProvider(billing);
+      await createLiveBillingProvider(tenantContext.tenantId, billing);
       const billingBackoffice = await buildBillingBackofficeSummary(tenantContext);
       const invoice = billingBackoffice.invoices.find((entry) => entry.id === input.invoiceId);
 
@@ -4321,7 +4511,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await assertFeatureEnabled(actor, tenantContext, "billing.autocollect");
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
       const billing = tenantProfile?.billing;
-      const liveProvider = getLiveBillingProvider(billing);
+      const liveProvider = await createLiveBillingProvider(tenantContext.tenantId, billing);
       const billingBackoffice = await buildBillingBackofficeSummary(tenantContext);
       const invoice = billingBackoffice.invoices.find((entry) => entry.id === input.invoiceId);
 
@@ -4407,16 +4597,24 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       return webhook;
     },
     async syncMollieBillingWebhook(input) {
-      if (!isMolliePaymentConfigured()) {
+      const tenantForWebhook = input.tenantId
+        ? await getLocalTenantProfile(input.tenantId)
+        : null;
+      const provider = tenantForWebhook
+        ? await createLiveBillingProvider(tenantForWebhook.id, tenantForWebhook.billing)
+        : isMolliePaymentConfigured()
+          ? createMolliePaymentProvider()
+          : null;
+
+      if (!provider) {
         throw new AppError("Mollie API-key ontbreekt voor webhookverwerking.", {
           code: "INVALID_INPUT",
           details: {
-            env: "MOLLIE_API_KEY",
+            env: "MOLLIE_API_KEY or MOLLIE_CLIENT_ID,MOLLIE_CLIENT_SECRET",
           },
         });
       }
 
-      const provider = createMolliePaymentProvider();
       const payment = await provider.getPayment(input.paymentId);
       const { tenant, invoice } = await findInvoiceForMolliePayment(
         payment,
@@ -5746,6 +5944,223 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return buildBillingSummary(tenantContext);
     },
+    async startMollieConnect(actor, tenantContext) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      await assertFeatureEnabled(actor, tenantContext, "billing.processing");
+
+      if (!isMollieConnectConfigured()) {
+        throw new AppError(
+          "Mollie OAuth credentials ontbreken. Vul MOLLIE_CLIENT_ID en MOLLIE_CLIENT_SECRET in.",
+          {
+            code: "INVALID_INPUT",
+            details: {
+              env: "MOLLIE_CLIENT_ID,MOLLIE_CLIENT_SECRET",
+            },
+          },
+        );
+      }
+
+      const state = buildMollieOauthState(tenantContext.tenantId, "connect");
+      const testMode = isMollieTestMode();
+      const scope = getMollieConnectScopeString();
+      await startLocalTenantMollieConnect(tenantContext.tenantId, {
+        state,
+        testMode,
+        scope,
+      });
+      await runtime.auditLogger.write({
+        action: "billing.mollie_connect_started",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          testMode,
+          scope,
+        },
+      });
+
+      return {
+        authorizationUrl: buildMollieConnectAuthorizationUrl({
+          clientId: process.env.MOLLIE_CLIENT_ID!.trim(),
+          redirectUri: resolveMollieConnectRedirectUrl(),
+          state,
+          testMode,
+        }),
+      };
+    },
+    async createMollieClientLink(actor, tenantContext, input) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      await assertFeatureEnabled(actor, tenantContext, "billing.processing");
+
+      if (!isMollieClientLinksConfigured()) {
+        throw new AppError(
+          "Mollie Client Links credentials ontbreken. Vul MOLLIE_CLIENT_ID, MOLLIE_CLIENT_SECRET en MOLLIE_ORGANIZATION_ACCESS_TOKEN in.",
+          {
+            code: "INVALID_INPUT",
+            details: {
+              env: "MOLLIE_CLIENT_ID,MOLLIE_CLIENT_SECRET,MOLLIE_ORGANIZATION_ACCESS_TOKEN",
+            },
+          },
+        );
+      }
+
+      const state = buildMollieOauthState(tenantContext.tenantId, "client-link");
+      const testMode = isMollieTestMode();
+      const scope = getMollieConnectScopeString();
+      const receipt = await createMollieConnectClient({ testMode }).createClientLink({
+        owner: input.owner,
+        state,
+      });
+      await recordLocalTenantMollieClientLink(tenantContext.tenantId, {
+        state,
+        testMode,
+        scope,
+        clientLinkId: receipt.id,
+        clientLinkUrl: receipt.clientLinkUrl,
+        onboardingUrl: receipt.onboardingUrl,
+      });
+      await runtime.auditLogger.write({
+        action: "billing.mollie_client_link_created",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          clientLinkId: receipt.id,
+          testMode,
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+
+      return receipt;
+    },
+    async previewMollieMandateMigration(actor, tenantContext) {
+      assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
+      await assertFeatureEnabled(actor, tenantContext, "billing.processing");
+      const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+      const billing = tenantProfile?.billing;
+
+      if (!billing?.mollieConnect?.refreshToken) {
+        throw new AppError("Koppel eerst het bestaande Mollie-account via OAuth.", {
+          code: "INVALID_INPUT",
+        });
+      }
+
+      const connectAccess = await resolveMollieConnectAccessToken(
+        tenantContext.tenantId,
+        billing,
+      );
+      const connectClient = createMollieConnectClient({
+        testMode: connectAccess.testMode,
+      });
+      const [customers, members] = await Promise.all([
+        connectClient.listCustomers(connectAccess.accessToken),
+        runtime.store.listMembers(tenantContext),
+      ]);
+      const membersByEmail = new Map(
+        members.map((member) => [member.email.trim().toLowerCase(), member]),
+      );
+      const membersByName = new Map(
+        members.map((member) => [member.fullName.trim().toLowerCase(), member]),
+      );
+      const mandateGroups = await Promise.all(
+        customers.map(async (customer) => ({
+          customer,
+          mandates: await connectClient.listMandates(connectAccess.accessToken, customer.id),
+        })),
+      );
+      const matches = mandateGroups.flatMap(({ customer, mandates }) => {
+        const member =
+          (customer.email ? membersByEmail.get(customer.email) : undefined) ??
+          membersByName.get(customer.name.trim().toLowerCase());
+
+        if (!member) {
+          return [];
+        }
+
+        return mandates.map((mandate) => ({
+          memberId: member.id,
+          memberName: member.fullName,
+          memberEmail: member.email,
+          mollieCustomerId: customer.id,
+          mollieCustomerName: customer.name,
+          mandateId: mandate.id,
+          mandateStatus: mandate.status,
+          mandateMethod: mandate.method,
+          reusable: mandate.method === "directdebit" && mandate.status === "valid",
+        }));
+      });
+      const reusableMandates = matches.filter((match) => match.reusable).length;
+
+      await runtime.auditLogger.write({
+        action: "billing.mollie_mandate_migration_previewed",
+        category: "settings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          totalCustomers: customers.length,
+          totalMandates: mandateGroups.reduce(
+            (sum, group) => sum + group.mandates.length,
+            0,
+          ),
+          reusableMandates,
+        },
+      });
+
+      return {
+        totalCustomers: customers.length,
+        totalMandates: mandateGroups.reduce(
+          (sum, group) => sum + group.mandates.length,
+          0,
+        ),
+        reusableMandates,
+        matches,
+      };
+    },
+    async completeMollieConnectCallback(input) {
+      const tenant = await findLocalTenantByMollieConnectState(input.state);
+
+      if (!tenant) {
+        throw new AppError("Mollie OAuth state is verlopen of onbekend.", {
+          code: "FORBIDDEN",
+        });
+      }
+
+      const testMode = tenant.billing.mollieConnect?.testMode ?? isMollieTestMode();
+      const connectClient = createMollieConnectClient({ testMode });
+      const tokenSet = await connectClient.exchangeAuthorizationCode(input.code);
+      const profiles = await connectClient.listProfiles(tokenSet.accessToken);
+      const profile = profiles[0];
+      await completeLocalTenantMollieConnect(tenant.id, {
+        state: input.state,
+        accessToken: tokenSet.accessToken,
+        refreshToken: tokenSet.refreshToken,
+        expiresAt: tokenSet.expiresAt,
+        scope: tokenSet.scope || tenant.billing.mollieConnect?.scope || getMollieConnectScopeString(),
+        testMode,
+        profileId: profile?.id,
+        profileLabel: profile?.name,
+        profileStatus: profile?.status,
+      });
+      await runtime.auditLogger.write({
+        action: "billing.mollie_connect_completed",
+        category: "settings",
+        actorId: "mollie:oauth",
+        tenantId: tenant.id,
+        metadata: {
+          profileId: profile?.id,
+          testMode,
+        },
+      });
+      const cache = createTenantAwareCache(runtime, createPublicTenantContext(tenant.id));
+      const accounts = await listLocalPlatformAccounts(tenant.id);
+      await Promise.all(
+        accounts.map((account) => cache.delete("dashboard", account.userId)),
+      );
+
+      return {
+        tenantId: tenant.id,
+      };
+    },
     async updateLegalSettings(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
 
@@ -6171,7 +6586,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           details: { paymentMethod: input.paymentMethod },
         });
       }
-      getLiveBillingProvider(billing);
+      await createLiveBillingProvider(tenantContext.tenantId, billing);
 
       const requestedAt = new Date().toISOString();
       const paymentMethodLabel = getBillingPaymentMethodLabel(input.paymentMethod);

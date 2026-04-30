@@ -584,6 +584,15 @@ export interface BillingSummary {
   readonly lastValidatedAt?: string;
   readonly lastPaymentActionAt?: string;
   readonly lastPaymentActionBy?: string;
+  readonly mollieConnectClientConfigured: boolean;
+  readonly mollieClientLinksConfigured: boolean;
+  readonly mollieConnectConnected: boolean;
+  readonly mollieConnectTestMode: boolean;
+  readonly mollieConnectScopes: ReadonlyArray<string>;
+  readonly mollieConnectConnectedAt?: string;
+  readonly mollieConnectProfileStatus?: string;
+  readonly mollieConnectOnboardingUrl?: string;
+  readonly mollieConnectMigrationHint: string;
 }
 
 export interface BillingActionReceipt {

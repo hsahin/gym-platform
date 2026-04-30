@@ -414,6 +414,25 @@ export function PlatformWorkbench({
     "Intakepakket",
   );
   const [billingPreviewMemberName, setBillingPreviewMemberName] = useState("");
+  const [mollieClientName, setMollieClientName] = useState(snapshot.tenantName);
+  const [mollieClientEmail, setMollieClientEmail] = useState(
+    snapshot.payments.supportEmail || snapshot.actorEmail || "",
+  );
+  const [mollieClientStreet, setMollieClientStreet] = useState("");
+  const [mollieClientPostalCode, setMollieClientPostalCode] = useState("");
+  const [mollieClientCity, setMollieClientCity] = useState(
+    snapshot.locations[0]?.city ?? "",
+  );
+  const [mollieClientCountry, setMollieClientCountry] = useState("NL");
+  const [mollieClientRegistrationNumber, setMollieClientRegistrationNumber] = useState("");
+  const [mollieClientVatNumber, setMollieClientVatNumber] = useState("");
+  const [mollieClientLegalEntity, setMollieClientLegalEntity] = useState(
+    "limited-liability-company",
+  );
+  const [mollieClientRegistrationOffice, setMollieClientRegistrationOffice] =
+    useState("NL");
+  const [mollieClientIncorporationDate, setMollieClientIncorporationDate] =
+    useState("");
 
   const [legalTermsUrl, setLegalTermsUrl] = useState(snapshot.legal.termsUrl);
   const [legalPrivacyUrl, setLegalPrivacyUrl] = useState(snapshot.legal.privacyUrl);
@@ -551,7 +570,10 @@ export function PlatformWorkbench({
     setBillingPaymentMethods(snapshot.payments.paymentMethods);
     setBillingNotes(snapshot.payments.notes ?? "");
     setBillingPreviewMethod(snapshot.payments.paymentMethods[0] ?? "one_time");
-  }, [snapshot.payments]);
+    setMollieClientName(snapshot.payments.profileLabel || snapshot.tenantName);
+    setMollieClientEmail(snapshot.payments.supportEmail || snapshot.actorEmail || "");
+    setMollieClientCity(snapshot.locations[0]?.city ?? "");
+  }, [snapshot.actorEmail, snapshot.locations, snapshot.payments, snapshot.tenantName]);
 
   useEffect(() => {
     setLegalTermsUrl(snapshot.legal.termsUrl);
@@ -1692,6 +1714,93 @@ export function PlatformWorkbench({
                   </Card.Content>
                 </Card>
 
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Header className="items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <Card.Title>Mollie Connect</Card.Title>
+                      <Card.Description>
+                        OAuth-koppeling in testmodus met scopes voor betalingen, incasso, subscriptions, payment links en reconciliatie.
+                      </Card.Description>
+                    </div>
+                    <Chip
+                      color={snapshot.payments.mollieConnectConnected ? "success" : "default"}
+                      size="sm"
+                      variant={snapshot.payments.mollieConnectConnected ? "soft" : "tertiary"}
+                    >
+                      {snapshot.payments.mollieConnectConnected
+                        ? snapshot.payments.mollieConnectTestMode
+                          ? "Test gekoppeld"
+                          : "Live gekoppeld"
+                        : "Niet gekoppeld"}
+                    </Chip>
+                  </Card.Header>
+                  <Card.Content className="section-stack">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
+                        <p className="text-sm font-medium">Bestaand Mollie-account</p>
+                        <p className="text-muted mt-1 text-sm leading-6">
+                          Koppel de gym via OAuth. Bestaande SEPA-mandates uit hetzelfde Mollie-account kunnen daarna gecontroleerd worden voor migratie.
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
+                        <p className="text-sm font-medium">Nieuwe Mollie-klant</p>
+                        <p className="text-muted mt-1 text-sm leading-6">
+                          Maak een Client Link zodat de gym Mollie-onboarding met GymOS-context kan afronden.
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-muted text-sm leading-6">
+                      {snapshot.payments.mollieConnectMigrationHint}
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        isDisabled={isPending || !snapshot.payments.mollieConnectClientConfigured}
+                        type="button"
+                        variant="outline"
+                        onPress={() => {
+                          window.location.href = "/api/platform/billing/mollie/connect";
+                        }}
+                      >
+                        Bestaand account koppelen
+                      </Button>
+                      {snapshot.payments.mollieConnectOnboardingUrl ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onPress={() =>
+                            window.open(
+                              snapshot.payments.mollieConnectOnboardingUrl,
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        >
+                          Laatste onboarding openen
+                        </Button>
+                      ) : null}
+                      <Button
+                        isDisabled={isPending || !snapshot.payments.mollieConnectConnected}
+                        type="button"
+                        variant="outline"
+                        onPress={() =>
+                          runAction(async () => {
+                            const preview = await submitJson<{
+                              reusableMandates: number;
+                              totalMandates: number;
+                            }>("/api/platform/billing/mollie/mandates", {});
+
+                            toast.success(
+                              `${preview.reusableMandates} van ${preview.totalMandates} Mollie-mandates zijn direct herbruikbaar.`,
+                            );
+                          })
+                        }
+                      >
+                        SEPA mandates scannen
+                      </Button>
+                    </div>
+                  </Card.Content>
+                </Card>
+
                 <Switch isSelected={billingEnabled} onChange={setBillingEnabled}>
                   <Switch.Control>
                     <Switch.Thumb />
@@ -1755,6 +1864,100 @@ export function PlatformWorkbench({
                 <Field label="Notities">
                   <TextArea fullWidth rows={4} placeholder="eerst lidmaatschappen via incasso, intro via betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
                 </Field>
+
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Header>
+                    <Card.Title>Mollie klant onboarden</Card.Title>
+                    <Card.Description>
+                      Gebruik dit wanneer een gym nog geen Mollie-account heeft. De link opent Mollie in testmodus.
+                    </Card.Description>
+                  </Card.Header>
+                  <Card.Content className="grid gap-4 md:grid-cols-2">
+                    <Field label="Organisatienaam">
+                      <Input fullWidth value={mollieClientName} onChange={(event) => setMollieClientName(event.target.value)} />
+                    </Field>
+                    <Field label="E-mail">
+                      <Input fullWidth type="email" value={mollieClientEmail} onChange={(event) => setMollieClientEmail(event.target.value)} />
+                    </Field>
+                    <Field label="Straat en nummer">
+                      <Input fullWidth value={mollieClientStreet} onChange={(event) => setMollieClientStreet(event.target.value)} />
+                    </Field>
+                    <Field label="Postcode">
+                      <Input fullWidth value={mollieClientPostalCode} onChange={(event) => setMollieClientPostalCode(event.target.value)} />
+                    </Field>
+                    <Field label="Plaats">
+                      <Input fullWidth value={mollieClientCity} onChange={(event) => setMollieClientCity(event.target.value)} />
+                    </Field>
+                    <Field label="Landcode">
+                      <Input fullWidth maxLength={2} value={mollieClientCountry} onChange={(event) => setMollieClientCountry(event.target.value.toUpperCase())} />
+                    </Field>
+                    <Field label="KvK-nummer">
+                      <Input fullWidth value={mollieClientRegistrationNumber} onChange={(event) => setMollieClientRegistrationNumber(event.target.value)} />
+                    </Field>
+                    <Field label="BTW-nummer">
+                      <Input fullWidth value={mollieClientVatNumber} onChange={(event) => setMollieClientVatNumber(event.target.value)} />
+                    </Field>
+                    <Field label="Rechtsvorm">
+                      <Input fullWidth value={mollieClientLegalEntity} onChange={(event) => setMollieClientLegalEntity(event.target.value)} />
+                    </Field>
+                    <Field label="Registratiekantoor">
+                      <Input fullWidth value={mollieClientRegistrationOffice} onChange={(event) => setMollieClientRegistrationOffice(event.target.value)} />
+                    </Field>
+                    <div className="md:col-span-2">
+                      <Field label="Oprichtingsdatum">
+                        <Input fullWidth placeholder="YYYY-MM-DD" value={mollieClientIncorporationDate} onChange={(event) => setMollieClientIncorporationDate(event.target.value)} />
+                      </Field>
+                    </div>
+                  </Card.Content>
+                  <Card.Footer className="justify-end">
+                    <Button
+                      isDisabled={
+                        isPending ||
+                        !snapshot.payments.mollieClientLinksConfigured ||
+                        !mollieClientName ||
+                        !mollieClientEmail ||
+                        !mollieClientStreet ||
+                        !mollieClientPostalCode ||
+                        !mollieClientCity ||
+                        !mollieClientCountry ||
+                        !mollieClientLegalEntity ||
+                        !mollieClientRegistrationOffice
+                      }
+                      type="button"
+                      variant="outline"
+                      onPress={() =>
+                        runAction(async () => {
+                          const receipt = await submitJson<{
+                            onboardingUrl: string;
+                          }>("/api/platform/billing/mollie/client-link", {
+                            owner: {
+                              name: mollieClientName,
+                              email: mollieClientEmail,
+                              address: {
+                                streetAndNumber: mollieClientStreet,
+                                postalCode: mollieClientPostalCode,
+                                city: mollieClientCity,
+                                country: mollieClientCountry,
+                              },
+                              registrationNumber:
+                                mollieClientRegistrationNumber || null,
+                              vatNumber: mollieClientVatNumber || null,
+                              legalEntity: mollieClientLegalEntity,
+                              registrationOffice: mollieClientRegistrationOffice,
+                              incorporationDate:
+                                mollieClientIncorporationDate || null,
+                            },
+                          });
+
+                          toast.success("Mollie onboardinglink aangemaakt.");
+                          window.open(receipt.onboardingUrl, "_blank", "noopener,noreferrer");
+                        })
+                      }
+                    >
+                      Client Link maken
+                    </Button>
+                  </Card.Footer>
+                </Card>
 
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Header>

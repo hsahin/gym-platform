@@ -157,4 +157,47 @@ describe("mollie payment provider", () => {
       code: "INVALID_INPUT",
     });
   });
+
+  it("uses OAuth app access tokens with testmode query parameters", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      expect(target).toBe("https://api.mollie.com/v2/payments?testmode=true");
+      expect(init?.headers).toMatchObject({
+        authorization: "Bearer access_123",
+      });
+
+      return jsonResponse({
+        id: "tr_oauth_1",
+        status: "open",
+        _links: {
+          checkout: {
+            href: "https://pay.mollie.com/p/oauth",
+          },
+        },
+      });
+    });
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+
+    await expect(
+      provider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "OAuth checkout",
+        paymentMethod: "one_time",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+        metadata: {
+          invoiceId: "inv_1",
+        },
+      }),
+    ).resolves.toMatchObject({
+      providerPaymentId: "tr_oauth_1",
+      checkoutUrl: "https://pay.mollie.com/p/oauth",
+    });
+  });
 });

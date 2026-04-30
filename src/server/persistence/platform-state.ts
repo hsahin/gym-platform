@@ -214,6 +214,7 @@ export interface UpdateLocalTenantBillingSettingsInput {
   readonly supportEmail: string;
   readonly paymentMethods: ReadonlyArray<BillingPaymentMethod>;
   readonly notes?: string;
+  readonly mollieConnect?: StoredBillingSettings["mollieConnect"];
 }
 
 export interface StoredTenantFeatureFlagOverride {
@@ -2811,6 +2812,212 @@ export async function updateLocalTenantBillingSettings(
           ? now
           : undefined,
     };
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              billing: nextBilling,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function startLocalTenantMollieConnect(
+  tenantId: string,
+  input: {
+    readonly state: string;
+    readonly testMode: boolean;
+    readonly scope: string;
+  },
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je Mollie koppelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor Mollie Connect.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextBilling = normalizeStoredBillingSettings({
+      ...tenant.billing,
+      mollieConnect: {
+        ...tenant.billing.mollieConnect,
+        scope: input.scope,
+        testMode: input.testMode,
+        state: input.state,
+        stateCreatedAt: now,
+      },
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              billing: nextBilling,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function recordLocalTenantMollieClientLink(
+  tenantId: string,
+  input: {
+    readonly state: string;
+    readonly testMode: boolean;
+    readonly scope: string;
+    readonly clientLinkId: string;
+    readonly clientLinkUrl: string;
+    readonly onboardingUrl: string;
+  },
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je Mollie onboardt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor Mollie onboarding.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextBilling = normalizeStoredBillingSettings({
+      ...tenant.billing,
+      mollieConnect: {
+        ...tenant.billing.mollieConnect,
+        scope: input.scope,
+        testMode: input.testMode,
+        state: input.state,
+        stateCreatedAt: now,
+        clientLinkId: input.clientLinkId,
+        clientLinkUrl: input.clientLinkUrl,
+        onboardingUrl: input.onboardingUrl,
+      },
+    });
+
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              billing: nextBilling,
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return nextState.tenants.find((entry) => entry.id === tenantId)!;
+  });
+}
+
+export async function findLocalTenantByMollieConnectState(state: string) {
+  const platformState = await readLocalPlatformState();
+  const normalizedState = state.trim();
+
+  if (!normalizedState) {
+    return null;
+  }
+
+  return (
+    platformState?.tenants.find(
+      (tenant) => tenant.billing.mollieConnect?.state === normalizedState,
+    ) ?? null
+  );
+}
+
+export async function completeLocalTenantMollieConnect(
+  tenantId: string,
+  input: {
+    readonly state: string;
+    readonly accessToken: string;
+    readonly refreshToken: string;
+    readonly expiresAt: string;
+    readonly scope: string;
+    readonly testMode: boolean;
+    readonly profileId?: string;
+    readonly profileLabel?: string;
+    readonly profileStatus?: string;
+  },
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      throw new AppError("Richt eerst het platform in voordat je Mollie koppelt.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const tenant = current.tenants.find((entry) => entry.id === tenantId);
+
+    if (!tenant) {
+      throw new AppError("Gym niet gevonden voor Mollie Connect.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { tenantId },
+      });
+    }
+
+    if (tenant.billing.mollieConnect?.state !== input.state) {
+      throw new AppError("Mollie OAuth state klopt niet meer.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const now = new Date().toISOString();
+    const nextBilling = normalizeStoredBillingSettings({
+      ...tenant.billing,
+      profileId: input.profileId || tenant.billing.profileId,
+      profileLabel: input.profileLabel || tenant.billing.profileLabel || tenant.name,
+      paymentMethods:
+        tenant.billing.paymentMethods.length > 0
+          ? tenant.billing.paymentMethods
+          : ["direct_debit", "one_time", "payment_request"],
+      mollieConnect: {
+        ...tenant.billing.mollieConnect,
+        accessToken: input.accessToken,
+        refreshToken: input.refreshToken,
+        expiresAt: input.expiresAt,
+        scope: input.scope,
+        connectedAt: now,
+        testMode: input.testMode,
+        state: undefined,
+        stateCreatedAt: undefined,
+        profileStatus: input.profileStatus,
+      },
+    });
 
     const nextState: LocalPlatformState = {
       ...current,

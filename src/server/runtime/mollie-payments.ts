@@ -30,6 +30,7 @@ export interface CreateMolliePaymentIntentInput {
   readonly paymentMethod: BillingPaymentMethod;
   readonly redirectUrl: string;
   readonly webhookUrl: string;
+  readonly profileId?: string;
   readonly metadata?: Record<string, string | number | boolean | null | undefined>;
 }
 
@@ -117,12 +118,16 @@ function parseMollieErrorBody(text: string) {
 
 export function createMolliePaymentProvider(options?: {
   readonly apiKey?: string;
+  readonly accessToken?: string;
   readonly fetchImpl?: FetchLike;
   readonly apiBaseUrl?: string;
+  readonly testMode?: boolean;
 }): MolliePaymentProvider {
   const apiKey = options?.apiKey?.trim() || process.env.MOLLIE_API_KEY?.trim();
+  const accessToken = options?.accessToken?.trim();
+  const bearerToken = accessToken || apiKey;
 
-  if (!apiKey) {
+  if (!bearerToken) {
     throw new AppError("Mollie API-key ontbreekt.", {
       code: "INVALID_INPUT",
       details: {
@@ -133,12 +138,21 @@ export function createMolliePaymentProvider(options?: {
 
   const fetchImpl = options?.fetchImpl ?? fetch;
   const apiBaseUrl = options?.apiBaseUrl ?? MOLLIE_API_BASE_URL;
+  const testMode = Boolean(options?.testMode);
+
+  function buildPath(path: string) {
+    if (!testMode) {
+      return path;
+    }
+
+    return `${path}${path.includes("?") ? "&" : "?"}testmode=true`;
+  }
 
   async function request<TBody>(path: string, init?: RequestInit) {
-    const response = await fetchImpl(`${apiBaseUrl}${path}`, {
+    const response = await fetchImpl(`${apiBaseUrl}${buildPath(path)}`, {
       ...init,
       headers: {
-        authorization: `Bearer ${apiKey}`,
+        authorization: `Bearer ${bearerToken}`,
         accept: "application/json",
         "content-type": "application/json",
         ...(init?.headers ?? {}),
@@ -171,6 +185,7 @@ export function createMolliePaymentProvider(options?: {
         description: input.description,
         redirectUrl: input.redirectUrl,
         webhookUrl: input.webhookUrl,
+        ...(input.profileId?.trim() ? { profileId: input.profileId.trim() } : {}),
         ...(method ? { method } : {}),
         metadata: compactMetadata(input.metadata),
       };

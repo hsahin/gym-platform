@@ -16,6 +16,22 @@ export interface StoredBillingSettings {
   readonly lastValidatedAt?: string;
   readonly lastPaymentActionAt?: string;
   readonly lastPaymentActionBy?: string;
+  readonly mollieConnect?: StoredMollieConnectSettings;
+}
+
+export interface StoredMollieConnectSettings {
+  readonly accessToken?: string;
+  readonly refreshToken?: string;
+  readonly expiresAt?: string;
+  readonly scope?: string;
+  readonly connectedAt?: string;
+  readonly testMode?: boolean;
+  readonly state?: string;
+  readonly stateCreatedAt?: string;
+  readonly clientLinkId?: string;
+  readonly clientLinkUrl?: string;
+  readonly onboardingUrl?: string;
+  readonly profileStatus?: string;
 }
 
 export interface BillingRuntimeOptions {
@@ -87,6 +103,22 @@ export function normalizeStoredBillingSettings(
   input?: Partial<StoredBillingSettings> | null,
 ): StoredBillingSettings {
   const base = createDefaultBillingSettings();
+  const mollieConnect = input?.mollieConnect
+    ? {
+        accessToken: input.mollieConnect.accessToken?.trim() || undefined,
+        refreshToken: input.mollieConnect.refreshToken?.trim() || undefined,
+        expiresAt: input.mollieConnect.expiresAt?.trim() || undefined,
+        scope: input.mollieConnect.scope?.trim() || undefined,
+        connectedAt: input.mollieConnect.connectedAt?.trim() || undefined,
+        testMode: input.mollieConnect.testMode,
+        state: input.mollieConnect.state?.trim() || undefined,
+        stateCreatedAt: input.mollieConnect.stateCreatedAt?.trim() || undefined,
+        clientLinkId: input.mollieConnect.clientLinkId?.trim() || undefined,
+        clientLinkUrl: input.mollieConnect.clientLinkUrl?.trim() || undefined,
+        onboardingUrl: input.mollieConnect.onboardingUrl?.trim() || undefined,
+        profileStatus: input.mollieConnect.profileStatus?.trim() || undefined,
+      }
+    : undefined;
 
   return {
     ...base,
@@ -100,6 +132,11 @@ export function normalizeStoredBillingSettings(
         ? Array.from(new Set(input.paymentMethods))
         : base.paymentMethods,
     notes: input?.notes?.trim() ? input.notes.trim() : undefined,
+    mollieConnect:
+      mollieConnect &&
+      Object.values(mollieConnect).some((value) => value !== undefined)
+        ? mollieConnect
+        : undefined,
   };
 }
 

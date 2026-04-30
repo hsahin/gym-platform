@@ -37,6 +37,7 @@ describe("system and integration flow coverage map", () => {
   it("keeps every API route represented in a route-level integration test", () => {
     const routeFiles = findFiles(path.join(process.cwd(), "src/app/api"), "route.ts");
     const routeIntegrationSources = readTestSources([
+      "src/app/api/mollie-connect-routes.test.ts",
       "src/app/api/routes.integration.test.ts",
       "src/app/api/platform-routes.integration.test.ts",
       "src/app/api/system-flows.integration.test.ts",

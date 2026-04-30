@@ -95,6 +95,15 @@ echte backends. In productie zijn deze variabelen verplicht:
 Aanbevolen live-instellingen:
 
 - `REDIS_URL` voor tenant cache over meerdere instances
+- `APP_BASE_URL=https://gym-platform-vc9yk.ondigitalocean.app` voor publieke
+  Mollie webhooks en redirects
+- `MOLLIE_TEST_MODE=true` zolang de Mollie OAuth-app in testfase draait
+- `MOLLIE_CLIENT_ID`, `MOLLIE_CLIENT_SECRET` en
+  `MOLLIE_CONNECT_REDIRECT_URL=https://gym-platform-vc9yk.ondigitalocean.app/api/mollie/redirect`
+  voor Mollie Connect OAuth
+- `MOLLIE_ORGANIZATION_ACCESS_TOKEN` met `clients.write` voor Client Link
+  onboarding van gyms die nog geen Mollie-account hebben
+- optioneel `MOLLIE_API_KEY` als fallback voor profielgebonden test/live keys
 - `MONGODB_BACKUP_POLICY=enabled` nadat automatische backups/PITR aanstaan
 - `MIGRATIONS_LOCKED=true` wanneer database-migraties onderdeel zijn van de releaseflow
 - `MONITORING_WEBHOOK_URL` of `SENTRY_DSN` voor error reporting
