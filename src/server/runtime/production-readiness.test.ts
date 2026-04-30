@@ -159,12 +159,17 @@ describe("production readiness", () => {
     );
   });
 
-  it("fails fast on partially configured cloud uploads even without the legacy enable flag", () => {
+  it("does not block live runtime on partial Spaces env unless uploads are explicitly enabled", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017");
+    vi.stubEnv("REDIS_URL", "redis://localhost:6379");
     vi.stubEnv("SPACES_BUCKET", "gym-files");
 
-    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
-      "Live infrastructuurconfiguratie mist onderdelen: Cloudopslag.",
-    );
+    expect(() => assertLiveInfrastructureConfiguration()).not.toThrow();
+    expect(
+      getLiveInfrastructureConfigurationIssues().some((issue) => issue.key === "storage"),
+    ).toBe(false);
   });
 
   it("fails fast when runtime datastores are not configured", () => {

@@ -104,9 +104,8 @@ function getMessagingConfigurationIssue(): LiveInfrastructureConfigurationIssue 
 
 function getStorageConfigurationIssue(): LiveInfrastructureConfigurationIssue | null {
   const liveUploadsRequested = process.env.ENABLE_REAL_UPLOADS === "true";
-  const spacesConfigured = hasConfiguredEnv(spacesEnvNames);
 
-  if (!liveUploadsRequested && !spacesConfigured) {
+  if (!liveUploadsRequested) {
     return null;
   }
 
