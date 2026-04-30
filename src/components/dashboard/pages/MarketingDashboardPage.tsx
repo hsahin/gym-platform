@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
 import { NativeSelect } from "@heroui-pro/react/native-select";
+import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
@@ -61,6 +62,9 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
   const [conversionStatus, setConversionStatus] = useState<"active" | "trial" | "paused" | "archived">("trial");
   const [conversionWaiverStatus, setConversionWaiverStatus] = useState<"complete" | "pending">("pending");
   const [automationTrigger, setAutomationTrigger] = useState<"manual" | "schedule" | "booking_cancellation">("manual");
+  const [marketingFormView, setMarketingFormView] = useState<
+    "lead-intake" | "lead-conversion" | "marketing-setup"
+  >("lead-intake");
 
   useEffect(() => {
     setEmailSenderName(snapshot.marketingWorkspace.emailSenderName);
@@ -75,7 +79,22 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+      <div className="section-stack">
+        <Segment
+          aria-label="Marketing formulieren"
+          className="w-full max-w-3xl"
+          selectedKey={marketingFormView}
+          size="sm"
+          onSelectionChange={(key) =>
+            setMarketingFormView(String(key) as typeof marketingFormView)
+          }
+        >
+          <Segment.Item id="lead-intake">Lead intake</Segment.Item>
+          <Segment.Item id="lead-conversion">Conversie</Segment.Item>
+          <Segment.Item id="marketing-setup">Setup</Segment.Item>
+        </Segment>
+
+        {marketingFormView === "lead-intake" ? (
         <PageSection
           title="Lead intake"
           description="Zet nieuwe aanvragen direct in de pipeline zonder extern CRM."
@@ -182,7 +201,9 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
             </Card.Content>
           </Card>
         </PageSection>
+        ) : null}
 
+        {marketingFormView === "lead-conversion" ? (
         <PageSection
           title="Lead conversie"
           description="Zet een warme lead direct om naar een member met contract en vestiging."
@@ -310,8 +331,9 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
             </Card.Content>
           </Card>
         </PageSection>
-      </div>
+        ) : null}
 
+        {marketingFormView === "marketing-setup" ? (
       <PageSection
         title="Marketing setup"
         description="Leg campagnes, leadopvolging en e-mailrouting vast zodat marketing niet los hangt van je live clubdata."
@@ -400,8 +422,10 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
           </Card.Content>
         </Card>
       </PageSection>
+        ) : null}
+      </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="section-stack">
         <PageSection
           title="Lead pipeline"
           description="Overzicht van alle warme contacten en hun huidige stage."

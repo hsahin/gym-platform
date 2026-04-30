@@ -76,7 +76,40 @@ describe("dashboard management UI wiring", () => {
     expect(settings).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
     expect(lazyWorkbench).toContain("stackSections");
     expect(workbench).toContain("stackSections = false");
-    expect(workbench).toContain('"grid gap-4 2xl:grid-cols-2"');
+    expect(workbench).toContain("shouldUseSectionTabs");
+    expect(workbench).toContain("visibleSectionTabs");
+    expect(workbench).not.toContain("2xl:grid-cols-2");
+  });
+
+  it("keeps owner forms below the content instead of in right side panels", () => {
+    const sidePanelChecks = [
+      ["dashboard/pages/MembersDashboardPage.tsx", "xl:grid-cols-[minmax(0,1fr)_420px]"],
+      ["dashboard/pages/MarketingDashboardPage.tsx", "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]"],
+      ["dashboard/pages/MarketingDashboardPage.tsx", "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"],
+      ["dashboard/pages/CoachingDashboardPage.tsx", "grid gap-4 xl:grid-cols-2"],
+      ["dashboard/pages/RetentionDashboardPage.tsx", "grid gap-4 xl:grid-cols-2"],
+      ["dashboard/pages/MobileDashboardPage.tsx", "grid gap-4 xl:grid-cols-2"],
+      ["dashboard/pages/SuperadminDashboardPage.tsx", "xl:grid-cols-[420px_minmax(0,1fr)]"],
+    ] as const;
+
+    for (const [page, sidePanelClass] of sidePanelChecks) {
+      expect(readSource(page)).not.toContain(sidePanelClass);
+    }
+  });
+
+  it("uses tabs when one menu exposes more than two form sections", () => {
+    const workbench = readSource("PlatformWorkbench.tsx");
+    const marketing = readSource("dashboard/pages/MarketingDashboardPage.tsx");
+    const retention = readSource("dashboard/pages/RetentionDashboardPage.tsx");
+
+    expect(workbench).toContain('import { Segment } from "@heroui-pro/react/segment";');
+    expect(workbench).toContain("shouldUseSectionTabs");
+    expect(workbench).toContain("visibleSectionTabs.map");
+    expect(workbench).toContain('aria-label="Formuliersecties"');
+    expect(marketing).toContain("marketingFormView");
+    expect(marketing).toContain('aria-label="Marketing formulieren"');
+    expect(retention).toContain("retentionFormView");
+    expect(retention).toContain('aria-label="Retentie formulieren"');
   });
 
   it("keeps contract forms stacked below the memberships overview", () => {

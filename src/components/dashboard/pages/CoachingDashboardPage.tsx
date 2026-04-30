@@ -250,7 +250,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
         )}
       </PageSection>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="section-stack">
         <PageSection
           title="PT packs"
           description="Verkoop packs en koppel resterende credits direct aan coachtrajecten."

@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useMemo,
   useState,
   useTransition,
   type ReactNode,
@@ -19,6 +20,7 @@ import {
 import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
 import { Kanban } from "@heroui-pro/react/kanban";
 import { NativeSelect } from "@heroui-pro/react/native-select";
+import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
 import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
@@ -234,6 +236,19 @@ const ALL_PLATFORM_WORKBENCH_SECTIONS: ReadonlyArray<PlatformWorkbenchSection> =
   "legal",
 ];
 
+const platformWorkbenchSectionLabels: Record<PlatformWorkbenchSection, string> = {
+  locations: "Vestiging",
+  contracts: "Lidmaatschap",
+  trainers: "Trainer",
+  classes: "Les",
+  members: "Lid",
+  imports: "Import",
+  staff: "Team",
+  "remote-access": "Smartdeur",
+  payments: "Betalingen",
+  legal: "Juridisch",
+};
+
 export function PlatformWorkbench({
   snapshot,
   highlightStepKey,
@@ -249,7 +264,34 @@ export function PlatformWorkbench({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const visibleSections = new Set<PlatformWorkbenchSection>(sections);
+  const visibleSectionTabs = useMemo(
+    () => {
+      const seenSections = new Set<PlatformWorkbenchSection>();
+
+      return sections
+        .filter((section) => {
+          if (seenSections.has(section)) {
+            return false;
+          }
+
+          seenSections.add(section);
+          return true;
+        })
+        .map((section) => ({
+          key: section,
+          label: platformWorkbenchSectionLabels[section],
+        }));
+    },
+    [sections],
+  );
+  const visibleSections = useMemo(
+    () => new Set(visibleSectionTabs.map((section) => section.key)),
+    [visibleSectionTabs],
+  );
+  const shouldUseSectionTabs = visibleSectionTabs.length > 2;
+  const [activeSection, setActiveSection] = useState<PlatformWorkbenchSection>(
+    visibleSectionTabs[0]?.key ?? "locations",
+  );
 
   const [locationName, setLocationName] = useState("");
   const [locationCity, setLocationCity] = useState("");
@@ -521,6 +563,15 @@ export function PlatformWorkbench({
     setLegalWaiverRetentionMonths(String(snapshot.legal.waiverRetentionMonths));
   }, [snapshot.legal]);
 
+  useEffect(() => {
+    if (
+      visibleSectionTabs.length > 0 &&
+      !visibleSectionTabs.some((section) => section.key === activeSection)
+    ) {
+      setActiveSection(visibleSectionTabs[0]!.key);
+    }
+  }, [activeSection, visibleSectionTabs]);
+
   function runAction(action: () => Promise<void>) {
     startTransition(async () => {
       try {
@@ -533,7 +584,7 @@ export function PlatformWorkbench({
   }
 
   function shouldShowSection(section: PlatformWorkbenchSection) {
-    return visibleSections.has(section);
+    return visibleSections.has(section) && (!shouldUseSectionTabs || activeSection === section);
   }
 
   function toggleBillingMethod(
@@ -573,10 +624,7 @@ export function PlatformWorkbench({
   const nextStep = workbenchExperience.steps.find(
     (step) => step.statusTone === "current" || step.statusTone === "upcoming",
   );
-  const sectionGridClass =
-    stackSections || visibleSections.size === 1
-      ? "grid gap-4"
-      : "grid gap-4 2xl:grid-cols-2";
+  const sectionGridClass = stackSections ? "grid content-start gap-4" : "grid gap-4";
   const launchStats = [
     { label: "Vestigingen", value: snapshot.locations.length },
     { label: "Lidmaatschappen", value: snapshot.membershipPlans.length },
@@ -733,6 +781,22 @@ export function PlatformWorkbench({
             </Card.Content>
           </Card>
         </>
+      ) : null}
+
+      {shouldUseSectionTabs ? (
+        <Segment
+          aria-label="Formuliersecties"
+          className="w-full"
+          selectedKey={activeSection}
+          size="sm"
+          onSelectionChange={(key) => setActiveSection(String(key) as PlatformWorkbenchSection)}
+        >
+          {visibleSectionTabs.map((section) => (
+            <Segment.Item key={section.key} id={section.key}>
+              {section.label}
+            </Segment.Item>
+          ))}
+        </Segment>
       ) : null}
 
       <div className={sectionGridClass}>

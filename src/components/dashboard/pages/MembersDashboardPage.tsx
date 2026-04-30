@@ -57,7 +57,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
+      <div className="section-stack">
         <div className="section-stack">
         <PageSection title="Leden" description="Bekijk lidstatus, intake en waiverstatus.">
           <div className="grid content-start gap-3">

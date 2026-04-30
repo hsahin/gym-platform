@@ -247,7 +247,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
         )}
       </PageSection>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="section-stack">
         <PageSection
           title="Zelfserviceverzoeken"
           description="Laat leden betaalmethode-updates en pauzeverzoeken indienen zonder mailverkeer."

@@ -196,7 +196,7 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
           title="Gym owner accounts"
           description="Beheer welke eigenaren toegang hebben tot hun gym. Dit is platform-breed en los van tenant feature flags."
         >
-          <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+          <div className="section-stack">
             <Card className="rounded-[24px] border border-border/80 bg-surface shadow-none">
               <Card.Header className="space-y-2">
                 <div className="flex items-center gap-2">

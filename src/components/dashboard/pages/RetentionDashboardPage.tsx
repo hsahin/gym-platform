@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Award, MessageSquareHeart, ShieldAlert, Users } from "lucide-react";
 import { Button, Card, Input, Label } from "@heroui/react";
 import { NativeSelect } from "@heroui-pro/react/native-select";
+import { Segment } from "@heroui-pro/react/segment";
 import { toast } from "sonner";
 import {
   parseCommaList,
@@ -60,6 +61,9 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
   const [responseAnswers, setResponseAnswers] = useState(
     "Ik ben positief over de sfeer,Ik wil graag meer ochtendlessen",
   );
+  const [retentionFormView, setRetentionFormView] = useState<
+    "community" | "questionnaires"
+  >("community");
   const trialMembers = snapshot.members.filter((member) => member.status === "trial").length;
   const pendingWaivers = snapshot.members.filter((member) => member.waiverStatus === "pending").length;
   const waitlistBookings = snapshot.bookings.filter((booking) => booking.status === "waitlisted").length;
@@ -227,7 +231,21 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
         </Card>
       </PageSection>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="section-stack">
+        <Segment
+          aria-label="Retentie formulieren"
+          className="w-full max-w-3xl"
+          selectedKey={retentionFormView}
+          size="sm"
+          onSelectionChange={(key) =>
+            setRetentionFormView(String(key) as typeof retentionFormView)
+          }
+        >
+          <Segment.Item id="community">Community</Segment.Item>
+          <Segment.Item id="questionnaires">Questionnaires</Segment.Item>
+        </Segment>
+
+        {retentionFormView === "community" ? (
         <PageSection
           title="Community en challenges"
           description="Maak groepen en loyaliteitscampagnes op echte members, niet alleen op instellingen."
@@ -368,7 +386,9 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
             ) : null}
           </div>
         </PageSection>
+        ) : null}
 
+        {retentionFormView === "questionnaires" ? (
         <PageSection
           title="Questionnaires"
           description="Bewaar vragenlijsten en responses als echte dataset voor churn en member sentiment."
@@ -517,6 +537,7 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
             )}
           </div>
         </PageSection>
+        ) : null}
       </div>
 
       <PageSection
