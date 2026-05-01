@@ -54,7 +54,10 @@ describe("public surface copy", () => {
     expect(source).toContain("Automatische incasso");
     expect(source).toContain("Member portal wachtwoord");
     expect(source).toContain("Checkout starten");
+    expect(source).toContain("snapshot.billingMessage");
+    expect(source).toContain("snapshot.legalMessage");
     expect(source).toContain("window.location.assign");
+    expect(source).not.toContain("Checkout staat nog niet live; deze club moet Mollie eerst activeren.");
     expect(source).not.toContain("Join the gym");
     expect(source).not.toContain("Checkout methode");
     expect(source).not.toContain("De owner rondt daarna");

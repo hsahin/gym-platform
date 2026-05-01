@@ -1591,6 +1591,77 @@ function isLegalCheckoutReady(legal: GymDashboardSnapshot["legal"]) {
   return getMissingLegalCheckoutFields(legal).length === 0;
 }
 
+function getPublicSignupLegalMessage(
+  legal: GymDashboardSnapshot["legal"],
+  options?: { readonly testMode?: boolean },
+) {
+  const missingLegalFields = getMissingLegalCheckoutFields(legal);
+
+  if (missingLegalFields.length === 0) {
+    return "Contract-PDF en waiveropslag zijn ingericht voor directe onboarding.";
+  }
+
+  if (options?.testMode) {
+    return `Testomgeving: checkout testen mag alvast. Voor live self-signup nog nodig: ${missingLegalFields.join(", ")}.`;
+  }
+
+  return `Self-signup mist nog juridische inrichting: ${missingLegalFields.join(", ")}.`;
+}
+
+function isPublicSignupBillingReady(
+  billing: StoredBillingSettings | null | undefined,
+  options?: { readonly testMode?: boolean },
+) {
+  const providerConfigured = isLiveBillingProviderConfigured(billing);
+
+  if (!billing || !providerConfigured) {
+    return false;
+  }
+
+  if (isBillingReady(billing)) {
+    return true;
+  }
+
+  return Boolean(
+    options?.testMode &&
+      billing.profileId.trim() &&
+      billing.paymentMethods.length > 0,
+  );
+}
+
+function getPublicSignupBillingMessage(
+  billing: StoredBillingSettings | null | undefined,
+  options?: { readonly testMode?: boolean },
+) {
+  const providerConfigured = isLiveBillingProviderConfigured(billing);
+
+  if (!billing) {
+    return "Mollie-account is nog niet gekoppeld voor deze gym.";
+  }
+
+  if (!providerConfigured) {
+    return "Mollie-account is gekoppeld, maar de app mist nog de publieke betaal-url of Mollie-toegang voor checkout.";
+  }
+
+  if (isBillingReady(billing)) {
+    return "Je betaling wordt direct als veilige checkout gestart.";
+  }
+
+  if (options?.testMode && billing.profileId.trim()) {
+    return "Mollie is gekoppeld. Je testbetaling wordt gestart in de Mollie-testomgeving; live verwerking staat nog uit.";
+  }
+
+  if (!billing.enabled) {
+    return "Mollie is gekoppeld, maar betalingen staan voor deze gym nog niet actief.";
+  }
+
+  if (!billing.supportEmail.trim()) {
+    return "Mollie is gekoppeld. Vul nog een supportmail voor betalingen in voordat self-signup live gaat.";
+  }
+
+  return "Mollie is gekoppeld, maar mist nog betaalprofiel of betaalroutes voor self-signup.";
+}
+
 function slugifyDocumentPart(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "document";
 }
@@ -3578,14 +3649,21 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       buildLegalComplianceSummary(tenantContext),
     ]);
     const billing = tenantProfile?.billing;
+    const testMode = isMollieTestMode();
 
-    if (!billing || !isBillingReady(billing)) {
+    if (!billing) {
       throw new AppError(
-        "Checkout is nog niet live. Koppel en activeer Mollie voordat consumenten zichzelf kunnen inschrijven.",
+        "Checkout is nog niet ingericht. Koppel Mollie voordat consumenten zichzelf kunnen inschrijven.",
         {
           code: "FORBIDDEN",
         },
       );
+    }
+
+    if (!isPublicSignupBillingReady(billing, { testMode })) {
+      throw new AppError(getPublicSignupBillingMessage(billing, { testMode }), {
+        code: "FORBIDDEN",
+      });
     }
 
     if (!billing.paymentMethods.includes(paymentMethod)) {
@@ -3595,10 +3673,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
     }
 
-    await createLiveBillingProvider(tenantContext.tenantId, billing);
+    const provider = testMode
+      ? await createBillingTestPaymentProvider(tenantContext.tenantId, billing)
+      : await createLiveBillingProvider(tenantContext.tenantId, billing);
 
     const missingLegalFields = getMissingLegalCheckoutFields(legal);
-    if (missingLegalFields.length > 0) {
+    if (missingLegalFields.length > 0 && !testMode) {
       throw new AppError(
         `Self-signup mist juridische inrichting: ${missingLegalFields.join(", ")}.`,
         {
@@ -3608,7 +3688,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       );
     }
 
-    return { billing, legal };
+    return { billing, legal, provider };
   }
 
   async function completeMemberSignupCheckout(input: {
@@ -3673,6 +3753,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         paymentMethod: input.signup.paymentMethod,
         description: `Membership checkout · ${input.membershipPlan.name}`,
         eventLabel: "payment.signup_checkout_created",
+        provider: prerequisites.provider ?? undefined,
       },
     );
 
@@ -4095,16 +4176,20 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           },
           legalReady: false,
           billingReady: false,
+          testMode: isMollieTestMode(),
+          billingMessage: "Kies eerst je club om de betaalstatus te controleren.",
+          legalMessage: "Kies eerst je club om de juridische setup te controleren.",
         } satisfies PublicMembershipSignupSnapshot);
       }
 
       const tenantContext = createPublicTenantContext(tenantProfile.id);
-      const [locations, plans, legal, payments] = await Promise.all([
+      const [locations, plans, legal] = await Promise.all([
         runtime.store.listLocations(tenantContext),
         runtime.store.listMembershipPlans(tenantContext),
         buildLegalComplianceSummary(tenantContext),
-        buildBillingSummary(tenantContext),
       ]);
+      const billing = tenantProfile.billing;
+      const testMode = isMollieTestMode();
 
       return toClientPlain({
         tenantName: tenantProfile.name,
@@ -4137,10 +4222,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           waiverStorageKey: legal.waiverStorageKey,
         },
         legalReady: isLegalCheckoutReady(legal),
-        billingReady:
-          payments.enabled &&
-          payments.connectionStatus === "configured" &&
-          !payments.previewMode,
+        billingReady: isPublicSignupBillingReady(billing, { testMode }),
+        testMode,
+        billingMessage: getPublicSignupBillingMessage(billing, { testMode }),
+        legalMessage: getPublicSignupLegalMessage(legal, { testMode }),
       } satisfies PublicMembershipSignupSnapshot);
     },
     async submitPublicMemberSignup(input) {

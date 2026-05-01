@@ -766,6 +766,9 @@ export interface PublicMembershipSignupSnapshot {
   >;
   readonly legalReady: boolean;
   readonly billingReady: boolean;
+  readonly testMode: boolean;
+  readonly billingMessage: string;
+  readonly legalMessage: string;
 }
 
 export interface MemberReservationSnapshot {

@@ -2403,6 +2403,8 @@ describe("gym platform services", () => {
     expect(publicSnapshot.membershipPlans.map((item) => item.id)).toContain(plan.id);
     expect(publicSnapshot.billingReady).toBe(true);
     expect(publicSnapshot.legalReady).toBe(true);
+    expect(publicSnapshot.billingMessage).toContain("veilige checkout");
+    expect(publicSnapshot.legalMessage).toContain("Contract-PDF en waiveropslag zijn ingericht");
     expect(checkout.signup.status).toBe("approved");
     expect(checkout.signup.waiverAcceptedAt).toBeTruthy();
     expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-checkout");
@@ -2467,6 +2469,101 @@ describe("gym platform services", () => {
       ]),
     );
     expect(authenticated?.account.linkedMemberId).toBe(approvedMember.id);
+  });
+
+  it("allows a public signup test checkout when Mollie is connected but live switch and legal docs are unfinished", async () => {
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+    const paymentRequests: Array<{
+      readonly method?: string;
+      readonly metadata?: Record<string, string>;
+      readonly profileId?: string;
+    }> = [];
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+
+      if (target.endsWith("/payments") && init?.method === "POST") {
+        paymentRequests.push(JSON.parse(String(init.body)));
+
+        return new Response(
+          JSON.stringify({
+            id: "tr_signup_test_checkout_1",
+            status: "open",
+            _links: {
+              checkout: {
+                href: "https://pay.mollie.com/p/signup-test-checkout",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unhandled Mollie request: ${target}`);
+    }) as typeof fetch;
+
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: false,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "",
+      paymentMethods: ["one_time", "payment_request"],
+    });
+
+    const publicSnapshot = await services.getPublicMembershipSignupSnapshot({
+      tenantSlug: state.tenant.id,
+    });
+
+    expect(publicSnapshot.billingReady).toBe(true);
+    expect(publicSnapshot.legalReady).toBe(false);
+    expect(publicSnapshot.testMode).toBe(true);
+    expect(publicSnapshot.billingMessage).toContain("Mollie is gekoppeld");
+    expect(publicSnapshot.billingMessage).toContain("testbetaling");
+    expect(publicSnapshot.legalMessage).toContain("Testomgeving");
+
+    const checkout = await services.submitPublicMemberSignup({
+      tenantSlug: state.tenant.id,
+      fullName: "Jade Test",
+      email: "jade-test@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      preferredLocationId: location.id,
+      paymentMethod: "one_time",
+      contractAccepted: true,
+      waiverAccepted: true,
+      portalPassword: "jade-member-123",
+    });
+
+    expect(checkout.signup.status).toBe("approved");
+    expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-test-checkout");
+    expect(paymentRequests[0]).toMatchObject({
+      profileId: "pfl_test_123456",
+      metadata: {
+        tenantId: tenantContext.tenantId,
+        invoiceId: checkout.invoice.id,
+        memberId: checkout.member.id,
+        source: "signup_checkout",
+      },
+    });
+    expect(paymentRequests[0]?.method).toBeUndefined();
   });
 
   it("rejects public signup requests for archived plans or locations", async () => {
@@ -3860,7 +3957,7 @@ describe("gym platform services", () => {
     expect(action.summary).toContain("Noa van Dijk");
   });
 
-  it("blocks Mollie payment actions when live credentials are missing", async () => {
+  it("blocks Mollie payment actions when provider access is missing", async () => {
     delete process.env.MOLLIE_API_KEY;
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
 
@@ -3882,8 +3979,8 @@ describe("gym platform services", () => {
         description: "Intake bundle",
       }),
     ).rejects.toMatchObject({
-      code: "INVALID_INPUT",
-      message: expect.stringContaining("Mollie live credentials ontbreken"),
+      code: "FORBIDDEN",
+      message: expect.stringContaining("Koppel eerst Mollie"),
     });
   });
 

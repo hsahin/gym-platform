@@ -25,7 +25,7 @@ export function PublicMembershipSignupPortal({
   const [preferredLocationId, setPreferredLocationId] = useState(
     snapshot.locations[0]?.id ?? "",
   );
-  const [paymentMethod, setPaymentMethod] = useState<"direct_debit" | "one_time" | "payment_request">("direct_debit");
+  const [paymentMethod, setPaymentMethod] = useState<"direct_debit" | "one_time" | "payment_request">("one_time");
   const [contractAccepted, setContractAccepted] = useState(false);
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const [portalPassword, setPortalPassword] = useState("");
@@ -33,7 +33,7 @@ export function PublicMembershipSignupPortal({
   const signupReady = Boolean(
     snapshot.tenantSlug &&
       snapshot.billingReady &&
-      snapshot.legalReady &&
+      (snapshot.legalReady || snapshot.testMode) &&
       fullName.trim() &&
       email.trim() &&
       phone.trim() &&
@@ -195,14 +195,10 @@ export function PublicMembershipSignupPortal({
                 {snapshot.legal.privacyUrl || "nog niet ingevuld"}
               </p>
               <p className="text-muted text-sm">
-                {snapshot.billingReady
-                  ? "Je betaling wordt direct als veilige checkout gestart."
-                  : "Checkout staat nog niet live; deze club moet Mollie eerst activeren."}
+                {snapshot.billingMessage}
               </p>
               <p className="text-muted text-sm">
-                {snapshot.legalReady
-                  ? "Contract-PDF en waiveropslag zijn ingericht voor directe onboarding."
-                  : "Contract-PDF en waiveropslag moeten nog ingericht worden voordat self-signup live kan."}
+                {snapshot.legalMessage}
               </p>
               {!signupReady ? (
                 <p className="text-muted text-sm">
