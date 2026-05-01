@@ -23,11 +23,22 @@ interface MollieRefundResponse {
   readonly status?: string;
 }
 
+interface MollieCustomerResponse {
+  readonly id?: string;
+}
+
+export interface CreateMollieCustomerInput {
+  readonly name: string;
+  readonly email: string;
+}
+
 export interface CreateMolliePaymentIntentInput {
   readonly amountCents: number;
   readonly currency: string;
   readonly description: string;
   readonly paymentMethod: BillingPaymentMethod;
+  readonly sequenceType?: "oneoff" | "first" | "recurring";
+  readonly customer?: CreateMollieCustomerInput;
   readonly redirectUrl: string;
   readonly webhookUrl: string;
   readonly profileId?: string;
@@ -38,6 +49,7 @@ export interface MolliePaymentIntent {
   readonly providerPaymentId: string;
   readonly checkoutUrl: string;
   readonly status: string;
+  readonly providerCustomerId?: string;
 }
 
 export interface MolliePaymentStatus {
@@ -262,7 +274,31 @@ export function createMolliePaymentProvider(options?: {
 
   return {
     async createPaymentIntent(input) {
-      const method = toMolliePaymentMethod(input.paymentMethod);
+      let providerCustomerId: string | undefined;
+
+      if (input.sequenceType === "first" && input.customer) {
+        const customerResponse = await request<MollieCustomerResponse>("/customers", {
+          method: "POST",
+          body: JSON.stringify({
+            name: input.customer.name,
+            email: input.customer.email,
+            ...(testMode ? { testmode: true } : {}),
+          }),
+        }, { testModeInBody: true });
+        providerCustomerId = customerResponse.id?.trim();
+
+        if (!providerCustomerId) {
+          throw new AppError("Mollie gaf geen geldige klantreferentie terug.", {
+            code: "INVALID_INPUT",
+            details: customerResponse,
+          });
+        }
+      }
+
+      const method =
+        input.sequenceType === "first"
+          ? undefined
+          : toMolliePaymentMethod(input.paymentMethod);
       const payload = {
         amount: {
           currency: input.currency.toUpperCase(),
@@ -271,15 +307,28 @@ export function createMolliePaymentProvider(options?: {
         description: input.description,
         redirectUrl: input.redirectUrl,
         webhookUrl: input.webhookUrl,
-        ...(input.profileId?.trim() ? { profileId: input.profileId.trim() } : {}),
+        ...(accessToken && input.profileId?.trim()
+          ? { profileId: input.profileId.trim() }
+          : {}),
         ...(method ? { method } : {}),
+        ...(input.sequenceType ? { sequenceType: input.sequenceType } : {}),
+        ...(providerCustomerId && input.sequenceType !== "first"
+          ? { customerId: providerCustomerId }
+          : {}),
         ...(testMode ? { testmode: true } : {}),
         metadata: compactMetadata(input.metadata),
       };
-      const response = await request<MolliePaymentResponse>("/payments", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }, { testModeInBody: true });
+      const paymentPath = providerCustomerId
+        ? `/customers/${encodeURIComponent(providerCustomerId)}/payments`
+        : "/payments";
+      const response = await request<MolliePaymentResponse>(
+        paymentPath,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+        { testModeInBody: true },
+      );
       const providerPaymentId = response.id?.trim();
       const checkoutUrl = response._links?.checkout?.href?.trim();
 
@@ -294,6 +343,7 @@ export function createMolliePaymentProvider(options?: {
         providerPaymentId,
         checkoutUrl,
         status: response.status ?? "open",
+        providerCustomerId,
       };
     },
     async getPayment(paymentId) {

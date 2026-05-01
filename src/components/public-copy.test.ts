@@ -52,6 +52,8 @@ describe("public surface copy", () => {
     expect(source).toContain("Inloggen");
     expect(source).toContain("Betaalmethode");
     expect(source).toContain("Automatische incasso");
+    expect(source).toContain("Eenmalige betaling (hele contractduur)");
+    expect(source).toContain("Betaalverzoek");
     expect(source).toContain("Member portal wachtwoord");
     expect(source).toContain("Checkout starten");
     expect(source).toContain("snapshot.billingMessage");

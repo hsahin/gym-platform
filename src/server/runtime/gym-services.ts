@@ -1895,6 +1895,11 @@ async function attachMolliePaymentToInvoice(
     readonly paymentMethod?: GymDashboardSnapshot["payments"]["paymentMethods"][number];
     readonly description?: string;
     readonly eventLabel?: string;
+    readonly sequenceType?: "oneoff" | "first" | "recurring";
+    readonly customer?: {
+      readonly name: string;
+      readonly email: string;
+    };
     readonly provider?: MolliePaymentProvider;
   },
 ) {
@@ -1914,6 +1919,8 @@ async function attachMolliePaymentToInvoice(
     currency: invoice.currency,
     description: options?.description ?? invoice.description,
     paymentMethod: options?.paymentMethod ?? selectBillingPaymentMethod(billing, invoice.source),
+    sequenceType: options?.sequenceType,
+    customer: options?.customer,
     profileId: billing.profileId,
     redirectUrl: buildBillingRedirectUrl(invoice.id),
     webhookUrl: buildMollieWebhookUrl(tenantContext),
@@ -3753,6 +3760,15 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         paymentMethod: input.signup.paymentMethod,
         description: `Membership checkout · ${input.membershipPlan.name}`,
         eventLabel: "payment.signup_checkout_created",
+        sequenceType:
+          input.signup.paymentMethod === "direct_debit" ? "first" : undefined,
+        customer:
+          input.signup.paymentMethod === "direct_debit"
+            ? {
+                name: member.fullName,
+                email: member.email,
+              }
+            : undefined,
         provider: prerequisites.provider ?? undefined,
       },
     );

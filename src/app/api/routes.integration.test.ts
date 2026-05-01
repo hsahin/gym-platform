@@ -230,7 +230,19 @@ describe("api route integrations", () => {
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
 
-      if (target.endsWith("/payments") && init?.method === "POST") {
+      if (target.endsWith("/customers") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            id: "cst_route_signup_1",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (
+        target.endsWith("/customers/cst_route_signup_1/payments") &&
+        init?.method === "POST"
+      ) {
         return new Response(
           JSON.stringify({
             id: "tr_route_signup_1",

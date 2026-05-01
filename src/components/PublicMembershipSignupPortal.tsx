@@ -25,7 +25,7 @@ export function PublicMembershipSignupPortal({
   const [preferredLocationId, setPreferredLocationId] = useState(
     snapshot.locations[0]?.id ?? "",
   );
-  const [paymentMethod, setPaymentMethod] = useState<"direct_debit" | "one_time" | "payment_request">("one_time");
+  const [paymentMethod, setPaymentMethod] = useState<"direct_debit" | "one_time" | "payment_request">("direct_debit");
   const [contractAccepted, setContractAccepted] = useState(false);
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const [portalPassword, setPortalPassword] = useState("");
@@ -163,7 +163,7 @@ export function PublicMembershipSignupPortal({
               <NativeSelect fullWidth>
                 <NativeSelect.Trigger value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>
                   <NativeSelect.Option value="direct_debit">Automatische incasso</NativeSelect.Option>
-                  <NativeSelect.Option value="one_time">Eenmalige betaling</NativeSelect.Option>
+                  <NativeSelect.Option value="one_time">Eenmalige betaling (hele contractduur)</NativeSelect.Option>
                   <NativeSelect.Option value="payment_request">Betaalverzoek</NativeSelect.Option>
                   <NativeSelect.Indicator />
                 </NativeSelect.Trigger>

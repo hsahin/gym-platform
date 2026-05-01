@@ -81,6 +81,82 @@ describe("mollie payment provider", () => {
     });
   });
 
+  it("creates a customer first for automatic direct debit mandate checkout", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+
+      if (target === "https://api.mollie.com/v2/customers") {
+        expect(init?.method).toBe("POST");
+        expect(body).toMatchObject({
+          name: "Jade Vermeer",
+          email: "jade@northside.test",
+          testmode: true,
+        });
+
+        return jsonResponse({
+          id: "cst_signup_1",
+        });
+      }
+
+      expect(target).toBe("https://api.mollie.com/v2/customers/cst_signup_1/payments");
+      expect(init?.method).toBe("POST");
+      expect(body).toMatchObject({
+        amount: {
+          currency: "EUR",
+          value: "119.00",
+        },
+        description: "Membership checkout",
+        sequenceType: "first",
+        testmode: true,
+        metadata: {
+          invoiceId: "inv_1",
+          tenantId: "tenant_1",
+        },
+      });
+      expect(body).not.toHaveProperty("method");
+
+      return jsonResponse({
+        id: "tr_first_1",
+        status: "open",
+        _links: {
+          checkout: {
+            href: "https://pay.mollie.com/p/first",
+          },
+        },
+      });
+    });
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+
+    await expect(
+      provider.createPaymentIntent({
+        amountCents: 11900,
+        currency: "EUR",
+        description: "Membership checkout",
+        paymentMethod: "direct_debit",
+        redirectUrl: "https://gym.example/dashboard/payments?invoice=inv_1",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+        customer: {
+          name: "Jade Vermeer",
+          email: "jade@northside.test",
+        },
+        sequenceType: "first",
+        metadata: {
+          invoiceId: "inv_1",
+          tenantId: "tenant_1",
+        },
+      }),
+    ).resolves.toMatchObject({
+      providerPaymentId: "tr_first_1",
+      providerCustomerId: "cst_signup_1",
+      checkoutUrl: "https://pay.mollie.com/p/first",
+    });
+  });
+
   it("reads Mollie payment status and creates refunds through the API", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
