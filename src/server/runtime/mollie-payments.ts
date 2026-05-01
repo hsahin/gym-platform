@@ -116,6 +116,88 @@ function parseMollieErrorBody(text: string) {
   }
 }
 
+function readMollieErrorText(body: unknown): string | undefined {
+  if (typeof body === "string") {
+    return body.trim() || undefined;
+  }
+
+  if (!body || typeof body !== "object") {
+    return undefined;
+  }
+
+  const record = body as Record<string, unknown>;
+  const directMessage =
+    (typeof record.detail === "string" && record.detail.trim()) ||
+    (typeof record.message === "string" && record.message.trim()) ||
+    (typeof record.title === "string" && record.title.trim()) ||
+    undefined;
+
+  if (directMessage) {
+    return directMessage;
+  }
+
+  const embedded = record._embedded;
+
+  if (!embedded || typeof embedded !== "object") {
+    return undefined;
+  }
+
+  const errors = (embedded as { errors?: unknown }).errors;
+
+  if (!Array.isArray(errors)) {
+    return undefined;
+  }
+
+  return errors
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const errorRecord = entry as Record<string, unknown>;
+
+      return (
+        (typeof errorRecord.detail === "string" && errorRecord.detail.trim()) ||
+        (typeof errorRecord.message === "string" && errorRecord.message.trim()) ||
+        (typeof errorRecord.title === "string" && errorRecord.title.trim()) ||
+        null
+      );
+    })
+    .filter((entry): entry is string => Boolean(entry))
+    .join(" ")
+    .trim() || undefined;
+}
+
+function readMollieErrorField(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") {
+    return undefined;
+  }
+
+  const field = (body as { field?: unknown }).field;
+
+  return typeof field === "string" && field.trim() ? field.trim() : undefined;
+}
+
+function buildMolliePaymentErrorMessage(body: unknown) {
+  const field = readMollieErrorField(body);
+  const detail = readMollieErrorText(body);
+  const haystack = `${field ?? ""} ${detail ?? ""}`.toLowerCase();
+
+  if (haystack.includes("profileid") || haystack.includes("profile id")) {
+    return "Mollie accepteert het gekoppelde betaalprofiel niet. Koppel het Mollie-account opnieuw of controleer of dit profiel testbetalingen mag ontvangen.";
+  }
+
+  if (haystack.includes("method") || haystack.includes("payment method")) {
+    return "Mollie accepteert deze betaalmethode nog niet voor dit profiel. Zet de betaalmethode in Mollie aan of kies een andere testlink.";
+  }
+
+  if (detail) {
+    return `Mollie weigerde de betaallink: ${detail}`;
+  }
+
+  return "Mollie weigerde de betaallink. Controleer het gekoppelde betaalprofiel en de betaalmethodes in Mollie.";
+}
+
 export function createMolliePaymentProvider(options?: {
   readonly apiKey?: string;
   readonly accessToken?: string;
@@ -140,16 +222,20 @@ export function createMolliePaymentProvider(options?: {
   const apiBaseUrl = options?.apiBaseUrl ?? MOLLIE_API_BASE_URL;
   const testMode = Boolean(options?.testMode);
 
-  function buildPath(path: string) {
-    if (!testMode) {
+  function buildPath(path: string, options?: { readonly testModeInBody?: boolean }) {
+    if (!testMode || options?.testModeInBody) {
       return path;
     }
 
     return `${path}${path.includes("?") ? "&" : "?"}testmode=true`;
   }
 
-  async function request<TBody>(path: string, init?: RequestInit) {
-    const response = await fetchImpl(`${apiBaseUrl}${buildPath(path)}`, {
+  async function request<TBody>(
+    path: string,
+    init?: RequestInit,
+    options?: { readonly testModeInBody?: boolean },
+  ) {
+    const response = await fetchImpl(`${apiBaseUrl}${buildPath(path, options)}`, {
       ...init,
       headers: {
         authorization: `Bearer ${bearerToken}`,
@@ -162,7 +248,7 @@ export function createMolliePaymentProvider(options?: {
     const body = parseMollieErrorBody(text);
 
     if (!response.ok) {
-      throw new AppError("Mollie heeft de betaalactie geweigerd.", {
+      throw new AppError(buildMolliePaymentErrorMessage(body), {
         code: "INVALID_INPUT",
         details: {
           status: response.status,
@@ -187,12 +273,13 @@ export function createMolliePaymentProvider(options?: {
         webhookUrl: input.webhookUrl,
         ...(input.profileId?.trim() ? { profileId: input.profileId.trim() } : {}),
         ...(method ? { method } : {}),
+        ...(testMode ? { testmode: true } : {}),
         metadata: compactMetadata(input.metadata),
       };
       const response = await request<MolliePaymentResponse>("/payments", {
         method: "POST",
         body: JSON.stringify(payload),
-      });
+      }, { testModeInBody: true });
       const providerPaymentId = response.id?.trim();
       const checkoutUrl = response._links?.checkout?.href?.trim();
 
@@ -233,8 +320,10 @@ export function createMolliePaymentProvider(options?: {
               value: formatMollieAmount(input.amountCents),
             },
             description: input.description,
+            ...(testMode ? { testmode: true } : {}),
           }),
         },
+        { testModeInBody: true },
       );
       const providerRefundId = response.id?.trim();
 

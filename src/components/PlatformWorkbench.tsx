@@ -1728,11 +1728,11 @@ export function PlatformWorkbench({
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Header className="items-start justify-between gap-4">
                     <div className="space-y-2">
-                      <Card.Title>Mollie Connect</Card.Title>
+                      <Card.Title>Mollie-account</Card.Title>
                       <Card.Description>
                         {isMollieConnectConnected
                           ? "Het Mollie-account is gekoppeld. Beheer hier SEPA-controle, opnieuw koppelen of ontkoppelen."
-                          : "Mollie-account koppelen of onboarden voordat GymOS betalingen kan verwerken."}
+                          : "Mollie-account koppelen of aanmeldlink maken voordat GymOS betalingen kan verwerken."}
                       </Card.Description>
                     </div>
                     <Chip
@@ -1778,7 +1778,7 @@ export function PlatformWorkbench({
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
                             <p className="text-sm font-medium">Nieuwe Mollie-klant</p>
                             <p className="text-muted mt-1 text-sm leading-6">
-                              Maak een Client Link zodat de gym Mollie-onboarding met GymOS-context kan afronden.
+                              Maak een aanmeldlink zodat de gym het Mollie-account met GymOS-context kan afronden.
                             </p>
                           </div>
                         </>
@@ -1901,7 +1901,7 @@ export function PlatformWorkbench({
                     <Input fullWidth placeholder="Atlas Forge Club" value={billingSettlementLabel} onChange={(event) => setBillingSettlementLabel(event.target.value)} />
                   </Field>
                   <div className="md:col-span-2">
-                    <Field label="Support e-mail">
+                    <Field label="Supportmail voor betalingen">
                       <Input fullWidth placeholder="billing@jouwgym.nl" type="email" value={billingSupportEmail} onChange={(event) => setBillingSupportEmail(event.target.value)} />
                     </Field>
                   </div>
@@ -1944,9 +1944,9 @@ export function PlatformWorkbench({
                 {!isMollieConnectConnected ? (
                   <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                     <Card.Header>
-                      <Card.Title>Mollie klant onboarden</Card.Title>
+                      <Card.Title>Nieuwe Mollie-klant aanmaken</Card.Title>
                       <Card.Description>
-                        Gebruik dit wanneer een gym nog geen Mollie-account heeft. De link opent Mollie in testmodus.
+                        Gebruik dit wanneer een gym nog geen Mollie-account heeft. De link opent Mollie in de testomgeving.
                       </Card.Description>
                     </Card.Header>
                     <Card.Content className="grid gap-4 md:grid-cols-2">
@@ -2031,7 +2031,7 @@ export function PlatformWorkbench({
                           })
                         }
                       >
-                        Client Link maken
+                        Aanmeldlink maken
                       </Button>
                     </Card.Footer>
                   </Card>
@@ -2067,11 +2067,14 @@ export function PlatformWorkbench({
                 </Card>
 
                 <div className="flex flex-wrap justify-end gap-3">
+                  <p className="text-muted mr-auto max-w-2xl text-sm leading-6">
+                    Slaat de gekozen betaalroutes, supportmail en aan/uit-stand voor deze gym op. Testlink maken opent alleen een losse Mollie testbetaling.
+                  </p>
                   <Button
                     isDisabled={isPending || billingPaymentMethods.length === 0}
                     type="submit"
                   >
-                    {isPending ? "Opslaan..." : "Betalingen opslaan"}
+                    {isPending ? "Opslaan..." : "Instellingen opslaan"}
                   </Button>
                   <Button
                     isDisabled={

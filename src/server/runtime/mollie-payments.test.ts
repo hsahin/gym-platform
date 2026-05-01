@@ -158,13 +158,16 @@ describe("mollie payment provider", () => {
     });
   });
 
-  it("uses OAuth app access tokens with testmode query parameters", async () => {
+  it("uses OAuth app access tokens with testmode body parameters for payment creation", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
 
-      expect(target).toBe("https://api.mollie.com/v2/payments?testmode=true");
+      expect(target).toBe("https://api.mollie.com/v2/payments");
       expect(init?.headers).toMatchObject({
         authorization: "Bearer access_123",
+      });
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        testmode: true,
       });
 
       return jsonResponse({
@@ -198,6 +201,42 @@ describe("mollie payment provider", () => {
     ).resolves.toMatchObject({
       providerPaymentId: "tr_oauth_1",
       checkoutUrl: "https://pay.mollie.com/p/oauth",
+    });
+  });
+
+  it("surfaces Mollie validation details in a business-readable error", async () => {
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          {
+            status: 422,
+            title: "Unprocessable Entity",
+            detail: "The profile id is invalid.",
+            field: "profileId",
+          },
+          { status: 422 },
+        ),
+      ),
+      testMode: true,
+    });
+
+    await expect(
+      provider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Testbetaling",
+        paymentMethod: "one_time",
+        profileId: "pfl_invalid",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+        metadata: {
+          invoiceId: "inv_1",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("gekoppelde betaalprofiel"),
     });
   });
 });

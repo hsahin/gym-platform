@@ -4,6 +4,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { POST as billingRoute } from "@/app/api/platform/billing/route";
 import { POST as billingPreviewRoute } from "@/app/api/platform/billing/preview/route";
 import { POST as clientLinkRoute } from "@/app/api/platform/billing/mollie/client-link/route";
 import { GET as connectRoute } from "@/app/api/platform/billing/mollie/connect/route";
@@ -208,16 +209,35 @@ describe("mollie connect routes", () => {
     expect(snapshot.payments.profileId).toBe("pfl_test_northside");
     expect(snapshot.payments.profileLabel).toBe("Northside Athletics Payments");
 
+    const saveResponse = await billingRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/billing",
+        token,
+        {
+          enabled: false,
+          provider: "mollie",
+          profileLabel: "Northside Athletics Payments",
+          profileId: "pfl_test_northside",
+          settlementLabel: "Northside Club",
+          supportEmail: "",
+          paymentMethods: ["one_time", "payment_request"],
+          notes: "Testlinks eerst controleren",
+        },
+      ),
+    );
+    expect(saveResponse.status).toBe(201);
+
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
 
-      expect(target).toBe("https://api.mollie.com/v2/payments?testmode=true");
+      expect(target).toBe("https://api.mollie.com/v2/payments");
       expect(init?.headers).toMatchObject({
         authorization: "Bearer access_123",
       });
       expect(JSON.parse(String(init?.body))).toMatchObject({
         description: "Proefbetaling",
         profileId: "pfl_test_northside",
+        testmode: true,
       });
 
       return new Response(

@@ -159,7 +159,7 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
-  it("exposes Mollie Connect OAuth and Client Link onboarding from the billing workbench", () => {
+  it("exposes Mollie onboarding in business language from the billing workbench", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 
     expect(workbench).toContain("/api/platform/billing/mollie/connect");
@@ -169,14 +169,18 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).toContain("Bestaand account koppelen");
     expect(workbench).toContain("Opnieuw koppelen");
     expect(workbench).toContain("Mollie-profiel gekoppeld");
-    expect(workbench).toContain("Mollie-account koppelen of onboarden");
+    expect(workbench).toContain("Mollie-account koppelen of aanmeldlink maken");
     expect(workbench).toContain("Koppeling verwijderen");
     expect(workbench).toContain("GymOS betaalflows");
     expect(workbench).toContain("Bepaal welke betaalroutes GymOS");
     expect(workbench).toContain("Betaallink testen");
-    expect(workbench).toContain("Client Link maken");
+    expect(workbench).toContain("Aanmeldlink maken");
+    expect(workbench).toContain("Instellingen opslaan");
+    expect(workbench).toContain("Slaat de gekozen betaalroutes");
     expect(workbench).toContain("SEPA mandates scannen");
     expect(workbench).toContain("mollieConnectMigrationHint");
+    expect(workbench).not.toContain("Mollie Connect");
+    expect(workbench).not.toContain("Client Link maken");
     expect(workbench).not.toContain("OAuth-koppeling");
     expect(workbench).not.toContain("Live betaalflow testen");
   });
