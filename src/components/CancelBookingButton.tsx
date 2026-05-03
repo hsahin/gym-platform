@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { toast } from "sonner";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 
 export function CancelBookingButton({
   bookingId,
@@ -28,11 +28,7 @@ export function CancelBookingButton({
               `/api/platform/bookings/${bookingId}/cancel`,
               {
                 method: "PATCH",
-                headers: {
-                  "content-type": "application/json",
-                  "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-                  "x-idempotency-key": crypto.randomUUID(),
-                },
+                headers: await buildMutationHeaders(),
                 body: JSON.stringify({
                   expectedVersion,
                 }),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as UiLabels from "@/lib/ui-labels";
 import {
   getBillingPaymentMethodLabel,
   getLeadAutomationTriggerLabel,
@@ -41,5 +42,53 @@ describe("ui labels", () => {
     expect(getUiLabel("memberStatus", "future_status")).toBe("Onbekend");
     expect(getUiLabel("billingPaymentMethod", "")).toBe("Onbekend");
     expect(getUiLabel("entityStatus", null)).toBe("Onbekend");
+  });
+
+  it("keeps every exported enum translator wired to the central Dutch label layer", () => {
+    const cases: ReadonlyArray<readonly [keyof typeof UiLabels, string, string]> = [
+      ["getAppointmentStatusLabel", "scheduled", "Gepland"],
+      ["getAttendanceChannelLabel", "frontdesk", "Balie"],
+      ["getBillingInvoiceSourceLabel", "signup_checkout", "Online aanmelding"],
+      ["getBillingInvoiceStatusLabel", "refunded", "Terugbetaald"],
+      ["getBillingPaymentMethodLabel", "bank_transfer", "Overschrijving"],
+      ["getBillingReconciliationStatusLabel", "attention", "Aandacht nodig"],
+      ["getBillingRefundStatusLabel", "processed", "Verwerkt"],
+      ["getBillingWebhookStatusLabel", "received", "Ontvangen"],
+      ["getBookingKindLabel", "open_gym", "Vrij trainen"],
+      ["getBookingSourceLabel", "member_app", "Ledenapp"],
+      ["getBookingStatusLabel", "waitlisted", "Wachtlijst"],
+      ["getChallengeStatusLabel", "completed", "Afgerond"],
+      ["getClassLevelLabel", "mixed", "Gemengd"],
+      ["getCollectionCaseStatusLabel", "retrying", "In opvolging"],
+      ["getCommunityGroupStatusLabel", "archived", "Gearchiveerd"],
+      ["getEntityStatusLabel", "paused", "Gepauzeerd"],
+      ["getLeadStageLabel", "trial_scheduled", "Proefles gepland"],
+      ["getLeadSourceLabel", "walk_in", "Binnenloper"],
+      ["getLeadAutomationTriggerLabel", "schedule", "Planning"],
+      ["getLeadTaskStatusLabel", "done", "Afgerond"],
+      ["getLeadTaskTypeLabel", "follow_up", "Nabellen"],
+      ["getMemberSignupStatusLabel", "rejected", "Afgewezen"],
+      ["getMemberStatusLabel", "trial", "Proeflid"],
+      ["getMobileRequestStatusLabel", "approved", "Goedgekeurd"],
+      ["getPointOfSaleModeLabel", "kiosk", "Kiosk"],
+      ["getQuestionnaireStatusLabel", "closed", "Gesloten"],
+      ["getRemoteAccessBridgeTypeLabel", "hub", "Hub"],
+      ["getRemoteAccessConnectionStatusLabel", "configured", "Ingericht"],
+      ["getRemoteAccessProviderLabel", "salto_ks", "Salto KS"],
+      ["getReviewRequestStatusLabel", "pending", "Open"],
+      ["getRoleLabel", "gym.trainer", "Trainer"],
+      ["getTrainerStatusLabel", "away", "Afwezig"],
+      ["getSystemHealthStatusLabel", "missing_config", "Configuratie mist"],
+      ["getSystemCacheModeLabel", "memory", "Tijdelijke stand"],
+      ["getWaiverRecordStatusLabel", "expired", "Verlopen"],
+      ["getWaiverStatusLabel", "complete", "Waiver akkoord"],
+    ];
+
+    for (const [functionName, value, expected] of cases) {
+      const translator = UiLabels[functionName];
+
+      expect(typeof translator).toBe("function");
+      expect((translator as (input: string) => string)(value)).toBe(expected);
+    }
   });
 });

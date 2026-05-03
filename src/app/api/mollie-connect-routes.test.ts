@@ -14,7 +14,7 @@ import { GET as redirectRoute } from "@/app/api/mollie/redirect/route";
 import {
   IDEMPOTENCY_HEADER,
   MUTATION_CSRF_HEADER,
-  MUTATION_CSRF_TOKEN,
+  createMutationCsrfToken,
 } from "@/server/http/platform-api";
 import { bootstrapLocalPlatform } from "@/server/persistence/platform-state";
 import { SESSION_COOKIE_NAME, buildPlatformActor } from "@/server/runtime/demo-session";
@@ -82,7 +82,7 @@ function createMutationRequest(
       cookie: `${SESSION_COOKIE_NAME}=${token}`,
       origin: "http://localhost",
       "content-type": "application/json",
-      [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+      [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
       [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
     },
     body: JSON.stringify(body),
@@ -293,7 +293,6 @@ describe("mollie connect routes", () => {
   });
 
   it("creates a Mollie client link for gyms that do not have a Mollie account yet", async () => {
-    expect(mandatesRoute).toBeTypeOf("function");
     await bootstrapLocalPlatform({
       tenantName: "Northside Athletics",
       ownerName: "Amina Hassan",
@@ -304,6 +303,18 @@ describe("mollie connect routes", () => {
       "owner@northside.test",
       "strong-pass-123",
     );
+    const mandatesResponse = await mandatesRoute(
+      createMutationRequest(
+        "http://localhost/api/platform/billing/mollie/mandates",
+        token,
+        {},
+      ),
+    );
+    const mandatesPayload = await mandatesResponse.json();
+
+    expect(mandatesResponse.status).toBe(400);
+    expect(mandatesPayload.error.message).toContain("betaalgegevens");
+
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
 

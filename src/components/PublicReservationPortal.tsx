@@ -13,7 +13,7 @@ import {
   getReviewRequestStatusLabel,
 } from "@/lib/ui-labels";
 import { formatEuroFromCents } from "@/lib/currency";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 import type {
   MemberReservationSnapshot,
   PublicReservationSnapshot,
@@ -184,11 +184,7 @@ export function PublicReservationPortal({
       try {
         const response = await fetch("/api/public/reservations", {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-            "x-idempotency-key": crypto.randomUUID(),
-          },
+          headers: await buildMutationHeaders(),
           body: JSON.stringify({
             tenantSlug: snapshot.tenantSlug ?? undefined,
             classSessionId: selectedClassSessionId,
@@ -251,11 +247,7 @@ export function PublicReservationPortal({
       try {
         const response = await fetch("/api/member/mobile-self-service", {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-            "x-idempotency-key": crypto.randomUUID(),
-          },
+          headers: await buildMutationHeaders(),
           body: JSON.stringify({
             operation: input.operation,
             ...input.body,

@@ -5,10 +5,11 @@ import {
   IDEMPOTENCY_HEADER,
   MUTATION_CSRF_HEADER,
   MUTATION_SECURITY_ERROR_MESSAGE,
-  MUTATION_CSRF_TOKEN,
+  createMutationCsrfToken,
   getRequestId,
   jsonError,
   jsonOk,
+  requireRateLimitedMutationSecurity,
   requireMutationSecurity,
   runApiHandler,
 } from "@/server/http/platform-api";
@@ -34,7 +35,7 @@ describe("platform api helpers", () => {
     const request = new Request("http://localhost/api/platform/bookings", {
       method: "POST",
       headers: {
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
       },
     });
 
@@ -47,7 +48,7 @@ describe("platform api helpers", () => {
     const request = new Request("http://localhost/api/platform/bookings", {
       method: "POST",
       headers: {
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: " booking-123 ",
       },
     });
@@ -57,25 +58,25 @@ describe("platform api helpers", () => {
     });
   });
 
-  it("rejects cross-origin mutation requests when the origin does not match", () => {
+  it("rejects cross-origin mutation requests when the origin does not match", async () => {
     const request = new Request("http://localhost/api/public/member-signups", {
       method: "POST",
       headers: {
         origin: "https://evil.example",
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: "signup-123",
       },
     });
 
-    expect(() =>
-      requireMutationSecurity(request, {
+    await expect(
+      requireRateLimitedMutationSecurity(request, {
         rateLimit: {
           scope: "member-signups",
           maxRequests: 3,
           windowMs: 60_000,
         },
       }),
-    ).toThrowError(MUTATION_SECURITY_ERROR_MESSAGE);
+    ).rejects.toThrowError(MUTATION_SECURITY_ERROR_MESSAGE);
   });
 
   it("accepts same-origin mutations behind a production proxy host", () => {
@@ -85,7 +86,7 @@ describe("platform api helpers", () => {
         host: "localhost:3000",
         "x-forwarded-host": "gym-platform-vc9yk.ondigitalocean.app",
         origin: "https://gym-platform-vc9yk.ondigitalocean.app",
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: "location-123",
       },
     });
@@ -98,7 +99,7 @@ describe("platform api helpers", () => {
       method: "POST",
       headers: {
         origin: "not a url",
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: "location-456",
       },
     });
@@ -108,37 +109,37 @@ describe("platform api helpers", () => {
     );
   });
 
-  it("rate limits mutation requests when configured", () => {
+  it("rate limits mutation requests when configured", async () => {
     const buildRequest = () =>
       new Request("http://localhost/api/public/member-signups", {
         method: "POST",
         headers: {
           origin: "http://localhost",
           "x-forwarded-for": "127.0.0.1",
-          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
           [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
         },
       });
 
-    expect(() =>
-      requireMutationSecurity(buildRequest(), {
+    await expect(
+      requireRateLimitedMutationSecurity(buildRequest(), {
         rateLimit: {
           scope: "member-signups",
           maxRequests: 1,
           windowMs: 60_000,
         },
       }),
-    ).not.toThrow();
+    ).resolves.toEqual(expect.objectContaining({ idempotencyKey: expect.any(String) }));
 
-    expect(() =>
-      requireMutationSecurity(buildRequest(), {
+    await expect(
+      requireRateLimitedMutationSecurity(buildRequest(), {
         rateLimit: {
           scope: "member-signups",
           maxRequests: 1,
           windowMs: 60_000,
         },
       }),
-    ).toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
+    ).rejects.toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
   });
 
   it("accepts same-origin mutation requests that only send a referer header", () => {
@@ -146,7 +147,7 @@ describe("platform api helpers", () => {
       method: "POST",
       headers: {
         referer: "http://localhost/join?gym=northside-athletics",
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: "signup-referer-123",
       },
     });
@@ -159,7 +160,7 @@ describe("platform api helpers", () => {
       method: "POST",
       headers: {
         referer: "not a valid url",
-        [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: "signup-malformed-referer",
       },
     });
@@ -167,67 +168,67 @@ describe("platform api helpers", () => {
     expect(() => requireMutationSecurity(request)).not.toThrow();
   });
 
-  it("uses cf-connecting-ip as the primary mutation rate limit identifier", () => {
+  it("uses cf-connecting-ip as the primary mutation rate limit identifier", async () => {
     const buildRequest = () =>
       new Request("http://localhost/api/public/member-signups", {
         method: "POST",
         headers: {
           origin: "http://localhost",
           "cf-connecting-ip": "203.0.113.9",
-          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
           [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
         },
       });
 
-    expect(() =>
-      requireMutationSecurity(buildRequest(), {
+    await expect(
+      requireRateLimitedMutationSecurity(buildRequest(), {
         rateLimit: {
           scope: "member-signups-cf",
           maxRequests: 1,
           windowMs: 60_000,
         },
       }),
-    ).not.toThrow();
-    expect(() =>
-      requireMutationSecurity(buildRequest(), {
+    ).resolves.toEqual(expect.objectContaining({ idempotencyKey: expect.any(String) }));
+    await expect(
+      requireRateLimitedMutationSecurity(buildRequest(), {
         rateLimit: {
           scope: "member-signups-cf",
           maxRequests: 1,
           windowMs: 60_000,
         },
       }),
-    ).toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
+    ).rejects.toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
   });
 
-  it("falls back to the request host when no client ip headers are present", () => {
+  it("falls back to the request host when no client ip headers are present", async () => {
     const buildRequest = () =>
       new Request("http://localhost/api/public/member-signups", {
         method: "POST",
         headers: {
           origin: "http://localhost",
-          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
           [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
         },
       });
 
-    expect(() =>
-      requireMutationSecurity(buildRequest(), {
+    await expect(
+      requireRateLimitedMutationSecurity(buildRequest(), {
         rateLimit: {
           scope: "member-signups-host",
           maxRequests: 1,
           windowMs: 60_000,
         },
       }),
-    ).not.toThrow();
-    expect(() =>
-      requireMutationSecurity(buildRequest(), {
+    ).resolves.toEqual(expect.objectContaining({ idempotencyKey: expect.any(String) }));
+    await expect(
+      requireRateLimitedMutationSecurity(buildRequest(), {
         rateLimit: {
           scope: "member-signups-host",
           maxRequests: 1,
           windowMs: 60_000,
         },
       }),
-    ).toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
+    ).rejects.toThrowError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.");
   });
 
   it("uses request ids from headers or generates a fallback id", () => {

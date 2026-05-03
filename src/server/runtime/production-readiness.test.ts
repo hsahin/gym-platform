@@ -173,6 +173,30 @@ describe("production readiness", () => {
     ).toBe(false);
   });
 
+  it("requires a webhook secret when Mollie billing is configured in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017");
+    vi.stubEnv("REDIS_URL", "redis://localhost:6379");
+    vi.stubEnv("MOLLIE_API_KEY", "test_api_key");
+    delete process.env.MOLLIE_WEBHOOK_SECRET;
+
+    expect(() => assertLiveInfrastructureConfiguration()).toThrow(
+      "Live infrastructuurconfiguratie mist onderdelen: Betaalwebhook-beveiliging.",
+    );
+    expect(getLiveInfrastructureConfigurationIssues()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "billing-webhook-security",
+          missingEnv: ["MOLLIE_WEBHOOK_SECRET"],
+        }),
+      ]),
+    );
+
+    vi.stubEnv("MOLLIE_WEBHOOK_SECRET", "webhook-secret");
+    expect(() => assertLiveInfrastructureConfiguration()).not.toThrow();
+  });
+
   it("does not block live runtime on partial Spaces env unless uploads are explicitly enabled", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("APP_ENV", "production");

@@ -52,6 +52,9 @@ import {
   createLocalTenantBillingRefund,
   createLocalTenantBillingWebhook,
   createLocalTenantBillingReconciliationRun,
+  findLocalTenantByMollieConnectState,
+  completeLocalTenantMollieConnect,
+  startLocalTenantMollieConnect,
   updateLocalTenantLeadTask,
   reviewLocalTenantPaymentMethodRequest,
   reviewLocalTenantPauseRequest,
@@ -69,6 +72,7 @@ beforeEach(async () => {
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
   vi.unstubAllEnvs();
+  vi.useRealTimers();
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -477,6 +481,44 @@ describe("platform state", () => {
       notes: "Preview routing for launch week",
     });
     expect(updatedTenant?.billing.lastValidatedAt).toEqual(expect.any(String));
+  });
+
+  it("expires Mollie connection states before completing a payment connection", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+    const createdAt = new Date("2026-05-01T09:00:00.000Z");
+
+    try {
+      vi.useFakeTimers();
+      vi.setSystemTime(createdAt);
+      await startLocalTenantMollieConnect(tenant.tenant.id, {
+        state: "state_123",
+        scope: "payments.read payments.write",
+        testMode: true,
+      });
+      await expect(findLocalTenantByMollieConnectState("state_123")).resolves.toMatchObject({
+        id: tenant.tenant.id,
+      });
+
+      vi.setSystemTime(new Date(createdAt.getTime() + 16 * 60_000));
+      await expect(findLocalTenantByMollieConnectState("state_123")).resolves.toBeNull();
+      await expect(
+        completeLocalTenantMollieConnect(tenant.tenant.id, {
+          state: "state_123",
+          accessToken: "access",
+          refreshToken: "refresh",
+          expiresAt: new Date("2026-05-01T10:00:00.000Z").toISOString(),
+          scope: "payments.read payments.write",
+          testMode: true,
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stores tenant feature flag overrides per gym", async () => {

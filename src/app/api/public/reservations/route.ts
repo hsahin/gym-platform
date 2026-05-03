@@ -6,7 +6,7 @@ import {
   isSupportedPhoneCountry,
 } from "@claimtech/i18n";
 import {
-  requireMutationSecurity,
+  requireRateLimitedMutationSecurity,
   runApiHandler,
 } from "@/server/http/platform-api";
 import {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     request,
     async () => {
       const services = await getGymPlatformServices();
-      requireMutationSecurity(request, {
+      await requireRateLimitedMutationSecurity(request, {
         rateLimit: {
           scope: "public.reservations",
           maxRequests: 8,

@@ -54,9 +54,13 @@
     "@vitest/coverage-v8": "^4.1.4",
     "eslint": "^8",
     "eslint-config-next": "^15.5.15",
-    "postcss": "^8",
+    "postcss": "^8.5.13",
     "tailwindcss": "^4.2.4",
     "typescript": "^5",
     "vitest": "4.1.4"
+  },
+  "overrides": {
+    "fast-xml-parser": "^5.7.0",
+    "postcss": "^8.5.13"
   }
 }

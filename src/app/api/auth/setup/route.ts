@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { bootstrapLocalPlatform } from "@/server/persistence/platform-state";
+import { verifyMutationCsrfToken } from "@/server/http/platform-api";
+import {
+  bootstrapLocalPlatform,
+  hasLocalPlatformSetup,
+} from "@/server/persistence/platform-state";
 import { createClientRedirectResponse } from "@/server/http/client-redirect";
 import {
   SESSION_COOKIE_NAME,
@@ -26,7 +30,22 @@ function createSetupRedirect(request: Request, message?: string) {
 
 export async function POST(request: Request) {
   try {
+    if (await hasLocalPlatformSetup()) {
+      return createSetupRedirect(
+        request,
+        "De eerste inrichting is al afgerond. Nieuwe eigenaars maak je aan via beheer.",
+      );
+    }
+
     const formData = await request.formData();
+
+    if (!verifyMutationCsrfToken(String(formData.get("csrfToken") ?? ""))) {
+      return createSetupRedirect(
+        request,
+        "De beveiliging is verlopen. Vernieuw de pagina en probeer opnieuw.",
+      );
+    }
+
     const payload = setupSchema.parse({
       tenantName: formData.get("tenantName"),
       ownerName: formData.get("ownerName"),

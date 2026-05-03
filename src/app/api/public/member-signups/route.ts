@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import {
-  requireMutationSecurity,
+  requireRateLimitedMutationSecurity,
   runApiHandler,
 } from "@/server/http/platform-api";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   return runApiHandler(
     request,
     async () => {
-      requireMutationSecurity(request, {
+      await requireRateLimitedMutationSecurity(request, {
         rateLimit: {
           scope: "public.member-signups",
           maxRequests: 4,

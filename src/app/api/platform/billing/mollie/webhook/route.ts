@@ -2,6 +2,7 @@ import { AppError } from "@claimtech/core";
 import { z } from "zod";
 import { runApiHandler } from "@/server/http/platform-api";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
+import { isProductionRuntime } from "@/server/runtime/production-readiness";
 
 const mollieWebhookSchema = z.object({
   id: z.string().trim().min(2),
@@ -27,7 +28,16 @@ function requireMollieWebhookSecret(request: Request) {
   const configuredSecret = process.env.MOLLIE_WEBHOOK_SECRET?.trim();
 
   if (!configuredSecret) {
-    return;
+    if (!isProductionRuntime()) {
+      return;
+    }
+
+    throw new AppError("Mollie webhook secret is verplicht in productie.", {
+      code: "INVALID_INPUT",
+      details: {
+        missingEnv: ["MOLLIE_WEBHOOK_SECRET"],
+      },
+    });
   }
 
   const requestUrl = new URL(request.url);

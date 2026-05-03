@@ -12,7 +12,7 @@ import {
   getBookingStatusLabel,
   getMemberStatusLabel,
 } from "@/lib/ui-labels";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 import type { ClassSession, GymMember } from "@/server/types";
 
 interface BookingDialogProps {
@@ -99,11 +99,7 @@ export function BookingDialog({
       try {
         const response = await fetch("/api/platform/bookings", {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-            "x-idempotency-key": crypto.randomUUID(),
-          },
+          headers: await buildMutationHeaders(),
           body: JSON.stringify({
             memberId,
             classSessionId,

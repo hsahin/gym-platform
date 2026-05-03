@@ -102,6 +102,7 @@ const contractRecordIdGenerator = createPrefixedIdGenerator({ prefix: "contractr
 const mongoPlatformStateCollection = "platform_state";
 const mongoPlatformStateDocumentId = "gym-platform-state";
 const productName = "gym-platform";
+const defaultMollieConnectStateTtlMs = 15 * 60_000;
 
 let mutationQueue = Promise.resolve();
 let mongoStateCollectionPromise:
@@ -2987,6 +2988,22 @@ export async function recordLocalTenantMollieClientLink(
   });
 }
 
+function getMollieConnectStateTtlMs() {
+  const parsed = Number(process.env.MOLLIE_CONNECT_STATE_TTL_MS);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultMollieConnectStateTtlMs;
+}
+
+function isMollieConnectStateFresh(stateCreatedAt: string | undefined) {
+  if (!stateCreatedAt) {
+    return false;
+  }
+
+  const createdAt = new Date(stateCreatedAt).getTime();
+
+  return Number.isFinite(createdAt) && Date.now() - createdAt <= getMollieConnectStateTtlMs();
+}
+
 export async function findLocalTenantByMollieConnectState(state: string) {
   const platformState = await readLocalPlatformState();
   const normalizedState = state.trim();
@@ -2997,7 +3014,9 @@ export async function findLocalTenantByMollieConnectState(state: string) {
 
   return (
     platformState?.tenants.find(
-      (tenant) => tenant.billing.mollieConnect?.state === normalizedState,
+      (tenant) =>
+        tenant.billing.mollieConnect?.state === normalizedState &&
+        isMollieConnectStateFresh(tenant.billing.mollieConnect.stateCreatedAt),
     ) ?? null
   );
 }
@@ -3032,8 +3051,11 @@ export async function completeLocalTenantMollieConnect(
       });
     }
 
-    if (tenant.billing.mollieConnect?.state !== input.state) {
-      throw new AppError("Mollie OAuth state klopt niet meer.", {
+    if (
+      tenant.billing.mollieConnect?.state !== input.state ||
+      !isMollieConnectStateFresh(tenant.billing.mollieConnect.stateCreatedAt)
+    ) {
+      throw new AppError("Mollie koppeling is verlopen. Start de koppeling opnieuw.", {
         code: "FORBIDDEN",
       });
     }

@@ -1,15 +1,76 @@
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createValkeyClient } from "@claimtech/cache";
 import { AppError, createPrefixedIdGenerator } from "@claimtech/core";
-import { InMemoryRateLimiter, buildRateLimitKey } from "@claimtech/ops";
+import { buildRateLimitKey } from "@claimtech/ops";
 import { ZodError } from "zod";
+import {
+  IDEMPOTENCY_HEADER,
+  MUTATION_CSRF_HEADER,
+  MUTATION_SECURITY_ERROR_MESSAGE,
+} from "@/lib/mutation-security-constants";
+import { allowsRuntimeFallbacks } from "@/server/runtime/production-readiness";
 
 const requestIdGenerator = createPrefixedIdGenerator({ prefix: "req" });
-const mutationRateLimiter = new InMemoryRateLimiter();
 
-export const MUTATION_CSRF_HEADER = "x-claimtech-csrf";
-export const MUTATION_CSRF_TOKEN = "claimtech-gym-platform";
-export const IDEMPOTENCY_HEADER = "x-idempotency-key";
-export const MUTATION_SECURITY_ERROR_MESSAGE =
-  "Deze actie kon niet veilig worden opgeslagen. Vernieuw de pagina en probeer het opnieuw.";
+export {
+  IDEMPOTENCY_HEADER,
+  MUTATION_CSRF_HEADER,
+  MUTATION_SECURITY_ERROR_MESSAGE,
+} from "@/lib/mutation-security-constants";
+const CSRF_TOKEN_VERSION = "v1";
+const DEFAULT_CSRF_TTL_SECONDS = 60 * 60 * 8;
+const DEFAULT_RATE_LIMIT_TTL_SAFETY_SECONDS = 5;
+const DEFAULT_RATE_LIMIT_TIMEOUT_MS = 1_000;
+const LOCAL_DEVELOPMENT_CSRF_SECRET =
+  "claimtech-gym-platform-local-development-csrf-secret";
+
+interface MutationRateLimitCacheClient {
+  incrBy(key: string, amount: number): Promise<number>;
+  expire(key: string, ttlSeconds: number): Promise<boolean>;
+}
+
+let mutationRateLimitCachePromise: Promise<MutationRateLimitCacheClient> | undefined;
+let mutationRateLimitCacheUrl: string | undefined;
+
+class MemoryRateLimitCacheClient implements MutationRateLimitCacheClient {
+  private readonly entries = new Map<
+    string,
+    {
+      value: string;
+      expiresAt?: number;
+    }
+  >();
+
+  private purgeIfExpired(key: string) {
+    const entry = this.entries.get(key);
+
+    if (entry?.expiresAt && entry.expiresAt <= Date.now()) {
+      this.entries.delete(key);
+    }
+  }
+
+  async incrBy(key: string, amount: number) {
+    this.purgeIfExpired(key);
+    const nextValue = Number(this.entries.get(key)?.value ?? "0") + amount;
+    this.entries.set(key, { value: String(nextValue) });
+    return nextValue;
+  }
+
+  async expire(key: string, ttlSeconds: number) {
+    this.purgeIfExpired(key);
+    const entry = this.entries.get(key);
+
+    if (!entry) {
+      return false;
+    }
+
+    this.entries.set(key, {
+      ...entry,
+      expiresAt: Date.now() + ttlSeconds * 1_000,
+    });
+    return true;
+  }
+}
 
 interface MutationRateLimitOptions {
   readonly scope: string;
@@ -63,6 +124,95 @@ function normalizeError(error: unknown) {
   }
 
   return error;
+}
+
+function getPositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getMutationCsrfSecret() {
+  const configuredSecret =
+    process.env.CLAIMTECH_CSRF_SECRET?.trim() ||
+    process.env.CLAIMTECH_SESSION_SECRET?.trim();
+
+  if (
+    configuredSecret &&
+    configuredSecret !== "replace-me" &&
+    configuredSecret !== "claimtech-gym-platform-local-secret"
+  ) {
+    return configuredSecret;
+  }
+
+  if (allowsRuntimeFallbacks()) {
+    return LOCAL_DEVELOPMENT_CSRF_SECRET;
+  }
+
+  throw new AppError("CSRF-beveiliging mist een sterke server secret.", {
+    code: "INVALID_INPUT",
+    details: {
+      missingEnv: ["CLAIMTECH_CSRF_SECRET", "CLAIMTECH_SESSION_SECRET"],
+    },
+  });
+}
+
+function signMutationCsrfPayload(payload: string) {
+  return createHmac("sha256", getMutationCsrfSecret())
+    .update(payload)
+    .digest("base64url");
+}
+
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  return (
+    leftBuffer.byteLength === rightBuffer.byteLength &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+export function getMutationCsrfMaxAgeSeconds() {
+  return getPositiveIntegerEnv(
+    "CLAIMTECH_CSRF_MAX_AGE_SECONDS",
+    DEFAULT_CSRF_TTL_SECONDS,
+  );
+}
+
+export function createMutationCsrfToken(now = Date.now()) {
+  const payload = `${CSRF_TOKEN_VERSION}.${now}.${randomUUID()}`;
+  const signature = signMutationCsrfPayload(payload);
+
+  return `${payload}.${signature}`;
+}
+
+export function verifyMutationCsrfToken(token: string | null | undefined, now = Date.now()) {
+  if (!token) {
+    return false;
+  }
+
+  const parts = token.split(".");
+
+  if (parts.length !== 4 || parts[0] !== CSRF_TOKEN_VERSION) {
+    return false;
+  }
+
+  const issuedAt = Number(parts[1]);
+
+  if (!Number.isFinite(issuedAt)) {
+    return false;
+  }
+
+  const maxAgeMs = getMutationCsrfMaxAgeSeconds() * 1_000;
+
+  if (issuedAt > now + 30_000 || now - issuedAt > maxAgeMs) {
+    return false;
+  }
+
+  const payload = parts.slice(0, 3).join(".");
+  const expectedSignature = signMutationCsrfPayload(payload);
+
+  return safeEqual(expectedSignature, parts[3] ?? "");
 }
 
 export function getRequestId(request: Request) {
@@ -173,24 +323,89 @@ function resolveClientIdentifier(request: Request) {
   );
 }
 
-function enforceMutationRateLimit(
+async function withRateLimitTimeout<T>(operation: Promise<T>) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutMs = getPositiveIntegerEnv(
+    "CLAIMTECH_RATE_LIMIT_TIMEOUT_MS",
+    DEFAULT_RATE_LIMIT_TIMEOUT_MS,
+  );
+  const timeout = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Mutation rate limit timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function getMutationRateLimitCache() {
+  const redisUrl = process.env.REDIS_URL?.trim();
+
+  if (!redisUrl) {
+    if (allowsRuntimeFallbacks()) {
+      if (!mutationRateLimitCachePromise || mutationRateLimitCacheUrl !== "memory") {
+        mutationRateLimitCacheUrl = "memory";
+        mutationRateLimitCachePromise = Promise.resolve(new MemoryRateLimitCacheClient());
+      }
+
+      return mutationRateLimitCachePromise;
+    }
+
+    throw new AppError("REDIS_URL is verplicht voor veilige rate limiting.", {
+      code: "INVALID_INPUT",
+    });
+  }
+
+  if (!mutationRateLimitCachePromise || mutationRateLimitCacheUrl !== redisUrl) {
+    mutationRateLimitCacheUrl = redisUrl;
+    mutationRateLimitCachePromise = createValkeyClient({
+      url: redisUrl,
+      name: "gym-platform-mutation-security",
+      socket: {
+        connectTimeout: getPositiveIntegerEnv("CLAIMTECH_REDIS_CONNECT_TIMEOUT_MS", 1500),
+        reconnectStrategy: (retries) => Math.min(retries * 100, 1000),
+      },
+    });
+  }
+
+  return mutationRateLimitCachePromise;
+}
+
+async function enforceMutationRateLimit(
   request: Request,
   rateLimit: MutationRateLimitOptions,
 ) {
-  const result = mutationRateLimiter.consume({
-    key: buildRateLimitKey({
-      scope: rateLimit.scope,
-      identifier: resolveClientIdentifier(request),
-      fallbackIdentifier: new URL(request.url).pathname,
-    }),
-    windowMs: rateLimit.windowMs,
-    maxRequests: rateLimit.maxRequests,
+  const cache = await getMutationRateLimitCache();
+  const key = buildRateLimitKey({
+    scope: rateLimit.scope,
+    identifier: resolveClientIdentifier(request),
+    fallbackIdentifier: new URL(request.url).pathname,
   });
+  const currentCount = await withRateLimitTimeout(cache.incrBy(key, 1));
 
-  if (!result.allowed) {
+  if (currentCount === 1) {
+    await withRateLimitTimeout(
+      cache.expire(
+        key,
+        Math.ceil(rateLimit.windowMs / 1_000) + DEFAULT_RATE_LIMIT_TTL_SAFETY_SECONDS,
+      ),
+    );
+  }
+
+  if (currentCount > rateLimit.maxRequests) {
     throw new AppError("Te veel mutaties in korte tijd. Probeer het zo opnieuw.", {
       code: "RATE_LIMIT_EXCEEDED",
-      details: result,
+      details: {
+        scope: rateLimit.scope,
+        maxRequests: rateLimit.maxRequests,
+        windowMs: rateLimit.windowMs,
+      },
     });
   }
 }
@@ -204,7 +419,7 @@ export function requireMutationSecurity(
   const csrfToken = request.headers.get(MUTATION_CSRF_HEADER);
   const idempotencyKey = request.headers.get(IDEMPOTENCY_HEADER)?.trim();
 
-  if (csrfToken !== MUTATION_CSRF_TOKEN) {
+  if (!verifyMutationCsrfToken(csrfToken)) {
     throw new AppError(MUTATION_SECURITY_ERROR_MESSAGE, {
       code: "CSRF_TOKEN_MISSING",
       details: {
@@ -225,10 +440,27 @@ export function requireMutationSecurity(
   assertSameOriginMutation(request);
 
   if (options?.rateLimit) {
-    enforceMutationRateLimit(request, options.rateLimit);
+    throw new AppError(
+      "Gebruik requireRateLimitedMutationSecurity voor publieke rate limits.",
+      {
+        code: "INVALID_INPUT",
+      },
+    );
   }
 
   return { idempotencyKey };
+}
+
+export async function requireRateLimitedMutationSecurity(
+  request: Request,
+  options: {
+    readonly rateLimit: MutationRateLimitOptions;
+  },
+) {
+  const result = requireMutationSecurity(request);
+  await enforceMutationRateLimit(request, options.rateLimit);
+
+  return result;
 }
 
 function toStatusCode(error: unknown) {

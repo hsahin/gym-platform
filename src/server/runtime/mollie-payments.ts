@@ -12,6 +12,8 @@ interface MollieLink {
 interface MolliePaymentResponse {
   readonly id?: string;
   readonly status?: string;
+  readonly customerId?: string;
+  readonly sequenceType?: string;
   readonly metadata?: Record<string, unknown>;
   readonly _links?: {
     readonly checkout?: MollieLink;
@@ -25,6 +27,11 @@ interface MollieRefundResponse {
 
 interface MollieCustomerResponse {
   readonly id?: string;
+}
+
+interface MollieSubscriptionResponse {
+  readonly id?: string;
+  readonly status?: string;
 }
 
 export interface CreateMollieCustomerInput {
@@ -57,6 +64,8 @@ export interface MolliePaymentStatus {
   readonly status: string;
   readonly invoiceId?: string;
   readonly tenantId?: string;
+  readonly providerCustomerId?: string;
+  readonly sequenceType?: string;
 }
 
 export interface CreateMollieRefundInput {
@@ -70,9 +79,26 @@ export interface MollieRefundReceipt {
   readonly status: string;
 }
 
+export interface CreateMollieSubscriptionInput {
+  readonly customerId: string;
+  readonly amountCents: number;
+  readonly currency: string;
+  readonly interval: string;
+  readonly description: string;
+  readonly webhookUrl: string;
+  readonly startDate?: string;
+  readonly metadata?: Record<string, string | number | boolean | null | undefined>;
+}
+
+export interface MollieSubscriptionReceipt {
+  readonly providerSubscriptionId: string;
+  readonly status: string;
+}
+
 export interface MolliePaymentProvider {
   createPaymentIntent(input: CreateMolliePaymentIntentInput): Promise<MolliePaymentIntent>;
   getPayment(paymentId: string): Promise<MolliePaymentStatus>;
+  createSubscription(input: CreateMollieSubscriptionInput): Promise<MollieSubscriptionReceipt>;
   createRefund(paymentId: string, input: CreateMollieRefundInput): Promise<MollieRefundReceipt>;
 }
 
@@ -357,6 +383,43 @@ export function createMolliePaymentProvider(options?: {
         status: response.status ?? "unknown",
         invoiceId: readMetadataString(response.metadata, "invoiceId"),
         tenantId: readMetadataString(response.metadata, "tenantId"),
+        providerCustomerId: response.customerId?.trim(),
+        sequenceType: response.sequenceType?.trim(),
+      };
+    },
+    async createSubscription(input) {
+      const response = await request<MollieSubscriptionResponse>(
+        `/customers/${encodeURIComponent(input.customerId)}/subscriptions`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            amount: {
+              currency: input.currency.toUpperCase(),
+              value: formatMollieAmount(input.amountCents),
+            },
+            interval: input.interval,
+            description: input.description,
+            webhookUrl: input.webhookUrl,
+            method: "directdebit",
+            ...(input.startDate ? { startDate: input.startDate } : {}),
+            ...(testMode ? { testmode: true } : {}),
+            metadata: compactMetadata(input.metadata),
+          }),
+        },
+        { testModeInBody: true },
+      );
+      const providerSubscriptionId = response.id?.trim();
+
+      if (!providerSubscriptionId) {
+        throw new AppError("Mollie gaf geen geldige incassoreferentie terug.", {
+          code: "INVALID_INPUT",
+          details: response,
+        });
+      }
+
+      return {
+        providerSubscriptionId,
+        status: response.status ?? "active",
       };
     },
     async createRefund(paymentId, input) {

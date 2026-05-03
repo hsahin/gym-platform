@@ -59,6 +59,7 @@ type LoginViewProps = {
   loginError?: string;
   mode: "login" | "signup";
   roleLabel?: string;
+  setupCsrfToken: string;
   setupError?: string;
 };
 
@@ -308,7 +309,7 @@ describe("app page flow integrations", () => {
       searchParams: Promise.resolve({ mode: "signup" }),
     });
     expect(expectComponent<LoginViewProps>(forcedSignup, components.LoginPageView).mode).toBe(
-      "signup",
+      "login",
     );
   });
 

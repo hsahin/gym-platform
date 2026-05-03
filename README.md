@@ -1,6 +1,6 @@
 # ClaimTech Gym Platform
 
-Single-app sportschoolplatform op Next.js 14, gebouwd bovenop remote `@claimtech/*`
+Single-app sportschoolplatform op Next.js 15, gebouwd bovenop remote `@claimtech/*`
 packages uit GitHub Packages. Er worden bewust geen workspaces gebruikt in deze
 repo.
 
@@ -19,7 +19,6 @@ Deze app resolveert en gebruikt de volgende remote packages:
 - `@claimtech/permissions@0.2.3`
 - `@claimtech/storage@0.2.3`
 - `@claimtech/tenant@0.2.3`
-- `@claimtech/ui@0.2.3`
 - `@claimtech/users@0.2.3`
 
 ## Package ownership map
@@ -33,7 +32,6 @@ Deze app resolveert en gebruikt de volgende remote packages:
 - `@claimtech/storage`: tenant-aware waiver paths en Spaces readiness
 - `@claimtech/ops`: audit log, health checks en rate limiting
 - `@claimtech/i18n`: currency en phone formatting
-- `@claimtech/ui`: dashboard UI, dialogs, tabs, metric cards en form controls
 
 ## Sportschool domeinlaag
 
@@ -76,6 +74,9 @@ Bij de eerste start richt je het platform eenmalig in met:
 - e-mailadres van de eigenaar
 - wachtwoord
 
+De publieke setup-route is daarna gesloten. Nieuwe eigenaars maak je aan via
+superadmin/beheer, niet via `/login?mode=signup`.
+
 Daarna log je in met echte teamaccounts en beheer je de gym vanuit aparte
 dashboardpagina's zoals `/dashboard/members`, `/dashboard/contracts`,
 `/dashboard/payments`, `/dashboard/smartdoors`, `/dashboard/locations` en
@@ -91,12 +92,15 @@ echte backends. In productie zijn deze variabelen verplicht:
 - `MONGODB_DB_NAME`
 - `REDIS_URL`
 - `CLAIMTECH_SESSION_SECRET`
+- `CLAIMTECH_CSRF_SECRET`
 
 Aanbevolen live-instellingen:
 
 - `REDIS_URL` voor tenant cache over meerdere instances
 - `APP_BASE_URL=https://gym-platform-vc9yk.ondigitalocean.app` voor publieke
   Mollie webhooks en redirects
+- `MOLLIE_WEBHOOK_SECRET` zodra Mollie is gekoppeld; betaalwebhooks zonder
+  gedeelde secret worden in productie geweigerd
 - `MOLLIE_TEST_MODE=true` zolang de Mollie OAuth-app in testfase draait
 - `MOLLIE_CLIENT_ID`, `MOLLIE_CLIENT_SECRET` en
   `MOLLIE_CONNECT_REDIRECT_URL=https://gym-platform-vc9yk.ondigitalocean.app/api/mollie/redirect`

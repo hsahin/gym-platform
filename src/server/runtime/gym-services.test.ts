@@ -2336,6 +2336,14 @@ describe("gym platform services", () => {
       readonly email?: string;
       readonly name?: string;
     }> = [];
+    const subscriptionRequests: Array<{
+      readonly amount?: { readonly value?: string };
+      readonly interval?: string;
+      readonly method?: string;
+      readonly metadata?: Record<string, string>;
+    }> = [];
+    let checkoutInvoiceId = "";
+    let tenantContextId = "";
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
 
@@ -2370,10 +2378,42 @@ describe("gym platform services", () => {
         );
       }
 
+      if (
+        target.endsWith("/customers/cst_signup_checkout_1/subscriptions") &&
+        init?.method === "POST"
+      ) {
+        subscriptionRequests.push(JSON.parse(String(init.body)));
+
+        return new Response(
+          JSON.stringify({
+            id: "sub_signup_checkout_1",
+            status: "active",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (target.endsWith("/payments/tr_signup_checkout_1") && (!init?.method || init.method === "GET")) {
+        return new Response(
+          JSON.stringify({
+            id: "tr_signup_checkout_1",
+            status: "paid",
+            customerId: "cst_signup_checkout_1",
+            sequenceType: "first",
+            metadata: {
+              invoiceId: checkoutInvoiceId,
+              tenantId: tenantContextId,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
       throw new Error(`Unhandled Mollie request: ${target}`);
     }) as typeof fetch;
 
     const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    tenantContextId = tenantContext.tenantId;
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -2426,6 +2466,11 @@ describe("gym platform services", () => {
       portalPassword: "jade-member-123",
       notes: "Start het liefst volgende week.",
     });
+    checkoutInvoiceId = checkout.invoice.id;
+    await services.syncMollieBillingWebhook({
+      tenantId: tenantContext.tenantId,
+      paymentId: checkout.providerPaymentId!,
+    });
     const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
     const authenticated = await authenticateLocalAccount(
       "jade@northside.test",
@@ -2470,6 +2515,17 @@ describe("gym platform services", () => {
       },
     });
     expect(paymentRequests[0]?.method).toBeUndefined();
+    expect(subscriptionRequests[0]).toMatchObject({
+      amount: { value: "119.00" },
+      interval: "1 month",
+      method: "directdebit",
+      metadata: {
+        tenantId: tenantContext.tenantId,
+        invoiceId: checkout.invoice.id,
+        memberId: approvedMember.id,
+        source: "signup_checkout",
+      },
+    });
     expect(snapshot.memberSignups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2484,9 +2540,10 @@ describe("gym platform services", () => {
         expect.objectContaining({
           memberName: "Jade Vermeer",
           amountCents: 11900,
-          status: "open",
+          status: "paid",
           source: "signup_checkout",
           externalReference: "tr_signup_checkout_1",
+          lastWebhookEventType: "subscription.created",
         }),
       ]),
     );

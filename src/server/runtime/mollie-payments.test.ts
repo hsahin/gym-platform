@@ -16,6 +16,21 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 }
 
 describe("mollie payment provider", () => {
+  it("requires either a platform API key or connected-account access token", () => {
+    const previousApiKey = process.env.MOLLIE_API_KEY;
+    delete process.env.MOLLIE_API_KEY;
+
+    try {
+      expect(() => createMolliePaymentProvider()).toThrow("Mollie API-key ontbreekt.");
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.MOLLIE_API_KEY;
+      } else {
+        process.env.MOLLIE_API_KEY = previousApiKey;
+      }
+    }
+  });
+
   it("detects configured Mollie credentials without treating empty env as live", () => {
     expect(isMolliePaymentConfigured({ MOLLIE_API_KEY: "" })).toBe(false);
     expect(isMolliePaymentConfigured({ MOLLIE_API_KEY: "test_live_key" })).toBe(true);
@@ -181,6 +196,8 @@ describe("mollie payment provider", () => {
       return jsonResponse({
         id: "tr_paid_1",
         status: "paid",
+        customerId: "cst_1",
+        sequenceType: "first",
         metadata: {
           invoiceId: "inv_1",
           tenantId: "tenant_1",
@@ -195,6 +212,8 @@ describe("mollie payment provider", () => {
     await expect(provider.getPayment("tr_paid_1")).resolves.toMatchObject({
       providerPaymentId: "tr_paid_1",
       invoiceId: "inv_1",
+      providerCustomerId: "cst_1",
+      sequenceType: "first",
       status: "paid",
     });
     await expect(
@@ -206,6 +225,165 @@ describe("mollie payment provider", () => {
     ).resolves.toMatchObject({
       providerRefundId: "re_1",
       status: "queued",
+    });
+  });
+
+  it("adds testmode to read calls for connected accounts outside request bodies", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      expect(String(url)).toBe("https://api.mollie.com/v2/payments/tr_paid_1?testmode=true");
+
+      return jsonResponse({
+        id: "tr_paid_1",
+        status: "paid",
+      });
+    });
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+
+    await expect(provider.getPayment("tr_paid_1")).resolves.toMatchObject({
+      providerPaymentId: "tr_paid_1",
+      status: "paid",
+    });
+  });
+
+  it("creates a Mollie subscription for monthly direct debit after the first mandate payment", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe(
+        "https://api.mollie.com/v2/customers/cst_1/subscriptions",
+      );
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        amount: {
+          currency: "EUR",
+          value: "119.00",
+        },
+        interval: "1 month",
+        method: "directdebit",
+        description: "Maandelijkse incasso · Jade Vermeer",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+        testmode: true,
+        metadata: {
+          invoiceId: "inv_1",
+          tenantId: "tenant_1",
+        },
+      });
+
+      return jsonResponse({
+        id: "sub_1",
+        status: "active",
+      });
+    });
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+
+    await expect(
+      provider.createSubscription({
+        customerId: "cst_1",
+        amountCents: 11900,
+        currency: "EUR",
+        interval: "1 month",
+        description: "Maandelijkse incasso · Jade Vermeer",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+        startDate: "2026-06-01",
+        metadata: {
+          invoiceId: "inv_1",
+          tenantId: "tenant_1",
+        },
+      }),
+    ).resolves.toEqual({
+      providerSubscriptionId: "sub_1",
+      status: "active",
+    });
+  });
+
+  it("rejects incomplete Mollie customer, payment, subscription and refund responses", async () => {
+    const customerProvider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async (url: string | URL | Request) => {
+        if (String(url).endsWith("/customers")) {
+          return jsonResponse({});
+        }
+
+        return jsonResponse({
+          id: "tr_never_used",
+          _links: { checkout: { href: "https://pay.mollie.com/p/never" } },
+        });
+      }),
+      testMode: true,
+    });
+
+    await expect(
+      customerProvider.createPaymentIntent({
+        amountCents: 11900,
+        currency: "EUR",
+        description: "Membership checkout",
+        paymentMethod: "direct_debit",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+        customer: {
+          name: "Jade Vermeer",
+          email: "jade@northside.test",
+        },
+        sequenceType: "first",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Mollie gaf geen geldige klantreferentie terug.",
+    });
+
+    const paymentProvider = createMolliePaymentProvider({
+      apiKey: "test_live_key",
+      fetchImpl: vi.fn(async () => jsonResponse({ id: "tr_without_checkout" })),
+    });
+
+    await expect(
+      paymentProvider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Drop-in",
+        paymentMethod: "one_time",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Mollie gaf geen geldige betaallink terug.",
+    });
+
+    const emptyResponseProvider = createMolliePaymentProvider({
+      apiKey: "test_live_key",
+      fetchImpl: vi.fn(async () => jsonResponse({})),
+    });
+
+    await expect(
+      emptyResponseProvider.createSubscription({
+        customerId: "cst_1",
+        amountCents: 11900,
+        currency: "EUR",
+        interval: "1 month",
+        description: "Maandelijkse incasso",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Mollie gaf geen geldige incassoreferentie terug.",
+    });
+
+    await expect(
+      emptyResponseProvider.createRefund("tr_1", {
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Refund",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Mollie gaf geen geldige refundreferentie terug.",
     });
   });
 
@@ -313,6 +491,59 @@ describe("mollie payment provider", () => {
     ).rejects.toMatchObject({
       code: "INVALID_INPUT",
       message: expect.stringContaining("gekoppelde betaalprofiel"),
+    });
+  });
+
+  it("translates embedded Mollie method errors and text responses to owner-readable messages", async () => {
+    const methodProvider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          {
+            _embedded: {
+              errors: [
+                null,
+                { title: "Payment method is not enabled for this profile." },
+              ],
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+      testMode: true,
+    });
+
+    await expect(
+      methodProvider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Testbetaling",
+        paymentMethod: "direct_debit",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("betaalmethode"),
+    });
+
+    const textProvider = createMolliePaymentProvider({
+      apiKey: "test_live_key",
+      fetchImpl: vi.fn(async () => new Response("Temporary Mollie outage", { status: 503 })),
+    });
+
+    await expect(
+      textProvider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Testbetaling",
+        paymentMethod: "one_time",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Mollie weigerde de betaallink: Temporary Mollie outage",
     });
   });
 });

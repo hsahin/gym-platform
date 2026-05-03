@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { LoginPageView } from "@/components/LoginPageView";
 import { RuntimeConfigurationState } from "@/components/RuntimeConfigurationState";
+import { createMutationCsrfToken } from "@/server/http/platform-api";
 import {
   hasLocalPlatformSetup,
 } from "@/server/persistence/platform-state";
@@ -29,10 +30,7 @@ export default async function LoginPage({
 
   try {
     const isSetupComplete = await hasLocalPlatformSetup();
-    const mode =
-      !isSetupComplete || readSearchParam(resolvedSearchParams?.mode) === "signup"
-        ? "signup"
-        : "login";
+    const mode = isSetupComplete ? "login" : "signup";
 
     return (
       <LoginPageView
@@ -40,6 +38,7 @@ export default async function LoginPage({
         loginError={loginError}
         mode={mode}
         roleLabel={viewer?.roleLabel}
+        setupCsrfToken={createMutationCsrfToken()}
         setupError={setupError}
       />
     );

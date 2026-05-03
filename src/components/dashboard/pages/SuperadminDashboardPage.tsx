@@ -14,7 +14,7 @@ import {
 } from "@/components/dashboard/shared";
 import { getDashboardFeatureCategoryLabel } from "@/features/dashboard-feature-copy";
 import { getEntityStatusLabel } from "@/lib/ui-labels";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 import type { FeatureState } from "@/server/types";
 
 function groupFeaturesByCategory(features: ReadonlyArray<FeatureState>) {
@@ -49,11 +49,7 @@ async function submitOwnerAccountMutation(
 ) {
   const response = await fetch("/api/platform/superadmin/owner-accounts", {
     method,
-    headers: {
-      "content-type": "application/json",
-      "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-      "x-idempotency-key": crypto.randomUUID(),
-    },
+    headers: await buildMutationHeaders(),
     body: JSON.stringify(payload),
   });
   const result = (await response.json()) as {

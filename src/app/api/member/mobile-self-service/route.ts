@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { AppError } from "@claimtech/core";
 import { z } from "zod";
 import {
-  requireMutationSecurity,
+  requireRateLimitedMutationSecurity,
   runApiHandler,
 } from "@/server/http/platform-api";
 import { requireViewerFromRequest } from "@/server/http/claimtech-request";
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const services = await getGymPlatformServices();
-    requireMutationSecurity(request, {
+    await requireRateLimitedMutationSecurity(request, {
       rateLimit: {
         scope: "member.mobile-self-service",
         maxRequests: 6,

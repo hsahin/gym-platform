@@ -24,12 +24,11 @@ import {
 import {
   IDEMPOTENCY_HEADER,
   MUTATION_CSRF_HEADER,
-  MUTATION_CSRF_TOKEN,
+  createMutationCsrfToken,
 } from "@/server/http/platform-api";
 import {
   SESSION_COOKIE_NAME,
   buildPlatformActor,
-  resolveViewerFromToken,
 } from "@/server/runtime/demo-session";
 import {
   createGymPlatformServices,
@@ -91,7 +90,7 @@ function createMutationRequest(
     headers: {
       origin: "http://localhost",
       "content-type": "application/json",
-      [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+      [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
       [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
       cookie: `${SESSION_COOKIE_NAME}=${token}`,
     },
@@ -127,6 +126,7 @@ describe("owner platform route integrations", () => {
     formData.set("ownerName", "Mustafa Ali");
     formData.set("ownerEmail", "owner@atlasforge.test");
     formData.set("password", "AtlasPass123!");
+    formData.set("csrfToken", createMutationCsrfToken());
 
     const response = await setupRoute(
       new Request("http://localhost/api/auth/setup", {
@@ -148,7 +148,7 @@ describe("owner platform route integrations", () => {
     expect(authenticated?.account.roleKey).toBe("owner");
   });
 
-  it("issues the setup session for the newly created gym owner when multiple gyms exist", async () => {
+  it("blocks public setup after the first gym is already configured", async () => {
     await bootstrapLocalPlatform({
       tenantName: "Existing Gym",
       ownerName: "First Owner",
@@ -161,6 +161,7 @@ describe("owner platform route integrations", () => {
     formData.set("ownerName", "Second Owner");
     formData.set("ownerEmail", "owner@second-performance.test");
     formData.set("password", "SecondPass123!");
+    formData.set("csrfToken", createMutationCsrfToken());
 
     const response = await setupRoute(
       new Request("http://localhost/api/auth/setup", {
@@ -168,20 +169,17 @@ describe("owner platform route integrations", () => {
         body: formData,
       }),
     );
-    const token = response.headers
-      .get("set-cookie")
-      ?.match(new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`))?.[1];
     const authenticated = await authenticateLocalAccount(
       "owner@second-performance.test",
       "SecondPass123!",
       "second-performance-gym",
     );
-    const viewer = await resolveViewerFromToken(token);
 
-    expect(token).toBeTruthy();
-    expect(authenticated?.tenant.name).toBe("Second Performance Gym");
-    expect(viewer?.actor.email).toBe("owner@second-performance.test");
-    expect(viewer?.tenantContext.tenantId).toBe(authenticated?.tenant.id);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toContain("/login");
+    expect(response.headers.get("location")).toContain("setupError=");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(authenticated).toBeNull();
   });
 
   it("redirects back to login when setup input is invalid", async () => {
@@ -637,7 +635,7 @@ describe("owner platform route integrations", () => {
         headers: {
           origin: "http://localhost",
           "content-type": "application/json",
-          [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+          [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
           [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
         },
         body: JSON.stringify({

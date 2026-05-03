@@ -1,9 +1,7 @@
 "use client";
 
-import {
-  MUTATION_SECURITY_ERROR_MESSAGE,
-  MUTATION_CSRF_TOKEN,
-} from "@/server/http/platform-api";
+import { MUTATION_SECURITY_ERROR_MESSAGE } from "@/lib/mutation-security-constants";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 
 const MUTATION_FALLBACK_ERROR_MESSAGE =
   "Opslaan is niet gelukt. Controleer je invoer en probeer het opnieuw.";
@@ -76,11 +74,7 @@ export async function submitDashboardMutation<TResponse>(
     method: options?.method ?? "POST",
     credentials: "same-origin",
     cache: "no-store",
-    headers: {
-      "content-type": "application/json",
-      "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-      "x-idempotency-key": crypto.randomUUID(),
-    },
+    headers: await buildMutationHeaders(),
     body: JSON.stringify(payload),
   });
   const result = await readMutationResult<TResponse>(response);

@@ -192,6 +192,7 @@ import {
   assertProductionEnvironmentReady,
   allowsRuntimeFallbacks,
   getProductionReadinessChecks,
+  isProductionRuntime,
 } from "@/server/runtime/production-readiness";
 import { resolveSpacesStorageConfiguration } from "@/server/runtime/spaces-config";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
@@ -1549,6 +1550,10 @@ function isLiveBillingProviderConfigured(
     return false;
   }
 
+  if (isProductionRuntime() && !process.env.MOLLIE_WEBHOOK_SECRET?.trim()) {
+    return false;
+  }
+
   return (
     isMolliePaymentConfigured() ||
     Boolean(hasMollieConnectTokens(billing) && isMollieConnectConfigured())
@@ -1563,6 +1568,13 @@ function buildMollieWebhookUrl(tenantContext: TenantContext) {
 
   if (webhookSecret) {
     params.set("secret", webhookSecret);
+  } else if (isProductionRuntime()) {
+    throw new AppError("Mollie webhook secret ontbreekt.", {
+      code: "INVALID_INPUT",
+      details: {
+        missingEnv: ["MOLLIE_WEBHOOK_SECRET"],
+      },
+    });
   }
 
   return `${resolveAppBaseUrl()}/api/platform/billing/mollie/webhook?${params.toString()}`;
@@ -1642,6 +1654,9 @@ function getMissingPublicSignupBillingFields(
     billing?.supportEmail?.trim() ? null : "supportmail",
     hasProviderCredentials ? null : "betaalkoppeling",
     resolveConfiguredAppBaseUrl() ? null : "webhook-url",
+    isProductionRuntime() && !process.env.MOLLIE_WEBHOOK_SECRET?.trim()
+      ? "webhook-beveiliging"
+      : null,
     billing?.enabled || options?.testMode ? null : "betalingen actief",
   ].filter((field): field is string => Boolean(field));
 }
@@ -2034,6 +2049,54 @@ async function findInvoiceForMolliePayment(
       tenantId,
     },
   });
+}
+
+function formatMollieSubscriptionStartDate(now = new Date()) {
+  const nextChargeDate = new Date(now);
+  nextChargeDate.setMonth(nextChargeDate.getMonth() + 1);
+
+  return nextChargeDate.toISOString().slice(0, 10);
+}
+
+async function ensureDirectDebitSubscriptionForPaidSignup(
+  tenantContext: TenantContext,
+  provider: MolliePaymentProvider,
+  payment: Awaited<ReturnType<MolliePaymentProvider["getPayment"]>>,
+  invoice: GymDashboardSnapshot["billingBackoffice"]["invoices"][number],
+) {
+  if (
+    invoice.source !== "signup_checkout" ||
+    invoice.lastWebhookEventType === "subscription.created" ||
+    payment.status !== "paid" ||
+    payment.sequenceType !== "first" ||
+    !payment.providerCustomerId
+  ) {
+    return null;
+  }
+
+  const subscription = await provider.createSubscription({
+    customerId: payment.providerCustomerId,
+    amountCents: invoice.amountCents,
+    currency: invoice.currency,
+    interval: "1 month",
+    description: `Maandelijkse incasso · ${invoice.memberName}`,
+    webhookUrl: buildMollieWebhookUrl(tenantContext),
+    startDate: formatMollieSubscriptionStartDate(),
+    metadata: {
+      tenantId: tenantContext.tenantId,
+      invoiceId: invoice.id,
+      memberId: invoice.memberId,
+      source: invoice.source,
+    },
+  });
+
+  await updateLocalTenantBillingInvoice(tenantContext.tenantId, {
+    id: invoice.id,
+    status: "paid",
+    lastWebhookEventType: "subscription.created",
+  });
+
+  return subscription;
 }
 
 async function buildBillingSummary(
@@ -3731,93 +3794,116 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         input.tenantContext,
         input.signup.paymentMethod,
       ));
-    const member = await runtime.store.createMember(input.tenantContext, {
-      fullName: input.signup.fullName,
-      email: input.signup.email,
-      phone: input.signup.phone,
-      phoneCountry: input.signup.phoneCountry,
-      membershipPlanId: input.membershipPlan.id,
-      homeLocationId: input.location.id,
-      status: input.memberStatus,
-      tags: ["self-signup"],
-      waiverStatus: "complete",
-      waiverStorageKey: prerequisites.legal.waiverStorageKey,
-    });
+    let member: GymMember | undefined;
+    let invoice: Awaited<ReturnType<typeof createLocalTenantBillingInvoice>> | undefined;
 
-    if (input.portalPassword?.trim()) {
-      await upsertLocalMemberPortalAccount(input.tenantContext.tenantId, {
-        memberId: member.id,
-        displayName: member.fullName,
-        email: member.email,
-        password: input.portalPassword.trim(),
+    try {
+      member = await runtime.store.createMember(input.tenantContext, {
+        fullName: input.signup.fullName,
+        email: input.signup.email,
+        phone: input.signup.phone,
+        phoneCountry: input.signup.phoneCountry,
+        membershipPlanId: input.membershipPlan.id,
+        homeLocationId: input.location.id,
+        status: input.memberStatus,
+        tags: ["self-signup"],
+        waiverStatus: "complete",
+        waiverStorageKey: prerequisites.legal.waiverStorageKey,
       });
-    }
-
-    const approvedSignup = await reviewLocalTenantMemberSignup(input.tenantContext.tenantId, {
-      id: input.signup.id,
-      status: "approved",
-      ownerNotes: input.ownerNotes,
-      approvedMemberId: member.id,
-    });
-    const invoice = await createLocalTenantBillingInvoice(input.tenantContext.tenantId, {
-      memberId: member.id,
-      memberName: member.fullName,
-      description: `Membership checkout · ${input.membershipPlan.name}`,
-      amountCents: getMembershipCheckoutAmountCents(input.membershipPlan),
-      dueAt: new Date().toISOString(),
-      source: "signup_checkout",
-      externalReference: input.signup.id,
-    });
-    const { invoice: processedInvoice, intent } = await attachMolliePaymentToInvoice(
-      input.tenantContext,
-      prerequisites.billing,
-      invoice,
-      {
-        paymentMethod: input.signup.paymentMethod,
+      invoice = await createLocalTenantBillingInvoice(input.tenantContext.tenantId, {
+        memberId: member.id,
+        memberName: member.fullName,
         description: `Membership checkout · ${input.membershipPlan.name}`,
-        eventLabel: "payment.signup_checkout_created",
-        sequenceType:
-          input.signup.paymentMethod === "direct_debit" ? "first" : undefined,
-        customer:
-          input.signup.paymentMethod === "direct_debit"
-            ? {
-                name: member.fullName,
-                email: member.email,
-              }
-            : undefined,
-        provider: prerequisites.provider ?? undefined,
-      },
-    );
-
-    if (!intent) {
-      throw new AppError("Mollie kon geen checkout aanmaken voor deze inschrijving.", {
-        code: "INVALID_INPUT",
+        amountCents: getMembershipCheckoutAmountCents(input.membershipPlan),
+        dueAt: new Date().toISOString(),
+        source: "signup_checkout",
+        externalReference: input.signup.id,
       });
-    }
+      const { invoice: processedInvoice, intent } = await attachMolliePaymentToInvoice(
+        input.tenantContext,
+        prerequisites.billing,
+        invoice,
+        {
+          paymentMethod: input.signup.paymentMethod,
+          description: `Membership checkout · ${input.membershipPlan.name}`,
+          eventLabel: "payment.signup_checkout_created",
+          sequenceType:
+            input.signup.paymentMethod === "direct_debit" ? "first" : undefined,
+          customer:
+            input.signup.paymentMethod === "direct_debit"
+              ? {
+                  name: member.fullName,
+                  email: member.email,
+                }
+              : undefined,
+          provider: prerequisites.provider ?? undefined,
+        },
+      );
 
-    const contract = await ensureMemberContractRecord(input.tenantContext, member);
-    await runtime.auditLogger.write({
-      action: "member_signup.checkout_created",
-      category: "members",
-      actorId: input.actorId,
-      tenantId: input.tenantContext.tenantId,
-      metadata: {
-        signupRequestId: input.signup.id,
-        memberId: member.id,
-        invoiceId: processedInvoice.id,
+      if (!intent) {
+        throw new AppError("Mollie kon geen checkout aanmaken voor deze inschrijving.", {
+          code: "INVALID_INPUT",
+        });
+      }
+
+      if (input.portalPassword?.trim()) {
+        await upsertLocalMemberPortalAccount(input.tenantContext.tenantId, {
+          memberId: member.id,
+          displayName: member.fullName,
+          email: member.email,
+          password: input.portalPassword.trim(),
+        });
+      }
+
+      const approvedSignup = await reviewLocalTenantMemberSignup(input.tenantContext.tenantId, {
+        id: input.signup.id,
+        status: "approved",
+        ownerNotes: input.ownerNotes,
+        approvedMemberId: member.id,
+      });
+      const contract = await ensureMemberContractRecord(input.tenantContext, member);
+      await runtime.auditLogger.write({
+        action: "member_signup.checkout_created",
+        category: "members",
+        actorId: input.actorId,
+        tenantId: input.tenantContext.tenantId,
+        metadata: {
+          signupRequestId: input.signup.id,
+          memberId: member.id,
+          invoiceId: processedInvoice.id,
+          providerPaymentId: intent.providerPaymentId,
+        },
+      });
+
+      return toClientPlain({
+        signup: approvedSignup,
+        member,
+        invoice: processedInvoice,
+        contract,
+        checkoutUrl: intent.checkoutUrl,
         providerPaymentId: intent.providerPaymentId,
-      },
-    });
+        providerStatus: intent.status,
+      } satisfies PublicMembershipSignupResult);
+    } catch (error) {
+      if (invoice) {
+        await updateLocalTenantBillingInvoice(input.tenantContext.tenantId, {
+          id: invoice.id,
+          status: "failed",
+          lastWebhookEventType: "payment.signup_checkout_failed",
+        }).catch(() => undefined);
+      }
 
-    return toClientPlain({
-      signup: approvedSignup,
-      member,
-      invoice: processedInvoice,
-      contract,
-      checkoutUrl: intent.checkoutUrl,
-      providerPaymentId: intent.providerPaymentId,
-      providerStatus: intent.status,
-    } satisfies PublicMembershipSignupResult);
+      if (member) {
+        await runtime.store
+          .deleteMember(input.tenantContext, {
+            id: member.id,
+            expectedVersion: member.version,
+          })
+          .catch(() => undefined);
+      }
+
+      throw error;
+    }
   }
 
   return {
@@ -4832,6 +4918,13 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         });
       }
 
+      const subscription = await ensureDirectDebitSubscriptionForPaidSignup(
+        createPublicTenantContext(tenant.id),
+        provider,
+        payment,
+        invoice,
+      );
+
       await runtime.auditLogger.write({
         action: "billing.mollie_webhook_synced",
         category: "billing",
@@ -4841,6 +4934,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           invoiceId: invoice.id,
           eventType,
           paymentId: payment.providerPaymentId,
+          providerSubscriptionId: subscription?.providerSubscriptionId,
         },
       });
       return webhook;

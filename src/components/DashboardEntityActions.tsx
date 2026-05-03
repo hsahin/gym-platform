@@ -3,7 +3,7 @@
 import { useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 
 export interface EntityActionOption {
   readonly value: string;
@@ -41,11 +41,7 @@ async function submitEntityMutation(
 ) {
   const response = await fetch(endpoint, {
     method,
-    headers: {
-      "content-type": "application/json",
-      "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-      "x-idempotency-key": crypto.randomUUID(),
-    },
+    headers: await buildMutationHeaders(),
     body: JSON.stringify(payload),
   });
   const result = (await response.json()) as {

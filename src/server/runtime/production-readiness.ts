@@ -8,6 +8,12 @@ const whatsappCloudEnvNames = [
   "WHATSAPP_PHONE_NUMBER_ID",
   "WHATSAPP_ACCESS_TOKEN",
 ] as const;
+const mollieBillingEnvNames = [
+  "MOLLIE_API_KEY",
+  "MOLLIE_CLIENT_ID",
+  "MOLLIE_CLIENT_SECRET",
+  "MOLLIE_ORGANIZATION_ACCESS_TOKEN",
+] as const;
 export interface ProductionReadinessCheck {
   readonly key: string;
   readonly label: string;
@@ -117,6 +123,24 @@ function getStorageConfigurationIssue(): LiveInfrastructureConfigurationIssue | 
   };
 }
 
+function getBillingWebhookConfigurationIssue(): LiveInfrastructureConfigurationIssue | null {
+  if (!isProductionRuntime() || !hasConfiguredEnv(mollieBillingEnvNames)) {
+    return null;
+  }
+
+  if (isPresent(process.env.MOLLIE_WEBHOOK_SECRET)) {
+    return null;
+  }
+
+  return {
+    key: "billing-webhook-security",
+    label: "Betaalwebhook-beveiliging",
+    helpText:
+      "Mollie-webhooks moeten in productie een gedeelde secret meesturen zodat betaalupdates niet publiek te vervalsen zijn.",
+    missingEnv: ["MOLLIE_WEBHOOK_SECRET"],
+  };
+}
+
 export function isProductionRuntime() {
   if (
     process.env.NEXT_PHASE === "phase-production-build" ||
@@ -201,6 +225,7 @@ export function getLiveInfrastructureConfigurationIssues(): ReadonlyArray<LiveIn
     getRuntimeDataStoresConfigurationIssue(),
     getMessagingConfigurationIssue(),
     getStorageConfigurationIssue(),
+    getBillingWebhookConfigurationIssue(),
   ].filter((issue): issue is LiveInfrastructureConfigurationIssue => issue !== null);
 }
 

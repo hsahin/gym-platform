@@ -6,7 +6,7 @@ import { Card, Checkbox, Input, Label } from "@heroui/react";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { toast } from "sonner";
-import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
+import { buildMutationHeaders } from "@/lib/mutation-security-client";
 import type { PublicMembershipSignupSnapshot } from "@/server/types";
 
 function formatMissingFields(fields: ReadonlyArray<string>) {
@@ -84,11 +84,7 @@ export function PublicMembershipSignupPortal({
       try {
         const response = await fetch("/api/public/member-signups", {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-claimtech-csrf": MUTATION_CSRF_TOKEN,
-            "x-idempotency-key": crypto.randomUUID(),
-          },
+          headers: await buildMutationHeaders(),
           body: JSON.stringify({
             tenantSlug: snapshot.tenantSlug ?? undefined,
             fullName,

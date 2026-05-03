@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Card, Chip, Input, Label } from "@heroui/react";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
-import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 
 export function LoginPageView({
@@ -12,16 +10,16 @@ export function LoginPageView({
   loginError,
   mode,
   roleLabel,
+  setupCsrfToken,
   setupError,
 }: {
   readonly isSetupComplete: boolean;
   readonly loginError?: string;
   readonly mode: "login" | "signup";
   readonly roleLabel?: string;
+  readonly setupCsrfToken: string;
   readonly setupError?: string;
 }) {
-  const router = useRouter();
-
   return (
     <main className="app-page section-stack min-h-screen py-6 md:py-8">
       <header className="app-header">
@@ -92,26 +90,6 @@ export function LoginPageView({
           </Card.Header>
 
           <Card.Content className="section-stack">
-            {isSetupComplete ? (
-              <Segment
-                onSelectionChange={(key) => {
-                  const nextMode = String(key);
-                  router.push(nextMode === "signup" ? "/login?mode=signup" : "/login");
-                }}
-                selectedKey={mode}
-                size="sm"
-              >
-                <Segment.Item id="login">
-                  <Segment.Separator />
-                  Inloggen
-                </Segment.Item>
-                <Segment.Item id="signup">
-                  <Segment.Separator />
-                  Nieuwe gym
-                </Segment.Item>
-              </Segment>
-            ) : null}
-
             {mode === "login" && isSetupComplete ? (
               <form action="/api/auth/login" className="section-stack" method="post">
                 <div className="field-stack">
@@ -151,6 +129,7 @@ export function LoginPageView({
               </form>
             ) : (
               <form action="/api/auth/setup" className="section-stack" method="post">
+                <input name="csrfToken" type="hidden" value={setupCsrfToken} />
                 <div className="field-stack">
                   <Label>Naam sportschool</Label>
                   <Input

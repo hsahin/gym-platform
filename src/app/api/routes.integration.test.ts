@@ -7,13 +7,14 @@ import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as memberMobileSelfServiceRoute } from "@/app/api/member/mobile-self-service/route";
 import { POST as publicMemberSignupRoute } from "@/app/api/public/member-signups/route";
 import { POST as publicReservationsRoute } from "@/app/api/public/reservations/route";
+import { GET as csrfRoute } from "@/app/api/security/csrf/route";
 import {
   bootstrapLocalPlatform,
 } from "@/server/persistence/platform-state";
 import {
   IDEMPOTENCY_HEADER,
   MUTATION_CSRF_HEADER,
-  MUTATION_CSRF_TOKEN,
+  createMutationCsrfToken,
 } from "@/server/http/platform-api";
 import {
   SESSION_COOKIE_NAME,
@@ -62,7 +63,7 @@ function createMutationRequest(
     origin: "http://localhost",
     "content-type": "application/json",
     "x-forwarded-for": options?.forwardedFor ?? `127.0.0.${Math.floor(Math.random() * 200) + 1}`,
-    [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+    [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
     [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
   });
 
@@ -124,6 +125,28 @@ afterEach(async () => {
 });
 
 describe("api route integrations", () => {
+  it("issues signed mutation security tokens for browser mutations", async () => {
+    const response = await csrfRoute(
+      new Request("http://localhost/api/security/csrf", {
+        method: "GET",
+      }),
+    );
+    const payload = (await response.json()) as {
+      ok: boolean;
+      data: {
+        csrfToken: string;
+        csrfHeader: string;
+        idempotencyHeader: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.data.csrfToken).toMatch(/^v1\./);
+    expect(payload.data.csrfHeader).toBe(MUTATION_CSRF_HEADER);
+    expect(payload.data.idempotencyHeader).toBe(IDEMPOTENCY_HEADER);
+  });
+
   it("logs owners into the dashboard and members into the reservation portal", async () => {
     const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
     const location = await services.createLocation(ownerActor, tenantContext, {

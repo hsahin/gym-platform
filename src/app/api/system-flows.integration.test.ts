@@ -65,7 +65,10 @@ import {
 } from "@/app/api/platform/locations/route";
 import { POST as marketingSettingsRoute } from "@/app/api/platform/marketing-settings/route";
 import { POST as memberPortalAccessRoute } from "@/app/api/platform/member-portal-access/route";
-import { GET as getMemberSignupsRoute } from "@/app/api/platform/member-signups/route";
+import {
+  GET as getMemberSignupsRoute,
+  PATCH as patchMemberSignupRoute,
+} from "@/app/api/platform/member-signups/route";
 import {
   DELETE as deleteMemberRoute,
   GET as getMembersRoute,
@@ -106,7 +109,7 @@ import { POST as publicReservationsRoute } from "@/app/api/public/reservations/r
 import {
   IDEMPOTENCY_HEADER,
   MUTATION_CSRF_HEADER,
-  MUTATION_CSRF_TOKEN,
+  createMutationCsrfToken,
 } from "@/server/http/platform-api";
 import {
   bootstrapLocalPlatform,
@@ -153,7 +156,7 @@ function createJsonRequest(
       origin: "http://localhost",
       "content-type": "application/json",
       "x-forwarded-for": `127.0.1.${Math.floor(Math.random() * 200) + 1}`,
-      [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+      [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
       [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
       cookie: `${SESSION_COOKIE_NAME}=${token}`,
     },
@@ -168,7 +171,7 @@ function createPublicJsonRequest(url: string, body: Record<string, unknown>, tok
       origin: "http://localhost",
       "content-type": "application/json",
       "x-forwarded-for": `127.0.2.${Math.floor(Math.random() * 200) + 1}`,
-      [MUTATION_CSRF_HEADER]: MUTATION_CSRF_TOKEN,
+      [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
       [IDEMPOTENCY_HEADER]: crypto.randomUUID(),
       ...(token ? { cookie: `${SESSION_COOKIE_NAME}=${token}` } : {}),
     },
@@ -1721,6 +1724,16 @@ describe("system flow integrations", () => {
       getMemberSignupsRoute(createGetRequest("http://localhost/api/platform/member-signups", token)),
     );
     expect(signups.some((entry) => entry.id === signup.id)).toBe(true);
+    const rejectedSignup = await expectOk<{ signup: IdentifiedRecord }>(
+      patchMemberSignupRoute(
+        createJsonRequest("http://localhost/api/platform/member-signups", {
+          signupRequestId: signup.id,
+          decision: "rejected",
+          ownerNotes: "Dubbele testaanmelding opgeschoond.",
+        }, token, "PATCH"),
+      ),
+    );
+    expect(rejectedSignup.signup.id).toBe(signup.id);
 
     const reservation = await expectOk<{ booking: VersionedRecord }>(
       publicReservationsRoute(
