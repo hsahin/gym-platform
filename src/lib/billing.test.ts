@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BILLING_PAYMENT_METHOD_OPTIONS,
   createDefaultBillingSettings,
   getBillingConnectionStatus,
   getBillingHelpText,
@@ -90,23 +91,41 @@ describe("billing helpers", () => {
     expect(getBillingProviderLabel("mollie")).toBe("Mollie");
     expect(getBillingProviderLabel("custom" as never)).toBe("custom");
     expect(getBillingPaymentMethodLabel("payment_request")).toBe("Betaalverzoek");
-    expect(getBillingPaymentMethodLabel("manual" as never)).toBe("manual");
+    expect(getBillingPaymentMethodLabel("manual" as never)).toBe("Onbekend");
     expect(getBillingStatusLabel(createDefaultBillingSettings())).toBe("Niet gekoppeld");
     expect(getBillingStatusLabel(attention)).toBe("Aandacht nodig");
     expect(getBillingStatusLabel(configuredDisabled)).toBe("Klaar om te activeren");
-    expect(getBillingStatusLabel(configuredEnabled)).toBe("Live credentials nodig");
+    expect(getBillingStatusLabel(configuredEnabled)).toBe("Live inrichting nodig");
     expect(getBillingStatusLabel(configuredEnabled, { liveProviderConfigured: true })).toBe(
       "Live",
     );
-    expect(getBillingHelpText(createDefaultBillingSettings())).toContain("Koppel Mollie");
+    expect(getBillingHelpText(createDefaultBillingSettings())).toContain(
+      "Koppel betaalgegevens",
+    );
     expect(getBillingHelpText(attention)).toContain("Vul profielnaam");
     expect(getBillingHelpText(configuredDisabled)).toContain("is ingevuld");
-    expect(getBillingHelpText(configuredEnabled)).toContain(
-      "live API-key en publieke webhook-url",
-    );
+    expect(getBillingHelpText(configuredDisabled)).toContain("lidmaatschappen");
+    expect(getBillingHelpText(configuredDisabled)).not.toContain("memberships");
+    expect(getBillingHelpText(configuredDisabled)).not.toContain("losse sales");
+    expect(getBillingHelpText(configuredEnabled)).toContain("live betaalverwerking");
     expect(getBillingHelpText(configuredEnabled, { liveProviderConfigured: true })).toContain(
       "Automatische incasso, Eenmalige betaling en Betaalverzoek",
     );
     expect(getBillingHelpText(configuredWithoutMethods)).toContain("Vul profielnaam");
+  });
+
+  it("explains payment routes in owner-facing business language", () => {
+    expect(BILLING_PAYMENT_METHOD_OPTIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "direct_debit",
+          helper: expect.stringContaining("maandelijks"),
+        }),
+        expect.objectContaining({
+          key: "one_time",
+          helper: expect.stringContaining("volledige contractperiode"),
+        }),
+      ]),
+    );
   });
 });

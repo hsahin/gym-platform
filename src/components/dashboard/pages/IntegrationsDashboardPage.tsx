@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ActivitySquare, Database, Link2, PlugZap } from "lucide-react";
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
+import { Card, Chip, Input, Label } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import {
   parseCommaList,
@@ -15,6 +16,7 @@ import {
   PageSection,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
+import { getSystemCacheModeLabel, getSystemHealthStatusLabel } from "@/lib/ui-labels";
 import { toast } from "sonner";
 
 export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
@@ -54,8 +56,8 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Integration setup"
-        description="Leg vast welke vendors, migratiebron en body composition tooling jouw tenant gebruikt."
+        title="Integraties instellen"
+        description="Leg vast welke leveranciers, migratiebron en meetapparatuur jouw club gebruikt."
         actions={
           <Button
             isDisabled={isPending}
@@ -89,7 +91,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
         <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
           <Card.Content className="grid gap-4 md:grid-cols-2">
             <div className="field-stack">
-              <Label>Hardware vendors</Label>
+              <Label>Hardwareleveranciers</Label>
               <Input
                 fullWidth
                 value={hardwareVendors}
@@ -97,7 +99,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Software integrations</Label>
+              <Label>Softwarekoppelingen</Label>
               <Input
                 fullWidth
                 value={softwareIntegrations}
@@ -105,7 +107,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Equipment integrations</Label>
+              <Label>Apparaatkoppelingen</Label>
               <Input
                 fullWidth
                 value={equipmentIntegrations}
@@ -113,7 +115,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Migration provider</Label>
+              <Label>Migratiebron</Label>
               <Input
                 fullWidth
                 value={migrationProvider}
@@ -121,7 +123,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Body composition provider</Label>
+              <Label>Lichaamssamenstelling</Label>
               <Input
                 fullWidth
                 value={bodyCompositionProvider}
@@ -136,13 +138,13 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
         {[
           {
             icon: PlugZap,
-            label: "Hardware state",
+            label: "Hardwarestatus",
             value: snapshot.remoteAccess.statusLabel,
-            helper: "Smart locks en clubhardware volgen hetzelfde connection model.",
+            helper: "Slimme sloten en clubhardware volgen hetzelfde koppelmodel.",
           },
           {
             icon: Database,
-            label: "Billing bridge",
+            label: "Betaalkoppeling",
             value: snapshot.payments.statusLabel,
             helper: "Betaalprovider en incassostatus kunnen als integratiebron fungeren.",
           },
@@ -150,16 +152,16 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
             ? [
                 {
                   icon: Link2,
-                  label: "Runtime cache",
-                  value: snapshot.runtime.cacheMode,
+                  label: "Systeemversnelling",
+                  value: getSystemCacheModeLabel(snapshot.runtime.cacheMode),
                   helper:
-                    "Cache-, messaging- en storage-modes bepalen integratiebetrouwbaarheid.",
+                    "Achtergrondservices bepalen hoe betrouwbaar koppelingen reageren.",
                 },
                 {
                   icon: ActivitySquare,
-                  label: "Aandacht checks",
+                  label: "Aandachtspunten",
                   value: String(attentionChecks.length),
-                  helper: "Gebruik health-checks om koppelingen veilig live te houden.",
+                  helper: "Gebruik statuschecks om koppelingen veilig live te houden.",
                 },
               ]
             : []),
@@ -179,11 +181,11 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
 
       {canViewPlatformChecks ? (
         <PageSection
-          title="Integration health"
-          description="Checks met aandacht tonen welke koppelingen of runtime onderdelen nog opvolging nodig hebben."
+          title="Integratiestatus"
+          description="Checks met aandacht tonen welke koppelingen of systeemonderdelen nog opvolging nodig hebben."
         >
           {attentionChecks.length > 0 ? (
-            <ListView aria-label="Integration health checks" items={attentionChecks}>
+            <ListView aria-label="Integratiestatuschecks" items={attentionChecks}>
               {(check) => (
                 <ListView.Item id={check.name} textValue={check.name}>
                   <ListView.ItemContent>
@@ -191,7 +193,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
                     <ListView.Description>{check.summary}</ListView.Description>
                   </ListView.ItemContent>
                   <Chip size="sm" variant="tertiary">
-                    {check.status}
+                    {getSystemHealthStatusLabel(check.status)}
                   </Chip>
                 </ListView.Item>
               )}
@@ -199,7 +201,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
           ) : (
             <EmptyPanel
               title="Geen open integratieproblemen"
-              description="Alle bekende runtime- en koppelingchecks staan momenteel gezond."
+              description="Alle bekende systeem- en koppelingchecks staan momenteel gezond."
             />
           )}
         </PageSection>
@@ -207,7 +209,7 @@ export function IntegrationsDashboardPage({ snapshot }: DashboardPageProps) {
 
       <PageSection
         title="Integratiemodules"
-        description="Compact overzicht van hardware, externe software en equipment-data."
+        description="Compact overzicht van hardware, externe software en apparaatgegevens."
       >
         <FeatureModuleBoard currentPage="integrations" features={integrationFeatures} snapshot={snapshot} />
       </PageSection>

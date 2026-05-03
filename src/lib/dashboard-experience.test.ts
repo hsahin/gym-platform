@@ -15,7 +15,7 @@ describe("dashboard experience", () => {
 
     expect(experience.isLaunchMode).toBe(true);
     expect(experience.pageHeroTitle).toBe(
-      "Je premium gym staat klaar voor de eerste live week.",
+      "Je gym staat klaar voor de eerste live week.",
     );
     expect(experience.progressValue).toBe("0% live");
     expect(experience.nextStep.label).toBe("Vestiging");
@@ -27,7 +27,7 @@ describe("dashboard experience", () => {
     });
     expect(experience.launchSteps.map((step) => step.label)).toEqual([
       "Vestiging",
-      "Membership",
+      "Lidmaatschap",
       "Trainer",
       "Les",
     ]);
@@ -68,11 +68,11 @@ describe("dashboard experience", () => {
 
     expect(experience.isLaunchMode).toBe(false);
     expect(experience.pageHeroTitle).toBe(
-      "Je club voelt nu als een premium merk, ook achter de schermen.",
+      "Je club voelt nu als een sterk merk, ook achter de schermen.",
     );
     expect(experience.progressValue).toBe("100% live");
     expect(experience.nextStep.label).toBe("Live gezet");
-    expect(experience.actionTitle).toBe("Nieuwe booking of snelle check");
+    expect(experience.actionTitle).toBe("Nieuwe reservering of snelle check");
     expect(experience.launchSteps.every((step) => step.complete)).toBe(true);
     expect(experience.screenChapters).toEqual([
       expect.objectContaining({
@@ -106,7 +106,59 @@ describe("dashboard experience", () => {
     });
 
     expect(experience.screenChapters.find((chapter) => chapter.key === "platform")).toMatchObject({
-      value: "Stack live",
+      value: "Platform live",
     });
+  });
+
+  it("keeps dashboard experience copy in Dutch business language", () => {
+    const launchExperience = getDashboardExperience({
+      locationsCount: 0,
+      membershipPlansCount: 0,
+      trainersCount: 0,
+      membersCount: 0,
+      classSessionsCount: 0,
+      bookingsCount: 0,
+      healthAttentionCount: 2,
+    });
+    const liveExperience = getDashboardExperience({
+      locationsCount: 1,
+      membershipPlansCount: 2,
+      trainersCount: 3,
+      membersCount: 24,
+      classSessionsCount: 8,
+      bookingsCount: 32,
+      healthAttentionCount: 1,
+    });
+    const visibleCopy = [
+      launchExperience,
+      liveExperience,
+    ].flatMap((experience) => [
+      experience.pageHeroTitle,
+      experience.pageHeroDescription,
+      experience.sectionTitle,
+      experience.sectionDescription,
+      experience.actionTitle,
+      experience.actionDescription,
+      ...experience.launchSteps.map((step) => `${step.label} ${step.helper}`),
+      ...experience.screenChapters.map((chapter) => `${chapter.title} ${chapter.helper}`),
+    ]).join("\n");
+
+    for (const fragment of [
+      "premium",
+      "Membership",
+      "membership",
+      "renewals",
+      "member journey",
+      "frontdesk",
+      "check-ins",
+      "member-bookings",
+      "Stack live",
+      "gym-stack",
+      "launchcanvas",
+      "launchpad",
+      "booking",
+    ]) {
+      expect(visibleCopy).not.toContain(fragment);
+    }
   });
 });

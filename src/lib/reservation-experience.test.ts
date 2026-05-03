@@ -49,7 +49,7 @@ describe("reservation experience", () => {
     const experience = getReservationExperience(liveSnapshot);
 
     expect(experience.heroBadges).toEqual([
-      "Member journey",
+      "Ledentraject",
       "Live rooster",
       "Direct bevestigd",
     ]);
@@ -58,7 +58,7 @@ describe("reservation experience", () => {
     expect(experience.promiseCards[0]?.title).toBe("Snelle keuze");
   });
 
-  it("turns an empty roster into a premium pre-launch state", () => {
+  it("turns an empty roster into a polished pre-launch state", () => {
     const experience = getReservationExperience({
       tenantName: "Atlas Horizon Club",
       tenantSlug: "atlas-horizon-club",
@@ -73,13 +73,13 @@ describe("reservation experience", () => {
     });
 
     expect(experience.heroBadges).toEqual([
-      "Founder edition",
+      "Oprichtingseditie",
       "Binnenkort live",
-      "Member-ready",
+      "Ledenklaar",
     ]);
-    expect(experience.emptyState?.title).toBe("Nieuwe class drops openen hier als eerste.");
+    expect(experience.emptyState?.title).toBe("Nieuwe lesmomenten openen hier als eerste.");
     expect(experience.emptyState?.highlights).toContain(
-      "De eerste live les activeert direct reserveringen, wachtlijst en confirmations.",
+      "De eerste live les activeert direct reserveringen, wachtlijst en bevestigingen.",
     );
     expect(experience.rosterSummary.value).toBe("Opening in opbouw");
   });

@@ -3,18 +3,21 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, HeartPulse, PlayCircle, Target } from "lucide-react";
-import { Button, Card, Input, Label } from "@heroui/react";
+import { Card, Input, Label } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
-import { NativeSelect } from "@heroui-pro/react/native-select";
+import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { toast } from "sonner";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import {
+  DisabledActionReason,
   EmptyPanel,
   PageSection,
   formatDateTime,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
+import { getClassLevelLabel } from "@/lib/ui-labels";
 
 export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
@@ -41,7 +44,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
   const [packMemberId, setPackMemberId] = useState(snapshot.members[0]?.id ?? "");
   const [packMemberName, setPackMemberName] = useState(snapshot.members[0]?.fullName ?? "");
   const [packTrainerId, setPackTrainerId] = useState(snapshot.trainers[0]?.id ?? "");
-  const [packTitle, setPackTitle] = useState("PT pack 10 credits");
+  const [packTitle, setPackTitle] = useState("PT-strippenkaart 10 ritten");
   const [packCredits, setPackCredits] = useState(10);
   const [packValidUntil, setPackValidUntil] = useState("2026-12-31T00:00:00.000Z");
   const [sessionTrainerId, setSessionTrainerId] = useState(snapshot.trainers[0]?.id ?? "");
@@ -54,7 +57,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
   const [sessionCreditPackId, setSessionCreditPackId] = useState(
     snapshot.appointments.creditPacks[0]?.id ?? "",
   );
-  const [sessionNotes, setSessionNotes] = useState("PT focus: strength cycle and accountability");
+  const [sessionNotes, setSessionNotes] = useState("PT-focus: krachtblok en opvolging");
   const upcomingCoachSessions = [...snapshot.classSessions]
     .sort((left, right) => left.startsAt.localeCompare(right.startsAt))
     .slice(0, 5);
@@ -83,11 +86,21 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
 
   const trainerNamesById = new Map(snapshot.trainers.map((trainer) => [trainer.id, trainer.fullName]));
   const locationNamesById = new Map(snapshot.locations.map((location) => [location.id, location.name]));
+  const packDisabledReason = isPending
+    ? "Even wachten: er loopt al een actie."
+    : !packMemberId || !packTrainerId
+      ? "Kies eerst een lid en coach voordat je een PT-strippenkaart toevoegt."
+      : null;
+  const sessionDisabledReason = isPending
+    ? "Even wachten: er loopt al een actie."
+    : !sessionTrainerId || !sessionLocationId
+      ? "Kies eerst een coach en vestiging voordat je sessies plant."
+      : null;
 
   return (
     <div className="section-stack">
       <PageSection
-        title="Coaching setup"
+        title="Coaching instellen"
         description="Leg de vaste coachaanpak, contentbron en AI-coachstijl vast voor alle trainers."
         actions={
           <Button
@@ -121,7 +134,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
         <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
           <Card.Content className="grid gap-4 md:grid-cols-2">
             <div className="field-stack">
-              <Label>Workout focus</Label>
+              <Label>Trainingsfocus</Label>
               <Input
                 fullWidth
                 value={workoutPlanFocus}
@@ -129,7 +142,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <label className="text-sm font-medium">Nutrition cadence</label>
+              <label className="text-sm font-medium">Voedingsritme</label>
               <NativeSelect fullWidth>
                 <NativeSelect.Trigger
                   value={nutritionCadence}
@@ -224,11 +237,11 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
       </div>
 
       <PageSection
-        title="Coach moments"
-        description="Gebruik je bestaande rooster als anker voor workout, voeding en progressieflows."
+        title="Coachmomenten"
+        description="Gebruik je bestaande rooster als anker voor training, voeding en voortgang."
       >
         {upcomingCoachSessions.length > 0 ? (
-          <ListView aria-label="Coach moments" items={upcomingCoachSessions}>
+          <ListView aria-label="Coachmomenten" items={upcomingCoachSessions}>
             {(session) => (
               <ListView.Item id={session.id} textValue={session.title}>
                 <ListView.ItemContent>
@@ -238,7 +251,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
                     {session.capacity}
                   </ListView.Description>
                 </ListView.ItemContent>
-                <p className="text-muted text-xs">{session.level}</p>
+                <p className="text-muted text-xs">{getClassLevelLabel(session.level)}</p>
               </ListView.Item>
             )}
           </ListView>
@@ -252,36 +265,39 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
 
       <div className="section-stack">
         <PageSection
-          title="PT packs"
-          description="Verkoop packs en koppel resterende credits direct aan coachtrajecten."
+          title="PT-strippenkaarten"
+          description="Verkoop strippenkaarten en koppel resterende ritten direct aan coachtrajecten."
           actions={
-            <Button
-              isDisabled={isPending || !packMemberId || !packTrainerId}
-              variant="outline"
-              onPress={() =>
-                startTransition(async () => {
-                  try {
-                    await submitDashboardMutation("/api/platform/appointments", {
-                      operation: "create_pack",
-                      memberId: packMemberId,
-                      memberName: packMemberName,
-                      trainerId: packTrainerId,
-                      title: packTitle,
-                      totalCredits: packCredits,
-                      validUntil: packValidUntil,
-                    });
-                    toast.success("PT pack toegevoegd.");
-                    router.refresh();
-                  } catch (error) {
-                    toast.error(
-                      error instanceof Error ? error.message : "PT pack toevoegen mislukt.",
-                    );
-                  }
-                })
-              }
-            >
-              {isPending ? "Opslaan..." : "Pack toevoegen"}
-            </Button>
+            <div className="flex flex-col items-start gap-2 md:items-end">
+              <Button
+                isDisabled={Boolean(packDisabledReason)}
+                variant="outline"
+                onPress={() =>
+                  startTransition(async () => {
+                    try {
+                      await submitDashboardMutation("/api/platform/appointments", {
+                        operation: "create_pack",
+                        memberId: packMemberId,
+                        memberName: packMemberName,
+                        trainerId: packTrainerId,
+                        title: packTitle,
+                        totalCredits: packCredits,
+                        validUntil: packValidUntil,
+                      });
+                      toast.success("PT-strippenkaart toegevoegd.");
+                      router.refresh();
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : "PT-strippenkaart toevoegen mislukt.",
+                      );
+                    }
+                  })
+                }
+              >
+                {isPending ? "Opslaan..." : "Strippenkaart toevoegen"}
+              </Button>
+              <DisabledActionReason reason={packDisabledReason} />
+            </div>
           }
         >
           <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
@@ -327,7 +343,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
                 <Input fullWidth value={packTitle} onChange={(event) => setPackTitle(event.target.value)} />
               </div>
               <div className="field-stack">
-                <Label>Credits</Label>
+                <Label>Ritten</Label>
                 <Input
                   fullWidth
                   min={1}
@@ -351,7 +367,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-medium">{pack.title}</p>
                       <p className="text-sm font-medium">
-                        {pack.remainingCredits}/{pack.totalCredits} credits
+                        {pack.remainingCredits}/{pack.totalCredits} ritten
                       </p>
                     </div>
                     <p className="text-muted text-sm">
@@ -364,8 +380,8 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
             </div>
           ) : (
             <EmptyPanel
-              title="Nog geen PT packs"
-              description="Nieuwe credit packs verschijnen hier zodra je de eerste verkoopt."
+              title="Nog geen PT-strippenkaarten"
+              description="Nieuwe strippenkaarten verschijnen hier zodra je de eerste verkoopt."
             />
           )}
         </PageSection>
@@ -374,39 +390,42 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
           title="Coach agenda"
           description="Plan terugkerende PT-sessies, koppel packs en houd de coachagenda centraal."
           actions={
-            <Button
-              isDisabled={isPending || !sessionTrainerId || !sessionLocationId}
-              variant="outline"
-              onPress={() =>
-                startTransition(async () => {
-                  try {
-                    const member = snapshot.members.find((entry) => entry.id === sessionMemberId);
+            <div className="flex flex-col items-start gap-2 md:items-end">
+              <Button
+                isDisabled={Boolean(sessionDisabledReason)}
+                variant="outline"
+                onPress={() =>
+                  startTransition(async () => {
+                    try {
+                      const member = snapshot.members.find((entry) => entry.id === sessionMemberId);
 
-                    await submitDashboardMutation("/api/platform/appointments", {
-                      operation: "create_sessions",
-                      trainerId: sessionTrainerId,
-                      memberId: sessionMemberId || undefined,
-                      memberName: member?.fullName,
-                      locationId: sessionLocationId,
-                      startsAt: sessionStartsAt,
-                      durationMinutes: sessionDurationMinutes,
-                      recurrence: sessionRecurrence,
-                      occurrences: sessionOccurrences,
-                      creditPackId: sessionCreditPackId || undefined,
-                      notes: sessionNotes || undefined,
-                    });
-                    toast.success("Coachsessies ingepland.");
-                    router.refresh();
-                  } catch (error) {
-                    toast.error(
-                      error instanceof Error ? error.message : "Coachsessies plannen mislukt.",
-                    );
-                  }
-                })
-              }
-            >
-              {isPending ? "Plannen..." : "Sessies plannen"}
-            </Button>
+                      await submitDashboardMutation("/api/platform/appointments", {
+                        operation: "create_sessions",
+                        trainerId: sessionTrainerId,
+                        memberId: sessionMemberId || undefined,
+                        memberName: member?.fullName,
+                        locationId: sessionLocationId,
+                        startsAt: sessionStartsAt,
+                        durationMinutes: sessionDurationMinutes,
+                        recurrence: sessionRecurrence,
+                        occurrences: sessionOccurrences,
+                        creditPackId: sessionCreditPackId || undefined,
+                        notes: sessionNotes || undefined,
+                      });
+                      toast.success("Coachsessies ingepland.");
+                      router.refresh();
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : "Coachsessies plannen mislukt.",
+                      );
+                    }
+                  })
+                }
+              >
+                {isPending ? "Plannen..." : "Sessies plannen"}
+              </Button>
+              <DisabledActionReason reason={sessionDisabledReason} />
+            </div>
           }
         >
           <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
@@ -501,16 +520,16 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
                 />
               </div>
               <div className="field-stack">
-                <label className="text-sm font-medium">Credit pack</label>
+                <label className="text-sm font-medium">Strippenkaart</label>
                 <NativeSelect fullWidth>
                   <NativeSelect.Trigger
                     value={sessionCreditPackId}
                     onChange={(event) => setSessionCreditPackId(event.target.value)}
                   >
-                    <NativeSelect.Option value="">Geen pack</NativeSelect.Option>
+                    <NativeSelect.Option value="">Geen strippenkaart</NativeSelect.Option>
                     {snapshot.appointments.creditPacks.map((pack) => (
                       <NativeSelect.Option key={pack.id} value={pack.id}>
-                        {pack.title} · {pack.remainingCredits} credits
+                        {pack.title} · {pack.remainingCredits} ritten
                       </NativeSelect.Option>
                     ))}
                     <NativeSelect.Indicator />
@@ -525,7 +544,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
           </Card>
 
           {snapshot.appointments.sessions.length > 0 ? (
-            <ListView aria-label="Coach appointments" items={snapshot.appointments.sessions}>
+            <ListView aria-label="Coachafspraken" items={snapshot.appointments.sessions}>
               {(session) => (
                 <ListView.Item id={session.id} textValue={session.memberName ?? session.id}>
                   <ListView.ItemContent>
@@ -554,7 +573,7 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
       </div>
 
       <PageSection
-        title="Coaching modules"
+        title="Coachingmodules"
         description="Compact overzicht van training, voeding en progressiemodules."
       >
         <FeatureModuleBoard currentPage="coaching" features={coachingFeatures} snapshot={snapshot} />

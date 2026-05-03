@@ -6,11 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src next.config.mjs vitest.config.ts --ext .js,.mjs,.ts,.tsx --max-warnings=0",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "ci:verify": "npm run lint && npm run typecheck && npm run build && npm run test:coverage"
   },
   "dependencies": {
     "@claimtech/auth": "0.2.3",

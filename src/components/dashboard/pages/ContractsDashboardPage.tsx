@@ -2,13 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
+import { Card, Chip, Input, Label } from "@heroui/react";
 import { toast } from "sonner";
 import { DashboardEntityActions } from "@/components/DashboardEntityActions";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import {
+  DisabledActionReason,
   EmptyPanel,
   PageSection,
   formatDate,
@@ -16,6 +18,7 @@ import {
 } from "@/components/dashboard/shared";
 import { filterManagementRecords } from "@/lib/dashboard-management";
 import { getMembershipBillingCycleLabel } from "@/lib/memberships";
+import { getEntityStatusLabel } from "@/lib/ui-labels";
 
 function defaultCreditValidUntil() {
   const nextYear = new Date();
@@ -31,7 +34,7 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
   const [packMemberId, setPackMemberId] = useState(snapshot.members[0]?.id ?? "");
   const [packTrainerId, setPackTrainerId] = useState(snapshot.trainers[0]?.id ?? "");
   const [packTitle, setPackTitle] = useState(
-    `Credit pack ${snapshot.bookingWorkspace.defaultCreditPackSize} credits`,
+    `Strippenkaart ${snapshot.bookingWorkspace.defaultCreditPackSize} ritten`,
   );
   const [packCredits, setPackCredits] = useState(
     snapshot.bookingWorkspace.defaultCreditPackSize,
@@ -62,6 +65,11 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
   const selectedMember = snapshot.members.find((member) => member.id === packMemberId);
   const selectedTrainer = snapshot.trainers.find((trainer) => trainer.id === packTrainerId);
   const canCreateCreditPack = Boolean(selectedMember && selectedTrainer);
+  const creditPackDisabledReason = isPending
+    ? "Even wachten: er loopt al een actie."
+    : !canCreateCreditPack
+      ? "Voeg eerst minimaal één lid en één trainer toe voordat je een strippenkaart verkoopt."
+      : null;
 
   useEffect(() => {
     if (!snapshot.members.some((member) => member.id === packMemberId)) {
@@ -75,7 +83,7 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
 
   function createCreditPack() {
     if (!selectedMember || !selectedTrainer) {
-      toast.error("Voeg eerst minimaal één lid en één trainer toe voordat je credits verkoopt.");
+      toast.error("Voeg eerst minimaal één lid en één trainer toe voordat je ritten verkoopt.");
       return;
     }
 
@@ -90,10 +98,10 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
           totalCredits: packCredits,
           validUntil: packValidUntil,
         });
-        toast.success("Credit pack toegevoegd.");
+        toast.success("Strippenkaart toegevoegd.");
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Credit pack toevoegen mislukt.");
+        toast.error(error instanceof Error ? error.message : "Strippenkaart toevoegen mislukt.");
       }
     });
   }
@@ -142,7 +150,7 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
                         {getMembershipBillingCycleLabel(plan.billingCycle)}
                       </Chip>
                       <Chip size="sm" variant="tertiary">
-                        {plan.status}
+                        {getEntityStatusLabel(plan.status)}
                       </Chip>
                     </div>
                   </div>
@@ -236,38 +244,41 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
       />
 
       <PageSection
-        title="Creditsysteem"
-        description="Beheer losse credits, PT-packs en class packs naast je vaste lidmaatschappen."
+        title="Strippenkaarten"
+        description="Beheer losse ritten, PT-strippenkaarten en lesbundels naast je vaste lidmaatschappen."
         actions={
-          <Button
-            isDisabled={isPending || !canCreateCreditPack}
-            variant="outline"
-            onPress={createCreditPack}
-          >
-            {isPending ? "Opslaan..." : "Pack toevoegen"}
-          </Button>
+          <div className="flex flex-col items-start gap-2 md:items-end">
+            <Button
+              isDisabled={Boolean(creditPackDisabledReason)}
+              variant="outline"
+              onPress={createCreditPack}
+            >
+              {isPending ? "Opslaan..." : "Strippenkaart toevoegen"}
+            </Button>
+            <DisabledActionReason reason={creditPackDisabledReason} />
+          </div>
         }
       >
         <div className="grid gap-3 md:grid-cols-4">
           <Card className="rounded-2xl border-border/80 bg-surface-secondary shadow-none">
             <Card.Content className="space-y-2">
-              <p className="text-muted text-sm">Standaard pack</p>
+              <p className="text-muted text-sm">Standaard strippenkaart</p>
               <p className="text-2xl font-semibold">
                 {snapshot.bookingWorkspace.defaultCreditPackSize}
               </p>
-              <p className="text-muted text-xs">credits per nieuw pack</p>
+              <p className="text-muted text-xs">ritten per nieuwe kaart</p>
             </Card.Content>
           </Card>
           <Card className="rounded-2xl border-border/80 bg-surface-secondary shadow-none">
             <Card.Content className="space-y-2">
-              <p className="text-muted text-sm">Verkochte packs</p>
+              <p className="text-muted text-sm">Verkochte strippenkaarten</p>
               <p className="text-2xl font-semibold">{totalPacks}</p>
-              <p className="text-muted text-xs">actieve creditbundels</p>
+              <p className="text-muted text-xs">actieve rittenbundels</p>
             </Card.Content>
           </Card>
           <Card className="rounded-2xl border-border/80 bg-surface-secondary shadow-none">
             <Card.Content className="space-y-2">
-              <p className="text-muted text-sm">Open credits</p>
+              <p className="text-muted text-sm">Open ritten</p>
               <p className="text-2xl font-semibold">{remainingCredits}</p>
               <p className="text-muted text-xs">nog te besteden</p>
             </Card.Content>
@@ -276,16 +287,16 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
             <Card.Content className="space-y-2">
               <p className="text-muted text-sm">Gebruikt</p>
               <p className="text-2xl font-semibold">{usedCredits}</p>
-              <p className="text-muted text-xs">credits ingepland</p>
+              <p className="text-muted text-xs">ritten ingepland</p>
             </Card.Content>
           </Card>
         </div>
 
         <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
           <Card.Header>
-            <Card.Title>Credit pack verkopen</Card.Title>
+            <Card.Title>Strippenkaart verkopen</Card.Title>
             <Card.Description>
-              Koppel credits aan een lid en trainer. Deze packs zijn direct bruikbaar bij PT- en
+              Koppel ritten aan een lid en trainer. Deze strippenkaarten zijn direct bruikbaar bij PT- en
               afspraakplanning.
             </Card.Description>
           </Card.Header>
@@ -333,7 +344,7 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Credits</Label>
+              <Label>Ritten</Label>
               <Input
                 fullWidth
                 min={1}
@@ -367,7 +378,7 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
                       </p>
                     </div>
                     <Chip size="sm" variant="soft">
-                      {pack.remainingCredits}/{pack.totalCredits} credits
+                      {pack.remainingCredits}/{pack.totalCredits} ritten
                     </Chip>
                   </div>
                   <p className="text-muted text-sm">Geldig tot {formatDate(pack.validUntil)}</p>
@@ -377,15 +388,15 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
           </div>
         ) : (
           <EmptyPanel
-            title="Nog geen credit packs"
-            description="Verkochte credit packs verschijnen hier zodra je de eerste bundel aan een lid koppelt."
+            title="Nog geen strippenkaarten"
+            description="Verkochte strippenkaarten verschijnen hier zodra je de eerste bundel aan een lid koppelt."
           />
         )}
       </PageSection>
 
       <PageSection
         title="Contractmodules"
-        description="Compact overzicht van uitbreidingen voor contractbeheer, credits en imports."
+        description="Compact overzicht van uitbreidingen voor contractbeheer, strippenkaarten en imports."
       >
         <FeatureModuleBoard currentPage="contracts" features={contractFeatures} snapshot={snapshot} />
       </PageSection>

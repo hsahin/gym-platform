@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Button as HeroButton, Card as HeroCard, Chip } from "@heroui/react";
+import { Card as HeroCard, Chip } from "@heroui/react";
+import { Button as HeroButton } from "@/components/dashboard/HydrationSafeButton";
 import { HeroPhoneNumberField, type HeroPhoneNumberFieldProps } from "@/components/HeroPhoneNumberField";
 
 function cx(...values: Array<string | undefined | false | null>) {

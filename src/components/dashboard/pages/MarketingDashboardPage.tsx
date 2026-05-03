@@ -2,19 +2,31 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
-import { NativeSelect } from "@heroui-pro/react/native-select";
-import { Segment } from "@heroui-pro/react/segment";
+import { Card, Chip, Input, Label } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
+import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import {
+  DisabledActionReason,
   EmptyPanel,
   PageSection,
   formatDateTime,
   statusChip,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
+import {
+  getLeadAutomationTriggerLabel,
+  getLeadSourceLabel,
+  getLeadStageLabel,
+  getLeadTaskStatusLabel,
+  getLeadTaskTypeLabel,
+  getMemberStatusLabel,
+  getWaiverStatusLabel,
+} from "@/lib/ui-labels";
+import { formatEuroFromCents, parseEuroInputToCents } from "@/lib/currency";
 
 export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
@@ -53,7 +65,9 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
   const [leadStage, setLeadStage] = useState<"new" | "contacted" | "trial_scheduled" | "won" | "lost">("new");
   const [leadInterest, setLeadInterest] = useState("");
   const [leadNotes, setLeadNotes] = useState("");
-  const [leadExpectedValueCents, setLeadExpectedValueCents] = useState(0);
+  const [leadExpectedValueInput, setLeadExpectedValueInput] = useState(
+    formatEuroFromCents(0),
+  );
   const [selectedLeadId, setSelectedLeadId] = useState(snapshot.leads[0]?.id ?? "");
   const [selectedMembershipPlanId, setSelectedMembershipPlanId] = useState(
     snapshot.membershipPlans[0]?.id ?? "",
@@ -76,6 +90,12 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
     setSelectedMembershipPlanId(snapshot.membershipPlans[0]?.id ?? "");
     setSelectedLocationId(snapshot.locations[0]?.id ?? "");
   }, [snapshot.leads, snapshot.locations, snapshot.marketingWorkspace, snapshot.membershipPlans]);
+  const conversionDisabledReason = isPending
+    ? "Even wachten: er loopt al een actie."
+    : !selectedLeadId || !selectedMembershipPlanId || !selectedLocationId
+      ? "Kies eerst een aanvraag, contract en vestiging voordat je omzet naar lid."
+      : null;
+  const leadExpectedValueCents = parseEuroInputToCents(leadExpectedValueInput);
 
   return (
     <div className="section-stack">
@@ -89,15 +109,15 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
             setMarketingFormView(String(key) as typeof marketingFormView)
           }
         >
-          <Segment.Item id="lead-intake">Lead intake</Segment.Item>
+          <Segment.Item id="lead-intake">Nieuwe aanvraag</Segment.Item>
           <Segment.Item id="lead-conversion">Conversie</Segment.Item>
-          <Segment.Item id="marketing-setup">Setup</Segment.Item>
+          <Segment.Item id="marketing-setup">Instellingen</Segment.Item>
         </Segment>
 
         {marketingFormView === "lead-intake" ? (
         <PageSection
-          title="Lead intake"
-          description="Zet nieuwe aanvragen direct in de pipeline zonder extern CRM."
+          title="Nieuwe aanvraag"
+          description="Zet nieuwe aanvragen direct in je opvolgproces zonder extern CRM."
           actions={
             <Button
               isDisabled={isPending}
@@ -120,16 +140,16 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                     setLeadPhone("");
                     setLeadInterest("");
                     setLeadNotes("");
-                    setLeadExpectedValueCents(0);
-                    toast.success("Lead toegevoegd.");
+                    setLeadExpectedValueInput(formatEuroFromCents(0));
+                    toast.success("Aanvraag toegevoegd.");
                     router.refresh();
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Lead toevoegen mislukt.");
+                    toast.error(error instanceof Error ? error.message : "Aanvraag toevoegen mislukt.");
                   }
                 })
               }
             >
-              {isPending ? "Opslaan..." : "Lead toevoegen"}
+              {isPending ? "Opslaan..." : "Aanvraag toevoegen"}
             </Button>
           }
         >
@@ -158,40 +178,43 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                     value={leadSource}
                     onChange={(event) => setLeadSource(event.target.value as typeof leadSource)}
                   >
-                    <NativeSelect.Option value="website">Website</NativeSelect.Option>
-                    <NativeSelect.Option value="instagram">Instagram</NativeSelect.Option>
-                    <NativeSelect.Option value="referral">Referral</NativeSelect.Option>
-                    <NativeSelect.Option value="walk_in">Walk-in</NativeSelect.Option>
-                    <NativeSelect.Option value="meta_ads">Meta ads</NativeSelect.Option>
-                    <NativeSelect.Option value="booking">Booking</NativeSelect.Option>
+                    {(["website", "instagram", "referral", "walk_in", "meta_ads", "booking"] as const).map((source) => (
+                      <NativeSelect.Option key={source} value={source}>
+                        {getLeadSourceLabel(source)}
+                      </NativeSelect.Option>
+                    ))}
                     <NativeSelect.Indicator />
                   </NativeSelect.Trigger>
                 </NativeSelect>
               </div>
               <div className="field-stack">
-                <label className="text-sm font-medium">Stage</label>
+                <label className="text-sm font-medium">Fase</label>
                 <NativeSelect fullWidth>
                   <NativeSelect.Trigger
                     value={leadStage}
                     onChange={(event) => setLeadStage(event.target.value as typeof leadStage)}
                   >
-                    <NativeSelect.Option value="new">Nieuw</NativeSelect.Option>
-                    <NativeSelect.Option value="contacted">Gecontacteerd</NativeSelect.Option>
-                    <NativeSelect.Option value="trial_scheduled">Trial gepland</NativeSelect.Option>
-                    <NativeSelect.Option value="won">Gewonnen</NativeSelect.Option>
-                    <NativeSelect.Option value="lost">Verloren</NativeSelect.Option>
+                    {(["new", "contacted", "trial_scheduled", "won", "lost"] as const).map((stage) => (
+                      <NativeSelect.Option key={stage} value={stage}>
+                        {getLeadStageLabel(stage)}
+                      </NativeSelect.Option>
+                    ))}
                     <NativeSelect.Indicator />
                   </NativeSelect.Trigger>
                 </NativeSelect>
               </div>
               <div className="field-stack">
-                <Label>Verwachte waarde (cent)</Label>
+                <Label>Verwachte waarde (€)</Label>
                 <Input
                   fullWidth
-                  min={0}
-                  type="number"
-                  value={String(leadExpectedValueCents)}
-                  onChange={(event) => setLeadExpectedValueCents(Number(event.target.value || "0"))}
+                  inputMode="decimal"
+                  placeholder="€ 99,00"
+                  type="text"
+                  value={leadExpectedValueInput}
+                  onBlur={() =>
+                    setLeadExpectedValueInput(formatEuroFromCents(leadExpectedValueCents))
+                  }
+                  onChange={(event) => setLeadExpectedValueInput(event.target.value)}
                 />
               </div>
               <div className="field-stack md:col-span-2">
@@ -205,49 +228,47 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
 
         {marketingFormView === "lead-conversion" ? (
         <PageSection
-          title="Lead conversie"
-          description="Zet een warme lead direct om naar een member met contract en vestiging."
+          title="Aanvraag omzetten"
+          description="Zet een warme aanvraag direct om naar een lid met contract en vestiging."
           actions={
-            <Button
-              isDisabled={
-                isPending ||
-                !selectedLeadId ||
-                !selectedMembershipPlanId ||
-                !selectedLocationId
-              }
-              variant="outline"
-              onPress={() =>
-                startTransition(async () => {
-                  try {
-                    await submitDashboardMutation(
-                      "/api/platform/leads",
-                      {
-                        operation: "convert",
-                        leadId: selectedLeadId,
-                        membershipPlanId: selectedMembershipPlanId,
-                        homeLocationId: selectedLocationId,
-                        status: conversionStatus,
-                        tags: ["lead-converted"],
-                        waiverStatus: conversionWaiverStatus,
-                      },
-                      { method: "PATCH" },
-                    );
-                    toast.success("Lead omgezet naar member.");
-                    router.refresh();
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Lead conversie mislukt.");
-                  }
-                })
-              }
-            >
-              {isPending ? "Omzetten..." : "Converteer lead"}
-            </Button>
+            <div className="flex flex-col items-start gap-2 md:items-end">
+              <Button
+                isDisabled={Boolean(conversionDisabledReason)}
+                variant="outline"
+                onPress={() =>
+                  startTransition(async () => {
+                    try {
+                      await submitDashboardMutation(
+                        "/api/platform/leads",
+                        {
+                          operation: "convert",
+                          leadId: selectedLeadId,
+                          membershipPlanId: selectedMembershipPlanId,
+                          homeLocationId: selectedLocationId,
+                          status: conversionStatus,
+                          tags: ["lead-converted"],
+                          waiverStatus: conversionWaiverStatus,
+                        },
+                        { method: "PATCH" },
+                      );
+                      toast.success("Aanvraag omgezet naar lid.");
+                      router.refresh();
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Aanvraag omzetten mislukt.");
+                    }
+                  })
+                }
+              >
+                {isPending ? "Omzetten..." : "Aanvraag omzetten"}
+              </Button>
+              <DisabledActionReason reason={conversionDisabledReason} />
+            </div>
           }
         >
           <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
             <Card.Content className="grid gap-4">
               <div className="field-stack">
-                <label className="text-sm font-medium">Lead</label>
+                <label className="text-sm font-medium">Aanvraag</label>
                 <NativeSelect fullWidth>
                   <NativeSelect.Trigger
                     value={selectedLeadId}
@@ -255,7 +276,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                   >
                     {snapshot.leads.map((lead) => (
                       <NativeSelect.Option key={lead.id} value={lead.id}>
-                        {lead.fullName} · {lead.stage}
+                        {lead.fullName} · {getLeadStageLabel(lead.stage)}
                       </NativeSelect.Option>
                     ))}
                     <NativeSelect.Indicator />
@@ -295,7 +316,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                 </NativeSelect>
               </div>
               <div className="field-stack">
-                <label className="text-sm font-medium">Member status</label>
+                <label className="text-sm font-medium">Lidstatus</label>
                 <NativeSelect fullWidth>
                   <NativeSelect.Trigger
                     value={conversionStatus}
@@ -303,16 +324,17 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                       setConversionStatus(event.target.value as typeof conversionStatus)
                     }
                   >
-                    <NativeSelect.Option value="trial">Trial</NativeSelect.Option>
-                    <NativeSelect.Option value="active">Actief</NativeSelect.Option>
-                    <NativeSelect.Option value="paused">Gepauzeerd</NativeSelect.Option>
-                    <NativeSelect.Option value="archived">Gearchiveerd</NativeSelect.Option>
+                    {(["trial", "active", "paused", "archived"] as const).map((status) => (
+                      <NativeSelect.Option key={status} value={status}>
+                        {getMemberStatusLabel(status)}
+                      </NativeSelect.Option>
+                    ))}
                     <NativeSelect.Indicator />
                   </NativeSelect.Trigger>
                 </NativeSelect>
               </div>
               <div className="field-stack">
-                <label className="text-sm font-medium">Waiver status</label>
+                <label className="text-sm font-medium">Toestemmingsstatus</label>
                 <NativeSelect fullWidth>
                   <NativeSelect.Trigger
                     value={conversionWaiverStatus}
@@ -322,8 +344,11 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                       )
                     }
                   >
-                    <NativeSelect.Option value="pending">Pending</NativeSelect.Option>
-                    <NativeSelect.Option value="complete">Complete</NativeSelect.Option>
+                    {(["pending", "complete"] as const).map((status) => (
+                      <NativeSelect.Option key={status} value={status}>
+                        {getWaiverStatusLabel(status)}
+                      </NativeSelect.Option>
+                    ))}
                     <NativeSelect.Indicator />
                   </NativeSelect.Trigger>
                 </NativeSelect>
@@ -335,8 +360,8 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
 
         {marketingFormView === "marketing-setup" ? (
       <PageSection
-        title="Marketing setup"
-        description="Leg campagnes, leadopvolging en e-mailrouting vast zodat marketing niet los hangt van je live clubdata."
+        title="Marketing instellen"
+        description="Leg campagnes, aanvraagopvolging en e-mailrouting vast zodat marketing niet los hangt van je live clubdata."
         actions={
           <Button
             isDisabled={isPending}
@@ -370,7 +395,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
         <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
           <Card.Content className="grid gap-4 md:grid-cols-2">
             <div className="field-stack">
-              <Label>Email sender</Label>
+              <Label>Afzendernaam</Label>
               <Input
                 fullWidth
                 value={emailSenderName}
@@ -378,7 +403,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Reply-to email</Label>
+              <Label>Antwoordadres</Label>
               <Input
                 fullWidth
                 value={emailReplyTo}
@@ -386,7 +411,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Promotion headline</Label>
+              <Label>Promotiekop</Label>
               <Input
                 fullWidth
                 value={promotionHeadline}
@@ -394,7 +419,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Lead pipeline</Label>
+              <Label>Aanvragenproces</Label>
               <Input
                 fullWidth
                 value={leadPipelineLabel}
@@ -402,7 +427,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <label className="text-sm font-medium">Automation cadence</label>
+              <label className="text-sm font-medium">Ritme opvolging</label>
               <NativeSelect fullWidth>
                 <NativeSelect.Trigger
                   value={automationCadence}
@@ -427,8 +452,8 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
 
       <div className="section-stack">
         <PageSection
-          title="Lead pipeline"
-          description="Overzicht van alle warme contacten en hun huidige stage."
+          title="Aanvragenproces"
+          description="Overzicht van alle warme contacten en hun huidige fase."
         >
           <div className="grid gap-3">
             {snapshot.leads.length > 0 ? (
@@ -437,11 +462,11 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                   <Card.Content className="space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-medium">{lead.fullName}</p>
-                      <span className="text-muted text-sm">{lead.stage}</span>
+                      <span className="text-muted text-sm">{getLeadStageLabel(lead.stage)}</span>
                     </div>
                     <p className="text-muted text-sm">{lead.email} · {lead.phone}</p>
                     <p className="text-muted text-sm">
-                      {lead.source} · {lead.interest}
+                      {getLeadSourceLabel(lead.source)} · {lead.interest}
                       {lead.convertedMemberId ? " · geconverteerd" : ""}
                     </p>
                   </Card.Content>
@@ -450,7 +475,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
             ) : (
               <Card className="rounded-2xl border-border/80 bg-surface-secondary">
                 <Card.Content className="text-muted text-sm">
-                  Nog geen leads toegevoegd.
+                  Nog geen aanvragen toegevoegd.
                 </Card.Content>
               </Card>
             )}
@@ -458,8 +483,8 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
         </PageSection>
 
         <PageSection
-          title="Lead automations"
-          description="Run nurture, abandoned booking en scheduled follow-up direct op tenantdata."
+          title="Aanvragen opvolgen"
+          description="Maak opvolgtaken op basis van warme aanvragen, afgebroken reserveringen en je planning."
           actions={
             <div className="flex flex-wrap gap-2">
               <NativeSelect fullWidth>
@@ -469,11 +494,11 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                     setAutomationTrigger(event.target.value as typeof automationTrigger)
                   }
                 >
-                  <NativeSelect.Option value="manual">Handmatig</NativeSelect.Option>
-                  <NativeSelect.Option value="schedule">Planning</NativeSelect.Option>
-                  <NativeSelect.Option value="booking_cancellation">
-                    Geannuleerde booking
-                  </NativeSelect.Option>
+                  {(["manual", "schedule", "booking_cancellation"] as const).map((trigger) => (
+                    <NativeSelect.Option key={trigger} value={trigger}>
+                      {getLeadAutomationTriggerLabel(trigger)}
+                    </NativeSelect.Option>
+                  ))}
                   <NativeSelect.Indicator />
                 </NativeSelect.Trigger>
               </NativeSelect>
@@ -486,17 +511,17 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                       await submitDashboardMutation("/api/platform/lead-automation", {
                         trigger: automationTrigger,
                       });
-                      toast.success("Lead automation gedraaid.");
+                      toast.success("Aanvraagopvolging gedraaid.");
                       router.refresh();
                     } catch (error) {
                       toast.error(
-                        error instanceof Error ? error.message : "Automation draaien mislukt.",
+                        error instanceof Error ? error.message : "Opvolging draaien mislukt.",
                       );
                     }
                   })
                 }
               >
-                {isPending ? "Draaien..." : "Automation run"}
+                {isPending ? "Draaien..." : "Opvolging draaien"}
               </Button>
             </div>
           }
@@ -505,7 +530,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
             <Card className="rounded-2xl border-border/80 bg-surface-secondary">
               <Card.Content className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">Follow-up taken</p>
+                  <p className="font-medium">Opvolgtaken</p>
                   <Chip size="sm" variant="soft">
                     {snapshot.leadAutomation.tasks.length}
                   </Chip>
@@ -521,15 +546,15 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                             <div>
                               <p className="font-medium">{task.title}</p>
                               <p className="text-muted text-sm">
-                                {task.type} · {task.source}
+                                {getLeadTaskTypeLabel(task.type)} · {getLeadSourceLabel(task.source)}
                               </p>
                             </div>
                             <Chip color={chip.color} size="sm" variant={chip.variant}>
-                              {task.status}
+                              {getLeadTaskStatusLabel(task.status)}
                             </Chip>
                           </div>
                           <p className="text-muted mt-2 text-sm">
-                            Due {formatDateTime(task.dueAt)}
+                            Vervalt {formatDateTime(task.dueAt)}
                             {task.assignedStaffName ? ` · ${task.assignedStaffName}` : ""}
                           </p>
                         </div>
@@ -538,8 +563,8 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                   </div>
                 ) : (
                   <EmptyPanel
-                    title="Nog geen automation taken"
-                    description="Nieuwe nurture- en abandoned-booking taken verschijnen hier."
+                    title="Nog geen opvolgtaken"
+                    description="Nieuwe aanvraagopvolgingen en afgebroken reserveringen verschijnen hier."
                   />
                 )}
               </Card.Content>
@@ -548,7 +573,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
             <Card className="rounded-2xl border-border/80 bg-surface-secondary">
               <Card.Content className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">Attributie en runs</p>
+                  <p className="font-medium">Campagneherkomst en opvolging</p>
                   <Chip size="sm" variant="tertiary">
                     {snapshot.leadAutomation.lastRunAt
                       ? formatDateTime(snapshot.leadAutomation.lastRunAt)
@@ -560,13 +585,13 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                     <div key={attribution.id} className="rounded-2xl border border-border/70 bg-surface p-4">
                       <p className="font-medium">{attribution.campaignLabel}</p>
                       <p className="text-muted text-sm">
-                        {attribution.source} · {attribution.medium}
+                        {getLeadSourceLabel(attribution.source)} · {attribution.medium}
                       </p>
                     </div>
                   ))}
                   {snapshot.leadAutomation.runs.slice(0, 3).map((run) => (
                     <div key={run.id} className="rounded-2xl border border-border/70 bg-surface p-4">
-                      <p className="font-medium">{run.trigger}</p>
+                      <p className="font-medium">{getLeadAutomationTriggerLabel(run.trigger)}</p>
                       <p className="text-muted text-sm">
                         {run.createdTasks} nieuwe taken · {formatDateTime(run.createdAt)}
                       </p>
@@ -576,7 +601,7 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
                   snapshot.leadAutomation.runs.length === 0 ? (
                     <EmptyPanel
                       title="Nog geen marketingtelemetrie"
-                      description="Leadbron, campaign labels en automation-runs verschijnen hier."
+                      description="Aanvraagbron, campagnelabels en automatische opvolgingen verschijnen hier."
                     />
                   ) : null}
                 </div>
@@ -586,27 +611,27 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
         </PageSection>
 
         <PageSection
-          title="Marketing signals"
-          description="Campaign-ready signals pulled from live bookings, members and conversion pressure."
+          title="Marketinginzichten"
+          description="Signalen uit reserveringen, leden en conversiedruk voor je campagnes."
         >
           <div className="grid gap-4 md:grid-cols-2">
             <Card className="rounded-2xl border-border/80 bg-surface-secondary">
               <Card.Content className="space-y-2">
-                <p className="text-muted text-sm">Occupancy</p>
+                <p className="text-muted text-sm">Bezetting</p>
                 <p className="text-3xl font-semibold">{occupancy}%</p>
                 <p className="text-muted text-sm">
-                  Use this to spot fill pressure and class timing issues.
+                  Gebruik dit om drukke en stille lesmomenten sneller te herkennen.
                 </p>
               </Card.Content>
             </Card>
             <Card className="rounded-2xl border-border/80 bg-surface-secondary">
               <Card.Content className="space-y-2">
-                <p className="text-muted text-sm">Trials</p>
+                <p className="text-muted text-sm">Proefleden</p>
                 <p className="text-3xl font-semibold">
                   {snapshot.members.filter((member) => member.status === "trial").length}
                 </p>
                 <p className="text-muted text-sm">
-                  Trial members are the clearest short-term conversion queue.
+                  Proefleden zijn je meest directe conversielijst voor opvolging.
                 </p>
               </Card.Content>
             </Card>
@@ -614,8 +639,8 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
         </PageSection>
 
         <PageSection
-          title="Outbound messaging"
-          description="Keep promotions and follow-up anchored to real class supply and member state."
+          title="Uitgaande berichten"
+          description="Houd promoties en opvolging gekoppeld aan echte lessen en ledenstatus."
         >
           <Card className="rounded-2xl border-border/80 bg-surface-secondary">
             <Card.Content className="space-y-2">
@@ -626,8 +651,8 @@ export function MarketingDashboardPage({ snapshot }: DashboardPageProps) {
       </div>
 
       <PageSection
-        title="Marketing modules"
-        description="Compact overzicht van campagnes, promoties en lead flows."
+        title="Marketingmodules"
+        description="Compact overzicht van campagnes, promoties en aanvragen."
       >
         <FeatureModuleBoard currentPage="marketing" features={marketingFeatures} snapshot={snapshot} />
       </PageSection>

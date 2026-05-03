@@ -106,6 +106,33 @@ describe("platform state", () => {
     );
   });
 
+  it("does not treat an ignored local seed file as live tenant setup", async () => {
+    const stateFilePath = process.env.LOCAL_PLATFORM_STATE_FILE;
+
+    expect(stateFilePath).toBeTruthy();
+    await writeFile(
+      stateFilePath!,
+      JSON.stringify({
+        version: 8,
+        tenants: [{ id: "northside-athletics", name: "Northside Athletics" }],
+        accounts: [],
+        data: createEmptyGymStoreState(),
+      }),
+      "utf8",
+    );
+
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("CLAIMTECH_SESSION_SECRET", "real-production-secret-value");
+    delete process.env.DIGITALOCEAN_APP_ID;
+    delete process.env.MONGODB_URI;
+    delete process.env.REDIS_URL;
+
+    await expect(hasLocalPlatformSetup()).rejects.toThrow(
+      "Productieconfiguratie mist verplichte onderdelen",
+    );
+  });
+
   it("can store multiple gyms next to each other", async () => {
     const firstTenant = await bootstrapLocalPlatform({
       tenantName: "Northside Athletics",

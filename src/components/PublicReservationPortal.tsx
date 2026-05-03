@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Button, Card, Chip, Input, Label, TextArea } from "@heroui/react";
-import { Segment } from "@heroui-pro/react/segment";
+import { Card, Chip, Input, Label, TextArea } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
+import {
+  getBookingStatusLabel,
+  getClassLevelLabel,
+  getReviewRequestStatusLabel,
+} from "@/lib/ui-labels";
+import { formatEuroFromCents } from "@/lib/currency";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type {
   MemberReservationSnapshot,
@@ -30,30 +37,6 @@ function formatSessionMoment(startsAt: string) {
 
 function formatClubCount(count: number) {
   return `${count} club${count === 1 ? "" : "s"}`;
-}
-
-function getRequestStatusLabel(status: string) {
-  switch (status) {
-    case "approved":
-      return "Goedgekeurd";
-    case "rejected":
-      return "Afgewezen";
-    case "pending":
-      return "Open";
-    default:
-      return status;
-  }
-}
-
-function getBookingStatusLabel(status: string) {
-  switch (status) {
-    case "waitlisted":
-      return "Wachtlijst";
-    case "confirmed":
-      return "Bevestigd";
-    default:
-      return status;
-  }
 }
 
 function getReservationTypeLabel(
@@ -350,7 +333,7 @@ export function PublicReservationPortal({
                 prefetch={false}
                 className="text-muted transition hover:text-foreground"
               >
-                Team login
+                Inloggen
               </Link>
             </nav>
           )}
@@ -540,7 +523,7 @@ export function PublicReservationPortal({
                             {getReservationTypeLabel(classSession)}
                           </Chip>
                           <Chip size="sm" variant="tertiary">
-                            {classSession.level}
+                            {getClassLevelLabel(classSession.level)}
                           </Chip>
                         </Card.Content>
                       </Card>
@@ -782,7 +765,7 @@ export function PublicReservationPortal({
               href="/login"
               className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
             >
-              Team login
+              Inloggen
             </Link>
           </Card.Content>
         </Card>
@@ -963,7 +946,7 @@ export function PublicReservationPortal({
                     <div key={receipt.invoiceId} className="rounded-2xl border border-border/70 p-4">
                       <p className="font-medium">{receipt.description}</p>
                       <p className="text-muted text-sm">
-                        EUR {(receipt.amountCents / 100).toFixed(2)} · {receipt.paidAt.slice(0, 10)}
+                        {formatEuroFromCents(receipt.amountCents)} · {receipt.paidAt.slice(0, 10)}
                       </p>
                     </div>
                   ))
@@ -987,7 +970,7 @@ export function PublicReservationPortal({
                         </p>
                       </div>
                       <Chip size="sm" variant="soft">
-                         {getRequestStatusLabel(request.status)}
+                         {getReviewRequestStatusLabel(request.status)}
                       </Chip>
                     </div>
                   ))}

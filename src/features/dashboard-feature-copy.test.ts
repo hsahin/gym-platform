@@ -9,12 +9,24 @@ import {
   getDashboardFeatureUiCopy,
 } from "@/features/dashboard-feature-copy";
 
-const PRODUCT_NAME_FEATURES = new Set([
-  "billing.autocollect",
-  "coaching.ai_max",
-  "retention.fitzone",
-  "integrations.virtuagym_connect",
-]);
+const mixedFeatureCopyFragments = [
+  "owners",
+  "frontdesk",
+  "remote toegang",
+  "owner-acties",
+  "check-ins",
+  "tenant",
+  "retail-checkout",
+  "flow",
+  "Workout",
+  "premium",
+  "member-only",
+  "journeys",
+  "Leadbeheer",
+  "leads",
+  "accountability",
+  "member progressie",
+] as const;
 
 describe("dashboard feature UI copy", () => {
   it("has clear UI copy for every feature in the catalog", () => {
@@ -27,14 +39,12 @@ describe("dashboard feature UI copy", () => {
 
       expect(copy.title).toBeTruthy();
       expect(copy.description).toBeTruthy();
-      if (!PRODUCT_NAME_FEATURES.has(feature.key)) {
-        expect(copy.title).not.toBe(feature.title);
-      }
-      expect(copy.description).not.toBe(feature.description);
+      expect(copy.title).not.toMatch(/\b(Member|Staff|Owner|Trial|Direct Debit)\b/);
+      expect(copy.description).not.toMatch(/\b(member portal|team members|owner|trial booking|one-time)\b/i);
     }
   });
 
-  it("localizes feature state, status, category, and rollout reason labels", () => {
+  it("localizes feature state, status, category, and module availability labels", () => {
     expect(getDashboardFeatureFlagStateLabel(true)).toBe("Ingeschakeld");
     expect(getDashboardFeatureFlagStateLabel(false)).toBe("Uitgeschakeld");
     expect(getDashboardFeatureStatusLabel("Live")).toBe("Live");
@@ -45,10 +55,20 @@ describe("dashboard feature UI copy", () => {
         categoryKey: "booking",
         categoryTitle: "Booking Options",
       }),
-    ).toBe("Boekingsopties");
-    expect(getDashboardFeatureReasonLabel("tenant_override")).toBe("Tenantinstelling");
+    ).toBe("Reserveringen");
+    expect(getDashboardFeatureReasonLabel("tenant_override")).toBe("Clubinstelling");
     expect(getDashboardFeatureReasonLabel("actor_override")).toBe("Gebruikersinstelling");
-    expect(getDashboardFeatureReasonLabel("rollout")).toBe("Rollout");
+    expect(getDashboardFeatureReasonLabel("rollout")).toBe("Standaard beschikbaar");
     expect(getDashboardFeatureReasonLabel("unknown")).toBe("Standaard");
+  });
+
+  it("keeps feature card titles and descriptions in business Dutch", () => {
+    const visibleFeatureCopy = Object.values(DASHBOARD_FEATURE_UI_COPY)
+      .map((copy) => `${copy.title}\n${copy.description}`)
+      .join("\n\n");
+
+    for (const fragment of mixedFeatureCopyFragments) {
+      expect(visibleFeatureCopy).not.toContain(fragment);
+    }
   });
 });

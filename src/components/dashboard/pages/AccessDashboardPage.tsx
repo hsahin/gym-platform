@@ -15,8 +15,8 @@ export function AccessDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack">
       <PageSection
-        title="Remote access"
-        description="Current device state and recent operator actions."
+        title="Toegang op afstand"
+        description="Huidige deurstatus en recente handelingen."
       >
         <div className="grid gap-4">
           <Card className="rounded-2xl border-border/80 bg-surface-secondary">
@@ -40,7 +40,7 @@ export function AccessDashboardPage({ snapshot }: DashboardPageProps) {
           </Card>
 
           {snapshot.auditEntries.length > 0 ? (
-            <ListView aria-label="Recent access events" items={snapshot.auditEntries}>
+            <ListView aria-label="Recente toegangshandelingen" items={snapshot.auditEntries}>
               {(entry) => (
                 <ListView.Item id={entry.eventId} textValue={entry.action}>
                   <ListView.ItemContent>
@@ -64,7 +64,7 @@ export function AccessDashboardPage({ snapshot }: DashboardPageProps) {
 
       <PageSection
         title="Toegangsmodules"
-        description="Compact overzicht van slimme toegang en owner-controlled open-acties."
+        description="Compact overzicht van slimme toegang en beheeracties op afstand."
       >
         <FeatureModuleBoard currentPage="access" features={accessFeatures} snapshot={snapshot} />
       </PageSection>

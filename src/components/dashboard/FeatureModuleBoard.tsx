@@ -83,7 +83,7 @@ export function FeatureModuleBoard({
     <ItemCardGroup
       columns={editable ? 2 : 3}
       layout="grid"
-      className="gap-2 rounded-[22px] border border-border/70 bg-surface-secondary/60 p-2"
+      className="mobile-feature-module-board min-w-0 max-w-full gap-2 rounded-[22px] border border-border/70 bg-surface-secondary/60 p-2"
     >
       {normalizedFeatures.map((feature) => {
         const isSaving = isPending && pendingKey === feature.key;
@@ -99,7 +99,7 @@ export function FeatureModuleBoard({
           <ItemCard
             key={feature.key}
             variant="outline"
-            className={`min-h-0 items-start gap-3 rounded-2xl bg-surface px-3 py-3 shadow-none ${
+            className={`min-h-0 min-w-0 max-w-full flex-wrap items-start gap-3 rounded-2xl bg-surface px-3 py-3 shadow-none ${
               feature.enabled ? "" : "opacity-85"
             }`}
           >
@@ -113,7 +113,7 @@ export function FeatureModuleBoard({
               <span className="size-2 rounded-full bg-current" />
             </ItemCard.Icon>
             <ItemCard.Content className="min-w-0 gap-1">
-              <ItemCard.Title className="flex flex-wrap items-center gap-1.5 text-sm">
+              <ItemCard.Title className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-sm">
                 <TruncatedTooltipText
                   className="max-w-[12rem] font-semibold"
                   lines={1}
@@ -153,12 +153,12 @@ export function FeatureModuleBoard({
               </div>
             </ItemCard.Content>
             {shouldShowOpenAction || editable ? (
-              <ItemCard.Action className="flex flex-col items-end gap-2">
+              <ItemCard.Action className="flex min-w-0 flex-row flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
                 {shouldShowOpenAction ? (
                   <Link
                     href={targetHref}
                     prefetch={false}
-                    className="whitespace-nowrap rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium"
+                    className="max-w-full rounded-full border border-border bg-surface px-3 py-1.5 text-center text-xs font-medium"
                   >
                     Module openen
                   </Link>

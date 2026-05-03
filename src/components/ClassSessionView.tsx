@@ -1,4 +1,5 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
+import { getClassLevelLabel } from "@/lib/ui-labels";
 import type { ClassSession } from "@/server/types";
 
 function formatSlot(startsAt: string) {
@@ -27,10 +28,10 @@ export function ClassSessionView({
       <CardHeader className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="eyebrow">Class pulse</p>
+            <p className="eyebrow">Lesoverzicht</p>
             <CardTitle className="text-lg">{classSession.title}</CardTitle>
             <p className="mt-1 text-sm text-slate-600">
-              {formatSlot(classSession.startsAt)} - {locationName ?? "Locatie"}
+              {formatSlot(classSession.startsAt)} - {locationName ?? "Vestiging"}
             </p>
           </div>
           <Badge variant={occupancy > 90 ? "warning" : "info"}>
@@ -45,7 +46,7 @@ export function ClassSessionView({
               Coach
             </p>
             <p className="mt-1 text-base font-semibold text-slate-900">
-              {trainerName ?? "TBA"}
+              {trainerName ?? "Nog geen coach"}
             </p>
           </div>
           <div className="soft-card p-3">
@@ -61,7 +62,7 @@ export function ClassSessionView({
               Niveau
             </p>
             <p className="mt-1 text-base font-semibold capitalize text-slate-900">
-              {classSession.level}
+              {getClassLevelLabel(classSession.level)}
             </p>
           </div>
         </div>

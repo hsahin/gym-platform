@@ -1,7 +1,7 @@
 "use client";
 
 import { Input, Label } from "@heroui/react";
-import { NativeSelect } from "@heroui-pro/react/native-select";
+import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 
 const COUNTRY_OPTIONS = [
   { code: "NL", label: "NL +31" },

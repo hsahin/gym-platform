@@ -6,7 +6,7 @@ import { ThemeModeSwitch } from "@/components/theme/ThemeModeSwitch";
 
 export function RuntimeConfigurationState({
   detail,
-  title = "Live runtimeconfiguratie ontbreekt",
+  title = "Live systeemconfiguratie ontbreekt",
 }: {
   readonly detail: string;
   readonly title?: string;
@@ -16,7 +16,7 @@ export function RuntimeConfigurationState({
       <header className="app-header">
         <div className="app-header__brand-copy">
           <p className="text-sm font-semibold">GymOS</p>
-          <p className="text-muted text-sm">Lokale runtime zonder tijdelijke fallback.</p>
+          <p className="text-muted text-sm">Lokale omgeving zonder tijdelijke fallback.</p>
         </div>
         <div className="app-header__actions">
           <nav className="app-header__nav text-sm">
@@ -34,7 +34,7 @@ export function RuntimeConfigurationState({
       <Card className="mx-auto w-full max-w-2xl rounded-[32px] border-border/80">
         <Card.Header className="space-y-3">
           <Chip size="sm" variant="soft">
-            Runtimeconfiguratie
+            Systeemconfiguratie
           </Chip>
           <Card.Title>{title}</Card.Title>
           <Card.Description>

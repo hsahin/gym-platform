@@ -18,9 +18,9 @@ export function getPublicLandingContent(snapshot: PublicReservationSnapshot) {
 
   return {
     heroTitle: "Run je gym als een merk waar leden direct bij willen horen.",
-    primaryCta: "Plan je launch",
+    primaryCta: "Plan je livegang",
     secondaryCta: "Bekijk lessen",
-    ownerSectionTitle: "Voor gym owners",
+    ownerSectionTitle: "Voor gymeigenaren",
     memberSectionTitle: "Voor leden",
     ownerHighlights: [
       "Boutique uitstraling",
@@ -58,19 +58,19 @@ export function getPublicLandingContent(snapshot: PublicReservationSnapshot) {
             label: "Launchstatus",
             value: "Klaar voor live",
             helper:
-              "Start met een lege tenant, maar laat nu al een merkervaring zien die klaar voelt om te verkopen.",
+              "Start met een lege clubomgeving, maar laat nu al een merkervaring zien die klaar voelt om te verkopen.",
           },
           {
             label: "Volgende stap",
             value: "Eerste les",
             helper:
-              "Voeg je eerste rooster toe en open daarna direct de publieke bookingflow voor leden.",
+              "Voeg je eerste rooster toe en open daarna direct de publieke reserveringsroute voor leden.",
           },
           {
-            label: "Owner flow",
+            label: "Eigenarenroute",
             value: "In 1 ritme",
             helper:
-              "Owner, operations en frontdesk landen straks in dezelfde premium ervaring zodra je eerste data staat.",
+              "Eigenaar, operatie en balie landen straks in dezelfde sterke ervaring zodra je eerste data staat.",
           },
         ],
     ownerStage: hasLiveClasses
@@ -86,18 +86,18 @@ export function getPublicLandingContent(snapshot: PublicReservationSnapshot) {
             value: `${totalCapacity}`,
           },
           helper:
-            "Boutique uitstraling voor buiten, operationele rust voor binnen. Dat is precies waarom owners sneller willen lanceren.",
+            "Boutique uitstraling voor buiten, operationele rust voor binnen. Dat is precies waarom eigenaren sneller willen lanceren.",
         }
       : {
-          statusLabel: "Launch canvas",
+          statusLabel: "Startinrichting",
           statusTone: "launch" as const,
           primaryMetric: {
             label: "Volgende stap",
             value: "Eerste les",
           },
           secondaryMetric: {
-            label: "Member flow",
-            value: "Member-ready",
+            label: "Ledenroute",
+            value: "Ledenklaar",
           },
           helper:
             "Voeg je eerste rooster toe en laat daarna meteen een reserveringservaring zien die als een echte studio aanvoelt.",
@@ -123,17 +123,17 @@ export function getLoginExperienceContent({
   isSetupComplete: boolean;
 }) {
   return {
-    heroTitle: "Van eerste locatie tot volle lesroosters.",
+    heroTitle: "Van eerste vestiging tot volle lesroosters.",
     ownerHighlights: [
       "Boutique uitstraling",
       "Omzet, bezetting en teamflow",
     ],
     momentumLabel: isSetupComplete
       ? `${accountCount} live account${accountCount === 1 ? "" : "s"}`
-      : "Binnen één flow live",
+      : "Binnen één route live",
     reservationCta: "Open reserveringspagina",
     bookingPromise: isSetupComplete
-      ? "Leden voelen direct een premium booking-ervaring en teamleden stappen in een dashboard dat vertrouwen uitstraalt."
-      : "Start schoon, voeg je echte data toe en laat meteen een platform zien dat klaar voelt voor members, frontdesk en eigenaarschap.",
+      ? "Leden voelen direct een sterke reserveringservaring en medewerkers stappen in een dashboard dat vertrouwen uitstraalt."
+      : "Start schoon, voeg je echte data toe en laat meteen een platform zien dat klaar voelt voor leden, balie en eigenaarschap.",
   };
 }

@@ -56,7 +56,9 @@ describe("dashboard pages", () => {
   it("builds clear dashboard cards for the expanded owner workspace", () => {
     const pages = getDashboardPages(createDashboardPagesInput());
 
-    expect(pages.map((page) => page.key)).toEqual(DASHBOARD_PAGE_KEYS);
+    expect(pages.map((page) => page.key)).toEqual(
+      DASHBOARD_PAGE_KEYS.filter((key) => key !== "superadmin"),
+    );
     expect(pages.map((page) => page.href)).toEqual([
       "/dashboard",
       "/dashboard/classes",
@@ -70,7 +72,6 @@ describe("dashboard pages", () => {
       "/dashboard/marketing",
       "/dashboard/integrations",
       "/dashboard/settings",
-      "/dashboard/superadmin",
     ]);
     expect(pages).toEqual(
       expect.arrayContaining([
@@ -82,7 +83,7 @@ describe("dashboard pages", () => {
         expect.objectContaining({
           key: "contracts",
           title: "Contracten",
-          value: "3 contracten",
+          value: "3 lidmaatschappen",
         }),
         expect.objectContaining({
           key: "coaching",
@@ -104,13 +105,35 @@ describe("dashboard pages", () => {
           title: "Integraties",
           value: "2 koppelingen live",
         }),
-        expect.objectContaining({
-          key: "superadmin",
-          title: "Superadmin",
-          value: "Flags beheer",
-        }),
       ]),
     );
+    expect(pages.some((page) => page.key === "superadmin")).toBe(false);
+  });
+
+  it("keeps dashboard card helpers in Dutch business language", () => {
+    const pages = getDashboardPages(createDashboardPagesInput());
+    const visibleCopy = pages
+      .map((page) => `${page.title}\n${page.value}\n${page.helper}`)
+      .join("\n\n");
+
+    for (const fragment of [
+      "launchsignalen",
+      "check-ins",
+      "membercontext",
+      "Workoutflows",
+      "premium",
+      "Remote toegang",
+      "White-label",
+      "mobile check-in",
+      "bookingmomenten",
+      "equipment",
+      "owner-instellingen",
+      "Owner accounts",
+      "moduleflags",
+      "rolloutcontrole",
+    ]) {
+      expect(visibleCopy).not.toContain(fragment);
+    }
   });
 
   it("marks protected owner pages without leaking implementation details", () => {
@@ -134,16 +157,14 @@ describe("dashboard pages", () => {
     );
 
     expect(pages.find((page) => page.key === "payments")).toMatchObject({
-      value: "Alleen owner",
+      value: "Alleen eigenaar",
       helper: expect.not.stringContaining("Mollie API"),
     });
     expect(pages.find((page) => page.key === "access")).toMatchObject({
-      value: "Alleen owner",
+      value: "Alleen eigenaar",
       helper: expect.not.stringContaining("Nuki API"),
     });
-    expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
-      value: "Geen toegang",
-    });
+    expect(pages.some((page) => page.key === "superadmin")).toBe(false);
     expect(pages.find((page) => page.key === "settings")).toMatchObject({
       title: "Gym instellingen",
       value: "2 vestigingen",
@@ -169,8 +190,8 @@ describe("dashboard pages", () => {
     );
 
     expect(pages.find((page) => page.key === "superadmin")).toMatchObject({
-      value: "Owner beheer",
-      helper: expect.stringContaining("Owner accounts"),
+      value: "Eigenaarsbeheer",
+      helper: expect.stringContaining("Eigenaarsaccounts"),
     });
   });
 
@@ -192,11 +213,11 @@ describe("dashboard pages", () => {
 
     expect(ownerPages.find((page) => page.key === "settings")).toMatchObject({
       value: "2 vestigingen",
-      helper: "Vestigingen, personeel, imports en owner-instellingen.",
+      helper: "Vestigingen, medewerkers, import en eigenaarsinstellingen.",
     });
     expect(superadminPages.find((page) => page.key === "settings")).toMatchObject({
       value: "3 checks",
-      helper: expect.stringContaining("platformstatus"),
+      helper: expect.stringContaining("systeemstatus"),
     });
   });
 
@@ -269,7 +290,7 @@ describe("dashboard pages", () => {
       value: "1 les",
     });
     expect(pages.find((page) => page.key === "contracts")).toMatchObject({
-      value: "1 contract",
+      value: "1 lidmaatschap",
     });
     expect(pages.find((page) => page.key === "coaching")).toMatchObject({
       value: "1 module actief",

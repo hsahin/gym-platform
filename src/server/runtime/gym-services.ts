@@ -1578,12 +1578,12 @@ function buildBillingRedirectUrl(invoiceId: string) {
 
 function getMissingLegalCheckoutFields(legal: GymDashboardSnapshot["legal"]) {
   return [
-    legal.termsUrl ? null : "voorwaarden",
-    legal.privacyUrl ? null : "privacyverklaring",
-    legal.sepaCreditorId ? null : "SEPA creditor ID",
-    legal.sepaMandateText ? null : "SEPA machtigingstekst",
-    legal.contractPdfTemplateKey ? null : "contract-PDF template",
-    legal.waiverStorageKey ? null : "waiver-opslag",
+    legal.termsUrl ? null : "voorwaardenlink",
+    legal.privacyUrl ? null : "privacylink",
+    legal.sepaCreditorId ? null : "incassant-ID",
+    legal.sepaMandateText ? null : "tekst voor incassomachtiging",
+    legal.contractPdfTemplateKey ? null : "contracttemplate",
+    legal.waiverStorageKey ? null : "waiveropslag",
   ].filter((field): field is string => Boolean(field));
 }
 
@@ -1598,14 +1598,14 @@ function getPublicSignupLegalMessage(
   const missingLegalFields = getMissingLegalCheckoutFields(legal);
 
   if (missingLegalFields.length === 0) {
-    return "Contract-PDF en waiveropslag zijn ingericht voor directe onboarding.";
+    return "Je contract en voorwaarden zijn klaar voor directe aanmelding.";
   }
 
   if (options?.testMode) {
-    return `Testomgeving: checkout testen mag alvast. Voor live self-signup nog nodig: ${missingLegalFields.join(", ")}.`;
+    return "Je kunt deze testaanmelding afronden. De club zet de laatste voorwaarden klaar voordat online inschrijven live gaat.";
   }
 
-  return `Self-signup mist nog juridische inrichting: ${missingLegalFields.join(", ")}.`;
+  return "Online inschrijven is bijna klaar. De club zet de laatste voorwaarden klaar voordat je kunt afronden.";
 }
 
 function isPublicSignupBillingReady(
@@ -1629,6 +1629,23 @@ function isPublicSignupBillingReady(
   );
 }
 
+function getMissingPublicSignupBillingFields(
+  billing: StoredBillingSettings | null | undefined,
+  options?: { readonly testMode?: boolean },
+) {
+  const hasProviderCredentials =
+    isMolliePaymentConfigured() || hasMollieConnectTokens(billing);
+
+  return [
+    billing?.profileId?.trim() ? null : "betaalprofiel",
+    billing?.paymentMethods && billing.paymentMethods.length > 0 ? null : "betaalroute",
+    billing?.supportEmail?.trim() ? null : "supportmail",
+    hasProviderCredentials ? null : "betaalkoppeling",
+    resolveConfiguredAppBaseUrl() ? null : "webhook-url",
+    billing?.enabled || options?.testMode ? null : "betalingen actief",
+  ].filter((field): field is string => Boolean(field));
+}
+
 function getPublicSignupBillingMessage(
   billing: StoredBillingSettings | null | undefined,
   options?: { readonly testMode?: boolean },
@@ -1636,11 +1653,11 @@ function getPublicSignupBillingMessage(
   const providerConfigured = isLiveBillingProviderConfigured(billing);
 
   if (!billing) {
-    return "Mollie-account is nog niet gekoppeld voor deze gym.";
+    return "Online betalen is nog niet beschikbaar bij deze club.";
   }
 
   if (!providerConfigured) {
-    return "Mollie-account is gekoppeld, maar de app mist nog de publieke betaal-url of Mollie-toegang voor checkout.";
+    return "Online betalen is bijna klaar, maar nog niet beschikbaar bij deze club.";
   }
 
   if (isBillingReady(billing)) {
@@ -1648,18 +1665,18 @@ function getPublicSignupBillingMessage(
   }
 
   if (options?.testMode && billing.profileId.trim()) {
-    return "Mollie is gekoppeld. Je testbetaling wordt gestart in de Mollie-testomgeving; live verwerking staat nog uit.";
+    return "Je testbetaling wordt gestart in een veilige checkout. Live betalen staat voor leden nog uit.";
   }
 
   if (!billing.enabled) {
-    return "Mollie is gekoppeld, maar betalingen staan voor deze gym nog niet actief.";
+    return "Online betalen staat voor deze club nog niet actief.";
   }
 
   if (!billing.supportEmail.trim()) {
-    return "Mollie is gekoppeld. Vul nog een supportmail voor betalingen in voordat self-signup live gaat.";
+    return "Online betalen is bijna klaar. De club rondt de betaalgegevens nog af.";
   }
 
-  return "Mollie is gekoppeld, maar mist nog betaalprofiel of betaalroutes voor self-signup.";
+  return "Online betalen is bijna klaar. De club rondt de betaalgegevens nog af.";
 }
 
 function slugifyDocumentPart(value: string) {
@@ -1718,14 +1735,14 @@ async function resolveMollieConnectAccessToken(
   const connect = billing.mollieConnect;
 
   if (!connect?.refreshToken || !connect.accessToken) {
-    throw new AppError("Mollie Connect is nog niet gekoppeld.", {
+    throw new AppError("Betaalgegevens zijn nog niet gekoppeld.", {
       code: "INVALID_INPUT",
     });
   }
 
   if (!isMollieConnectConfigured()) {
     throw new AppError(
-      "Mollie OAuth credentials ontbreken. Vul MOLLIE_CLIENT_ID en MOLLIE_CLIENT_SECRET in.",
+      "De beveiligde betaalkoppeling ontbreekt. Vul MOLLIE_CLIENT_ID en MOLLIE_CLIENT_SECRET in.",
       {
         code: "INVALID_INPUT",
         details: {
@@ -1779,7 +1796,7 @@ async function createLiveBillingProvider(
   }
 
   if (getBillingConnectionStatus(billing) !== "configured") {
-    throw new AppError("Mollie instellingen zijn nog niet compleet.", {
+    throw new AppError("Betaalinstellingen zijn nog niet compleet.", {
       code: "INVALID_INPUT",
       details: {
         provider: "mollie",
@@ -1792,7 +1809,7 @@ async function createLiveBillingProvider(
 
   if (!hasProviderCredentials) {
     throw new AppError(
-      "Mollie live credentials ontbreken. Vul MOLLIE_API_KEY in of koppel Mollie Connect voordat je betalingen verwerkt.",
+      "De live betaalinrichting ontbreekt. Vul MOLLIE_API_KEY in of koppel betaalgegevens voordat je betalingen verwerkt.",
       {
         code: "INVALID_INPUT",
         details: {
@@ -1805,7 +1822,7 @@ async function createLiveBillingProvider(
 
   if (!resolveConfiguredAppBaseUrl()) {
     throw new AppError(
-      "Mollie webhook-url ontbreekt. Vul APP_BASE_URL met de publieke app-url in voordat je betalingen verwerkt.",
+      "De betaalnotificatie-url ontbreekt. Vul APP_BASE_URL met de publieke app-url in voordat je betalingen verwerkt.",
       {
         code: "INVALID_INPUT",
         details: {
@@ -1833,7 +1850,7 @@ async function createBillingTestPaymentProvider(
   billing: StoredBillingSettings | null | undefined,
 ) {
   if (!billing) {
-    throw new AppError("Koppel eerst Mollie voordat je een testbetaling maakt.", {
+    throw new AppError("Koppel eerst betaalgegevens voordat je een testbetaling maakt.", {
       code: "FORBIDDEN",
     });
   }
@@ -1842,7 +1859,7 @@ async function createBillingTestPaymentProvider(
     isMolliePaymentConfigured() || hasMollieConnectTokens(billing);
 
   if (!hasProviderCredentials) {
-    throw new AppError("Koppel eerst Mollie voordat je een testbetaling maakt.", {
+    throw new AppError("Koppel eerst betaalgegevens voordat je een testbetaling maakt.", {
       code: "FORBIDDEN",
     });
   }
@@ -2025,10 +2042,13 @@ async function buildBillingSummary(
   const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
   const billing = tenantProfile?.billing;
   const liveProviderConfigured = isLiveBillingProviderConfigured(billing);
+  const providerAccessConfigured =
+    isMolliePaymentConfigured() || hasMollieConnectTokens(billing);
+  const webhookUrlConfigured = Boolean(resolveConfiguredAppBaseUrl());
   const connect = billing?.mollieConnect;
   const connectScopes = parseMollieScope(connect?.scope);
   const migrationHint =
-    "Heeft de gym al SEPA-incasso via Virtuagym/Mollie? Koppel hetzelfde Mollie-account; GymOS kan daarna met customers.read en mandates.read bestaande klanten en mandates herkennen voor migratiecontrole.";
+    "Heeft de gym al automatische incasso via Virtuagym/Mollie? Koppel dezelfde betaalgegevens; GymOS kan daarna bestaande incasso’s herkennen en mandaten controleren voor migratie.";
 
   if (!billing) {
     return {
@@ -2045,6 +2065,8 @@ async function buildBillingSummary(
       helpText:
         "Koppel Mollie per gym om automatische incasso, eenmalige betalingen en deelbare betaalverzoeken voor te bereiden.",
       previewMode: true,
+      providerAccessConfigured,
+      webhookUrlConfigured,
       mollieConnectClientConfigured: isMollieConnectConfigured(),
       mollieClientLinksConfigured: isMollieClientLinksConfigured(),
       mollieConnectConnected: false,
@@ -2067,6 +2089,8 @@ async function buildBillingSummary(
     statusLabel: getBillingStatusLabel(billing, { liveProviderConfigured }),
     helpText: getBillingHelpText(billing, { liveProviderConfigured }),
     previewMode: !liveProviderConfigured,
+    providerAccessConfigured,
+    webhookUrlConfigured,
     notes: billing.notes,
     lastValidatedAt: billing.lastValidatedAt,
     lastPaymentActionAt: billing.lastPaymentActionAt,
@@ -2101,17 +2125,17 @@ async function buildLegalComplianceSummary(
       waiverRetentionMonths: 84,
       statusLabel: "Niet ingericht",
       helpText:
-        "Voeg voorwaarden, privacy, SEPA-toestemming, contract-PDF en waiver-opslag toe voordat je live gaat.",
+        "Voeg voorwaarden, privacy, incassomachtiging, contractsjabloon en waiveropslag toe voordat je live gaat.",
     };
   }
 
   const missing = [
     legal.termsUrl ? null : "voorwaarden",
     legal.privacyUrl ? null : "privacy",
-    legal.sepaCreditorId ? null : "SEPA creditor ID",
-    legal.sepaMandateText ? null : "SEPA machtigingstekst",
-    legal.contractPdfTemplateKey ? null : "contract-PDF template",
-    legal.waiverStorageKey ? null : "waiver-opslag",
+    legal.sepaCreditorId ? null : "incassant-ID",
+    legal.sepaMandateText ? null : "tekst voor incassomachtiging",
+    legal.contractPdfTemplateKey ? null : "contractsjabloon",
+    legal.waiverStorageKey ? null : "waiveropslag",
   ].filter(Boolean);
 
   return {
@@ -2119,7 +2143,7 @@ async function buildLegalComplianceSummary(
     statusLabel: missing.length === 0 ? "Juridisch klaar" : `${missing.length} check${missing.length === 1 ? "" : "s"}`,
     helpText:
       missing.length === 0
-        ? "Voorwaarden, privacy, SEPA-toestemming, contract-PDF en waiver-opslag zijn vastgelegd."
+        ? "Voorwaarden, privacy, incassomachtiging, contractsjabloon en waiveropslag zijn vastgelegd."
         : `Nog nodig: ${missing.join(", ")}.`,
   };
 }
@@ -3659,12 +3683,9 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     const testMode = isMollieTestMode();
 
     if (!billing) {
-      throw new AppError(
-        "Checkout is nog niet ingericht. Koppel Mollie voordat consumenten zichzelf kunnen inschrijven.",
-        {
-          code: "FORBIDDEN",
-        },
-      );
+      throw new AppError(getPublicSignupBillingMessage(billing, { testMode }), {
+        code: "FORBIDDEN",
+      });
     }
 
     if (!isPublicSignupBillingReady(billing, { testMode })) {
@@ -3674,9 +3695,8 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     }
 
     if (!billing.paymentMethods.includes(paymentMethod)) {
-      throw new AppError("Deze betaalmethode is nog niet geactiveerd voor self-signup.", {
+      throw new AppError("Deze betaalmethode is nog niet beschikbaar voor online inschrijven.", {
         code: "FORBIDDEN",
-        details: { paymentMethod },
       });
     }
 
@@ -3684,15 +3704,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       ? await createBillingTestPaymentProvider(tenantContext.tenantId, billing)
       : await createLiveBillingProvider(tenantContext.tenantId, billing);
 
-    const missingLegalFields = getMissingLegalCheckoutFields(legal);
-    if (missingLegalFields.length > 0 && !testMode) {
-      throw new AppError(
-        `Self-signup mist juridische inrichting: ${missingLegalFields.join(", ")}.`,
-        {
-          code: "INVALID_INPUT",
-          details: { missingLegalFields },
-        },
-      );
+    if (!isLegalCheckoutReady(legal) && !testMode) {
+      throw new AppError(getPublicSignupLegalMessage(legal, { testMode }), {
+        code: "INVALID_INPUT",
+        details: { legalReady: false },
+      });
     }
 
     return { billing, legal, provider };
@@ -4192,9 +4208,24 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           },
           legalReady: false,
           billingReady: false,
+          legalMissingFields: [
+            "voorwaardenlink",
+            "privacylink",
+            "incassant-ID",
+            "tekst voor incassomachtiging",
+            "contracttemplate",
+            "waiveropslag",
+          ],
+          billingMissingFields: [
+            "betaalprofiel",
+            "betaalroute",
+            "supportmail",
+            "betaalkoppeling",
+            "webhook-url",
+          ],
           testMode: isMollieTestMode(),
-          billingMessage: "Kies eerst je club om de betaalstatus te controleren.",
-          legalMessage: "Kies eerst je club om de juridische setup te controleren.",
+          billingMessage: "Kies eerst je club om te zien of online betalen beschikbaar is.",
+          legalMessage: "Kies eerst je club om te zien of online aanmelden beschikbaar is.",
         } satisfies PublicMembershipSignupSnapshot);
       }
 
@@ -4206,6 +4237,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       ]);
       const billing = tenantProfile.billing;
       const testMode = isMollieTestMode();
+      const legalMissingFields = getMissingLegalCheckoutFields(legal);
+      const billingMissingFields = getMissingPublicSignupBillingFields(billing, {
+        testMode,
+      });
 
       return toClientPlain({
         tenantName: tenantProfile.name,
@@ -4237,8 +4272,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           contractPdfTemplateKey: legal.contractPdfTemplateKey,
           waiverStorageKey: legal.waiverStorageKey,
         },
-        legalReady: isLegalCheckoutReady(legal),
+        legalReady: legalMissingFields.length === 0,
         billingReady: isPublicSignupBillingReady(billing, { testMode }),
+        legalMissingFields,
+        billingMissingFields,
         testMode,
         billingMessage: getPublicSignupBillingMessage(billing, { testMode }),
         legalMessage: getPublicSignupLegalMessage(legal, { testMode }),
@@ -4942,13 +4979,13 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         );
 
         if (!existingPack) {
-          throw new AppError("Credit pack niet gevonden voor appointment.", {
+          throw new AppError("Strippenkaart niet gevonden voor deze afspraak.", {
             code: "RESOURCE_NOT_FOUND",
           });
         }
 
         if (existingPack.remainingCredits < occurrences) {
-          throw new AppError("Deze credit pack heeft niet genoeg credits voor alle sessies.", {
+          throw new AppError("Deze strippenkaart heeft niet genoeg ritten voor alle sessies.", {
             code: "INVALID_INPUT",
             details: {
               remainingCredits: existingPack.remainingCredits,
@@ -6099,7 +6136,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
       if (!isMollieConnectConfigured()) {
         throw new AppError(
-          "Mollie OAuth credentials ontbreken. Vul MOLLIE_CLIENT_ID en MOLLIE_CLIENT_SECRET in.",
+          "De beveiligde betaalkoppeling ontbreekt. Vul MOLLIE_CLIENT_ID en MOLLIE_CLIENT_SECRET in.",
           {
             code: "INVALID_INPUT",
             details: {
@@ -6143,7 +6180,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
       if (!isMollieClientLinksConfigured()) {
         throw new AppError(
-          "Mollie Client Links credentials ontbreken. Vul MOLLIE_CLIENT_ID, MOLLIE_CLIENT_SECRET en MOLLIE_ORGANIZATION_ACCESS_TOKEN in.",
+          "De aanmeldlink voor betaalgegevens ontbreekt. Vul MOLLIE_CLIENT_ID, MOLLIE_CLIENT_SECRET en MOLLIE_ORGANIZATION_ACCESS_TOKEN in.",
           {
             code: "INVALID_INPUT",
             details: {
@@ -6205,7 +6242,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       const billing = tenantProfile?.billing;
 
       if (!billing?.mollieConnect?.refreshToken) {
-        throw new AppError("Koppel eerst het bestaande Mollie-account via OAuth.", {
+        throw new AppError("Koppel eerst de betaalgegevens veilig.", {
           code: "INVALID_INPUT",
         });
       }
@@ -6285,7 +6322,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       const tenant = await findLocalTenantByMollieConnectState(input.state);
 
       if (!tenant) {
-        throw new AppError("Mollie OAuth state is verlopen of onbekend.", {
+        throw new AppError("De beveiligde Mollie-koppeling is verlopen of onbekend.", {
           code: "FORBIDDEN",
         });
       }
@@ -6737,14 +6774,14 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       const billing = tenantProfile?.billing;
 
       if (!billing) {
-        throw new AppError("Koppel eerst Mollie voordat je een testbetaling maakt.", {
+        throw new AppError("Koppel eerst betaalgegevens voordat je een testbetaling maakt.", {
           code: "FORBIDDEN",
         });
       }
 
       if (input.paymentMethod === "direct_debit") {
         throw new AppError(
-          "Automatische incasso test je via SEPA-mandates en leden met een machtiging. Maak hier een testlink voor een eenmalige betaling of betaalverzoek.",
+          "Automatische incasso test je via mandaten en leden met een machtiging. Start hier een testbetaling voor een eenmalige betaling of betaalverzoek.",
           {
             code: "INVALID_INPUT",
             details: { paymentMethod: input.paymentMethod },
@@ -6781,7 +6818,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
       if (!intent) {
         throw new AppError(
-          "Mollie live credentials ontbreken. Vul MOLLIE_API_KEY in voordat je betalingen verwerkt.",
+          "De live betaalinrichting ontbreekt. Vul MOLLIE_API_KEY in voordat je betalingen verwerkt.",
           {
             code: "INVALID_INPUT",
             details: {

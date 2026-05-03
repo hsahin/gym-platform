@@ -217,7 +217,7 @@ describe("demo session runtime", () => {
 
     await expect(resolveViewerFromToken(token)).resolves.toMatchObject({
       roleKey: "manager",
-      roleLabel: "Operations manager",
+      roleLabel: "Operatiemanager",
     });
   });
 

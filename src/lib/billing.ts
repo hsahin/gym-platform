@@ -3,6 +3,9 @@ import type {
   BillingPaymentMethod,
   BillingProvider,
 } from "@/server/types";
+import {
+  getBillingPaymentMethodLabel as getBillingPaymentMethodUiLabel,
+} from "@/lib/ui-labels";
 
 export interface StoredBillingSettings {
   readonly enabled: boolean;
@@ -47,7 +50,7 @@ export const BILLING_PROVIDER_OPTIONS: ReadonlyArray<{
     key: "mollie",
     label: "Mollie",
     helper:
-      "Sterke Europese betaalprovider voor incasso, eenmalige checkout en gedeelde betaalverzoeken.",
+      "Sterke Europese betaalprovider voor incasso, eenmalige betaling en gedeelde betaalverzoeken.",
   },
 ] as const;
 
@@ -58,18 +61,18 @@ export const BILLING_PAYMENT_METHOD_OPTIONS: ReadonlyArray<{
 }> = [
   {
     key: "direct_debit",
-    label: "Automatische incasso",
-    helper: "Voor memberships en doorlopende betalingen met een vaste mandateflow.",
+    label: getBillingPaymentMethodUiLabel("direct_debit"),
+    helper: "Voor lidmaatschappen die je maandelijks automatisch int via SEPA-incasso.",
   },
   {
     key: "one_time",
-    label: "Eenmalige betaling",
-    helper: "Voor drop-ins, intakepakketten of een snelle checkout voor losse aankopen.",
+    label: getBillingPaymentMethodUiLabel("one_time"),
+    helper: "Voor leden die de volledige contractperiode in één keer betalen.",
   },
   {
     key: "payment_request",
-    label: "Betaalverzoek",
-    helper: "Voor een deelbare betaallink via WhatsApp of sms, in Tikkie-stijl.",
+    label: getBillingPaymentMethodUiLabel("payment_request"),
+    helper: "Voor losse betaalverzoeken via WhatsApp of sms, bijvoorbeeld voor intake of toeslagen.",
   },
 ] as const;
 
@@ -93,10 +96,7 @@ export function getBillingProviderLabel(provider: BillingProvider) {
 }
 
 export function getBillingPaymentMethodLabel(paymentMethod: BillingPaymentMethod) {
-  return (
-    BILLING_PAYMENT_METHOD_OPTIONS.find((option) => option.key === paymentMethod)?.label ??
-    paymentMethod
-  );
+  return getBillingPaymentMethodUiLabel(paymentMethod);
 }
 
 export function normalizeStoredBillingSettings(
@@ -178,7 +178,7 @@ export function getBillingStatusLabel(
   const status = getBillingConnectionStatus(settings);
 
   if (status === "configured" && settings.enabled) {
-    return options?.liveProviderConfigured ? "Live" : "Live credentials nodig";
+    return options?.liveProviderConfigured ? "Live" : "Live inrichting nodig";
   }
 
   if (status === "configured") {
@@ -200,7 +200,7 @@ export function getBillingHelpText(
   const methods = settings.paymentMethods.map(getBillingPaymentMethodLabel);
   const methodLabel =
     methods.length === 0
-      ? "nog geen betaalflows"
+      ? "nog geen betaalroutes"
       : methods.length === 1
         ? methods[0]
         : `${methods.slice(0, -1).join(", ")} en ${methods.at(-1)}`;
@@ -208,19 +208,19 @@ export function getBillingHelpText(
 
   if (status === "configured" && settings.enabled) {
     if (options?.liveProviderConfigured) {
-      return `${providerLabel} verwerkt nu ${methodLabel}. Facturen, refunds, webhooks en reconciliatie lopen via de live providerkoppeling.`;
+      return `${providerLabel} verwerkt nu ${methodLabel}. Facturen, terugbetalingen en dagafsluiting lopen via de live betaalverwerking.`;
     }
 
-    return `${providerLabel} is ingesteld voor ${methodLabel}, maar de live API-key en publieke webhook-url ontbreken nog in de omgeving.`;
+    return `${providerLabel} is ingesteld voor ${methodLabel}, maar de live betaalverwerking is nog niet volledig aangesloten in de omgeving.`;
   }
 
   if (status === "configured") {
-    return `${providerLabel} is ingevuld voor ${methodLabel}. Activeer betalingen zodra je memberships of losse sales live wilt incasseren.`;
+    return `${providerLabel} is ingevuld voor ${methodLabel}. Activeer betalingen zodra je lidmaatschappen of losse verkopen live wilt incasseren.`;
   }
 
   if (status === "attention") {
     return `Vul profielnaam, profiel-id en support e-mail aan om ${providerLabel} betrouwbaar te kunnen gebruiken.`;
   }
 
-  return "Koppel Mollie per gym om automatische incasso, eenmalige betalingen en deelbare betaalverzoeken voor te bereiden.";
+  return "Koppel betaalgegevens per gym om maandelijkse incasso, volledige vooruitbetaling en deelbare betaalverzoeken voor te bereiden.";
 }

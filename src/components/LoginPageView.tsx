@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
-import { Segment } from "@heroui-pro/react/segment";
+import { Card, Chip, Input, Label } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 
 export function LoginPageView({
@@ -34,7 +35,7 @@ export function LoginPageView({
           <div className="app-header__brand-copy">
             <p className="text-sm font-semibold">GymOS</p>
             <p className="text-muted text-sm">
-              Toegang voor eigenaars, team en leden.
+              Toegang voor eigenaars, medewerkers en leden.
             </p>
           </div>
         </div>
@@ -84,8 +85,8 @@ export function LoginPageView({
               </Card.Title>
               <Card.Description className="max-w-xl text-base">
                 {mode === "login"
-                  ? "Eigenaars, teamleden en clubleden gebruiken hier hetzelfde inlogpunt."
-                  : "Hiermee maak je het owner-account en de tenantbasis aan. De rest van de inrichting gebeurt daarna in het dashboard."}
+                  ? "Eigenaars, medewerkers en clubleden gebruiken hier hetzelfde inlogpunt."
+                  : "Hiermee maak je het eigenaarsaccount en de gymbasis aan. De rest van de inrichting gebeurt daarna in het dashboard."}
               </Card.Description>
             </div>
           </Card.Header>
@@ -156,7 +157,7 @@ export function LoginPageView({
                     autoComplete="organization"
                     fullWidth
                     name="tenantName"
-                    placeholder="Northside Athletics"
+                    placeholder="Jouw sportschool"
                     required
                   />
                 </div>
@@ -167,7 +168,7 @@ export function LoginPageView({
                     autoComplete="name"
                     fullWidth
                     name="ownerName"
-                    placeholder="Amina Hassan"
+                    placeholder="Naam eigenaar"
                     required
                   />
                 </div>

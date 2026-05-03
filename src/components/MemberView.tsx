@@ -1,6 +1,10 @@
 import { formatPhoneForDisplay } from "@claimtech/i18n";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
 import { getMembershipBillingCycleLabel } from "@/lib/memberships";
+import {
+  getMemberStatusLabel,
+  getWaiverStatusLabel,
+} from "@/lib/ui-labels";
 import type { GymMember, MembershipPlan } from "@/server/types";
 
 function formatRenewalDate(nextRenewalAt: string) {
@@ -34,16 +38,16 @@ export function MemberView({
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="eyebrow">Member profile</p>
+            <p className="eyebrow">Lidprofiel</p>
             <CardTitle className="text-lg">{member.fullName}</CardTitle>
             <p className="mt-1 text-sm text-slate-600">{member.email}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant={statusVariant}>{member.status}</Badge>
+            <Badge variant={statusVariant}>{getMemberStatusLabel(member.status)}</Badge>
             <Badge
               variant={member.waiverStatus === "complete" ? "success" : "warning"}
             >
-              waiver {member.waiverStatus}
+              {getWaiverStatusLabel(member.waiverStatus)}
             </Badge>
           </div>
         </div>
@@ -65,7 +69,7 @@ export function MemberView({
           </div>
           <div className="soft-card p-3">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-              Locatie
+              Vestiging
             </p>
             <p className="mt-1 text-base font-semibold text-slate-900">
               {homeLocationName ?? "Onbekend"}

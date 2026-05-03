@@ -9,8 +9,8 @@ const pageFormTitles: Record<DashboardPageKey, ReadonlyArray<string>> = {
   overview: [],
   classes: ["Les plannen"],
   members: ["Lid toevoegen"],
-  contracts: ["Contract toevoegen", "Contracten en klanten importeren"],
-  coaching: ["Workout flow configureren"],
+  contracts: ["Lidmaatschap toevoegen", "Lidmaatschappen en leden importeren"],
+  coaching: ["Trainingsroute configureren"],
   retention: ["Retentiecampagne starten"],
   access: ["Smartdeur koppelen"],
   payments: ["Mollie betalingen koppelen"],
@@ -20,10 +20,10 @@ const pageFormTitles: Record<DashboardPageKey, ReadonlyArray<string>> = {
   settings: [
     "Vestiging toevoegen",
     "Trainer toevoegen",
-    "Teamlid uitnodigen",
-    "Contracten en klanten importeren",
+    "Medewerker uitnodigen",
+    "Lidmaatschappen en leden importeren",
   ],
-  superadmin: ["Gym owner account toevoegen", "Feature flags beheren"],
+  superadmin: ["Eigenaar toevoegen", "Clubmodules beheren"],
 };
 
 export function getDashboardPageLayout(

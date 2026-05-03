@@ -14,6 +14,7 @@ import { createGymPlatformServices } from "@/server/runtime/gym-services";
 
 let tempDir = "";
 const originalMollieApiKey = process.env.MOLLIE_API_KEY;
+const originalMollieTestMode = process.env.MOLLIE_TEST_MODE;
 const originalAppBaseUrl = process.env.APP_BASE_URL;
 const originalNukiApiToken = process.env.NUKI_API_TOKEN;
 const originalEnableRealMessages = process.env.ENABLE_REAL_MESSAGES;
@@ -129,6 +130,11 @@ afterEach(async () => {
     delete process.env.MOLLIE_API_KEY;
   } else {
     process.env.MOLLIE_API_KEY = originalMollieApiKey;
+  }
+  if (originalMollieTestMode === undefined) {
+    delete process.env.MOLLIE_TEST_MODE;
+  } else {
+    process.env.MOLLIE_TEST_MODE = originalMollieTestMode;
   }
   if (originalAppBaseUrl === undefined) {
     delete process.env.APP_BASE_URL;
@@ -1276,6 +1282,14 @@ describe("gym platform services", () => {
     expect(snapshot.mobileExperience.whiteLabelDomain).toBe("app.northside.test");
     expect(snapshot.marketingWorkspace.promotionHeadline).toBe("Spring intake week");
     expect(snapshot.integrationWorkspace.hardwareVendors).toEqual(["Nuki", "Brivo"]);
+    expect(snapshot.payments.mollieConnectMigrationHint).toContain(
+      "bestaande incasso’s herkennen",
+    );
+    expect(snapshot.payments.mollieConnectMigrationHint).toContain(
+      "mandaten controleren",
+    );
+    expect(snapshot.payments.mollieConnectMigrationHint).not.toContain("customers.read");
+    expect(snapshot.payments.mollieConnectMigrationHint).not.toContain("mandates.read");
   });
 
   it("lets an owner toggle tenant feature flags from the dashboard model", async () => {
@@ -2423,7 +2437,10 @@ describe("gym platform services", () => {
     expect(publicSnapshot.billingReady).toBe(true);
     expect(publicSnapshot.legalReady).toBe(true);
     expect(publicSnapshot.billingMessage).toContain("veilige checkout");
-    expect(publicSnapshot.legalMessage).toContain("Contract-PDF en waiveropslag zijn ingericht");
+    expect(publicSnapshot.legalMessage).toContain("contract en voorwaarden zijn klaar");
+    expect(`${publicSnapshot.billingMessage} ${publicSnapshot.legalMessage}`).not.toMatch(
+      /Mollie-account|publieke betaal-url|Mollie-toegang|SEPA creditor ID|contract-PDF template|waiver-opslag|self-signup/i,
+    );
     expect(checkout.signup.status).toBe("approved");
     expect(checkout.signup.waiverAcceptedAt).toBeTruthy();
     expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-checkout");
@@ -2558,9 +2575,11 @@ describe("gym platform services", () => {
     expect(publicSnapshot.billingReady).toBe(true);
     expect(publicSnapshot.legalReady).toBe(false);
     expect(publicSnapshot.testMode).toBe(true);
-    expect(publicSnapshot.billingMessage).toContain("Mollie is gekoppeld");
     expect(publicSnapshot.billingMessage).toContain("testbetaling");
-    expect(publicSnapshot.legalMessage).toContain("Testomgeving");
+    expect(publicSnapshot.legalMessage).toContain("testaanmelding");
+    expect(`${publicSnapshot.billingMessage} ${publicSnapshot.legalMessage}`).not.toMatch(
+      /Mollie-account|publieke betaal-url|Mollie-toegang|SEPA creditor ID|contract-PDF template|waiver-opslag|self-signup|Testomgeving/i,
+    );
 
     const checkout = await services.submitPublicMemberSignup({
       tenantSlug: state.tenant.id,
@@ -2588,6 +2607,71 @@ describe("gym platform services", () => {
     });
     expect(paymentRequests[0]?.profileId).toBeUndefined();
     expect(paymentRequests[0]?.method).toBeUndefined();
+  });
+
+  it("keeps public signup setup errors consumer-safe when online signup is not live", async () => {
+    process.env.MOLLIE_TEST_MODE = "false";
+    process.env.MOLLIE_API_KEY = "live_mollie_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_live_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["direct_debit"],
+    });
+    const publicSnapshot = await services.getPublicMembershipSignupSnapshot({
+      tenantSlug: state.tenant.id,
+    });
+
+    expect(publicSnapshot.billingMissingFields).toEqual([]);
+    expect(publicSnapshot.legalMissingFields).toEqual(
+      expect.arrayContaining(["voorwaardenlink", "privacylink", "contracttemplate"]),
+    );
+
+    let rejection: unknown;
+    try {
+      await services.submitPublicMemberSignup({
+        tenantSlug: state.tenant.id,
+        fullName: "Jade Live",
+        email: "jade-live@northside.test",
+        phone: "0612345678",
+        phoneCountry: "NL",
+        membershipPlanId: plan.id,
+        preferredLocationId: location.id,
+        paymentMethod: "direct_debit",
+        contractAccepted: true,
+        waiverAccepted: true,
+        portalPassword: "jade-member-123",
+      });
+    } catch (error) {
+      rejection = error;
+    }
+
+    expect(rejection).toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Online inschrijven is bijna klaar. De club zet de laatste voorwaarden klaar voordat je kunt afronden.",
+    });
+    expect(JSON.stringify(rejection)).not.toMatch(
+      /Mollie-account|publieke betaal-url|Mollie-toegang|SEPA creditor ID|contract-PDF template|waiver-opslag|self-signup|Testomgeving/i,
+    );
   });
 
   it("charges one-time signup checkout for the whole contract duration", async () => {
@@ -4093,7 +4177,7 @@ describe("gym platform services", () => {
       }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: expect.stringContaining("Koppel eerst Mollie"),
+      message: expect.stringContaining("Koppel eerst betaalgegevens"),
     });
   });
 

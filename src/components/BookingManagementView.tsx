@@ -2,6 +2,11 @@ import Link from "next/link";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { CancelBookingButton } from "@/components/CancelBookingButton";
+import {
+  getBookingSourceLabel,
+  getBookingStatusLabel,
+  getClassLevelLabel,
+} from "@/lib/ui-labels";
 import type { GymDashboardSnapshot } from "@/server/types";
 
 function formatSessionMoment(startsAt: string) {
@@ -31,18 +36,6 @@ function getBookingVariant(status: string) {
   return "info";
 }
 
-function getSourceLabel(source: string) {
-  if (source === "member_app") {
-    return "Ledenapp";
-  }
-
-  if (source === "coach") {
-    return "Coach";
-  }
-
-  return "Frontdesk";
-}
-
 export function BookingManagementView({
   snapshot,
 }: {
@@ -69,13 +62,13 @@ export function BookingManagementView({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-              Reservation desk
+              Reserveringsbalie
             </p>
             <h3 className="text-3xl font-semibold tracking-tight text-white">
-              Volledige grip op confirmations, wachtlijst en check-ins.
+              Volledige grip op bevestigingen, wachtlijst en aanwezigheid.
             </h3>
             <p className="text-sm leading-6 text-white/70">
-              Dit scherm moet voelen als een premium frontdesk-console: snel scanbaar,
+              Dit scherm moet voelen als een sterke balieconsole: snel scanbaar,
               direct actiegericht en zonder ruis tussen status en opvolging.
             </p>
           </div>
@@ -116,8 +109,8 @@ export function BookingManagementView({
           {bookings.map((booking) => {
             const classSession = classSessionById.get(booking.classSessionId);
             const locationName = classSession
-              ? locationById.get(classSession.locationId)?.name ?? "Onbekende locatie"
-              : "Onbekende locatie";
+              ? locationById.get(classSession.locationId)?.name ?? "Onbekende vestiging"
+              : "Onbekende vestiging";
 
             return (
               <Card key={booking.id} className="overflow-hidden border-white/70 bg-white/90 shadow-[0_22px_80px_-58px_rgba(16,24,38,0.5)]">
@@ -133,9 +126,9 @@ export function BookingManagementView({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary">{getSourceLabel(booking.source)}</Badge>
+                      <Badge variant="secondary">{getBookingSourceLabel(booking.source)}</Badge>
                       <Badge variant={getBookingVariant(booking.status)}>
-                        {booking.status}
+                        {getBookingStatusLabel(booking.status)}
                       </Badge>
                     </div>
                   </div>
@@ -153,7 +146,9 @@ export function BookingManagementView({
                     </div>
                     <div className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
                       <p className="font-medium text-slate-900">Niveau</p>
-                      <p className="mt-2">{classSession?.level ?? "Niet beschikbaar"}</p>
+                      <p className="mt-2">
+                        {classSession ? getClassLevelLabel(classSession.level) : "Niet beschikbaar"}
+                      </p>
                     </div>
                     <div className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
                       <p className="font-medium text-slate-900">Notitie</p>
@@ -195,16 +190,16 @@ export function BookingManagementView({
             <div className="space-y-2">
               <p className="eyebrow">Nog leeg</p>
               <p className="text-xl font-semibold text-slate-950">
-                Je eerste reservering verschijnt hier zodra de member flow live gaat.
+                Je eerste reservering verschijnt hier zodra de ledenroute live gaat.
               </p>
             </div>
             <p>
-              Gebruik de bookingflow in het dashboard of laat leden reserveren via de
+              Gebruik de reserveringsroute in het dashboard of laat leden reserveren via de
               publieke reserveringspagina.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/reserve" className="cta-primary">
-                Open publieke flow
+                Open publieke route
               </Link>
               <Link href="/" className="cta-secondary">
                 Terug naar dashboard

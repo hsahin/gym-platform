@@ -100,7 +100,7 @@ describe("remote access helpers", () => {
     expect(getRemoteAccessHelpText(createDefaultRemoteAccessSettings())).toContain(
       "Koppel een slim slot",
     );
-    expect(getRemoteAccessHelpText(attention)).toContain("Vul locatie");
+    expect(getRemoteAccessHelpText(attention)).toContain("Vul vestiging");
     expect(getRemoteAccessHelpText(configuredDisabled)).toContain("is ingevuld");
     expect(getRemoteAccessHelpText(configuredEnabled)).toContain("live API-token");
     expect(getRemoteAccessHelpText(configuredEnabled, { liveProviderConfigured: true })).toContain(

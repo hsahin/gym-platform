@@ -5,12 +5,17 @@ import { useState } from "react";
 import { ShieldCheck, Users } from "lucide-react";
 import { Card, Chip, Input, Label } from "@heroui/react";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
-import { Segment } from "@heroui-pro/react/segment";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { DashboardEntityActions } from "@/components/DashboardEntityActions";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import { EmptyPanel, PageSection, type DashboardPageProps } from "@/components/dashboard/shared";
 import { filterManagementRecords } from "@/lib/dashboard-management";
+import {
+  getEntityStatusLabel,
+  getRoleLabel,
+  getTrainerStatusLabel,
+} from "@/lib/ui-labels";
 
 export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
   const [settingsView, setSettingsView] = useState<"ops" | "team" | "legal">("ops");
@@ -42,7 +47,7 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
     <div className="section-stack">
       <PageSection
         title="Gym instellingen"
-        description="Vestigingen, runtime, team en juridische gereedheid."
+        description="Vestigingen, medewerkers, juridische inrichting en systeemstatus."
       >
         <div className="grid content-start gap-3">
             <Segment
@@ -55,7 +60,7 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
               }}
             >
               <Segment.Item id="ops">Operatie</Segment.Item>
-              <Segment.Item id="team">Team</Segment.Item>
+              <Segment.Item id="team">Medewerkers</Segment.Item>
               <Segment.Item id="legal">Juridisch</Segment.Item>
             </Segment>
 
@@ -92,7 +97,7 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <p className="font-medium">{location.name}</p>
                         <Chip size="sm" variant="tertiary">
-                          {location.status}
+                          {getEntityStatusLabel(location.status)}
                         </Chip>
                       </div>
                       <p className="text-muted text-sm">
@@ -168,22 +173,22 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                   />
                 )}
 
-                {snapshot.uiCapabilities.canManageFeatureFlags ? (
+                {snapshot.uiCapabilities.canManageOwnerAccounts ? (
                   <Card className="rounded-2xl border-border/80 bg-surface-secondary">
                     <Card.Content className="space-y-3">
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4" />
-                        <p className="font-medium">Superadminbeheer</p>
+                        <p className="font-medium">Platformbeheer</p>
                       </div>
                       <p className="text-muted text-sm leading-6">
-                        Beheer alle tenant-level feature flags vanaf een aparte ownerpagina.
+                        Beheer eigenaarsaccounts en platforminstellingen vanaf de beheerpagina.
                       </p>
                       <Link
                         href="/dashboard/superadmin"
                         prefetch={false}
                         className="inline-flex w-fit rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium"
                       >
-                        Open Superadmin
+                        Open platformbeheer
                       </Link>
                     </Card.Content>
                   </Card>
@@ -226,7 +231,7 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <p className="font-medium">{trainer.fullName}</p>
                               <Chip size="sm" variant="tertiary">
-                                {trainer.status}
+                                {getTrainerStatusLabel(trainer.status)}
                               </Chip>
                             </div>
                             <p className="text-muted text-sm">
@@ -309,25 +314,25 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                 ) : null}
                 {filteredStaff.length > 0 ? (
                 <>
-                <p className="text-sm font-semibold">Teamaccounts</p>
-                <ListView aria-label="Teamaccounts" items={filteredStaff}>
+                <p className="text-sm font-semibold">Medewerkeraccounts</p>
+                <ListView aria-label="Medewerkeraccounts" items={filteredStaff}>
                   {(member) => (
                     <ListView.Item id={member.id} textValue={member.displayName}>
                       <ListView.ItemContent>
                         <ListView.Title>{member.displayName}</ListView.Title>
-                        <ListView.Description>
-                          {member.email} · {member.roles.join(", ")}
+                      <ListView.Description>
+                          {member.email} · {member.roles.map(getRoleLabel).join(", ")}
                         </ListView.Description>
                       </ListView.ItemContent>
                       <div className="flex flex-wrap items-center gap-2">
                         <Chip size="sm" variant="tertiary">
-                          {member.status}
+                          {getEntityStatusLabel(member.status)}
                         </Chip>
                         <Users className="text-muted h-4 w-4" />
                       </div>
                       <DashboardEntityActions
                         endpoint="/api/platform/staff"
-                        entityLabel={`Teamlid ${member.displayName}`}
+                        entityLabel={`Medewerker ${member.displayName}`}
                         updatePayloadBase={{
                           userId: member.id,
                           expectedUpdatedAt: member.updatedAt ?? "",
@@ -353,10 +358,10 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                             defaultValue: member.roleKey ?? "frontdesk",
                             type: "select",
                             options: [
-                              { value: "owner", label: "Owner" },
+                              { value: "owner", label: "Eigenaar" },
                               { value: "manager", label: "Manager" },
                               { value: "trainer", label: "Trainer" },
-                              { value: "frontdesk", label: "Frontdesk" },
+                              { value: "frontdesk", label: "Balie" },
                             ],
                           },
                           {
@@ -377,15 +382,15 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                 </>
                 ) : (
                   <EmptyPanel
-                    title={snapshot.staff.length > 0 ? "Geen teamleden gevonden" : "Nog geen teamaccounts"}
-                    description="Pas je zoekterm of statusfilter aan om meer teamleden te tonen."
+                    title={snapshot.staff.length > 0 ? "Geen medewerkers gevonden" : "Nog geen medewerkeraccounts"}
+                    description="Pas je zoekterm of statusfilter aan om meer medewerkers te tonen."
                   />
                 )}
                 </>
               ) : (
                 <EmptyPanel
-                  title="Nog geen teamaccounts"
-                  description="Nodig de rest van het team uit zodra de werkruimte klaar is."
+                  title="Nog geen medewerkeraccounts"
+                  description="Nodig de rest van je medewerkers uit zodra de werkruimte klaar is."
                 />
               )
             ) : (
@@ -424,7 +429,7 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
 
       <PageSection
         title="Gym instellingsmodules"
-        description="Compact overzicht van feature-uitrol voor vestigingen, teambeheer en operatie."
+        description="Compact overzicht van clubmodules voor vestigingen, medewerkers en operatie."
       >
         <FeatureModuleBoard currentPage="settings" features={settingsFeatures} snapshot={snapshot} />
       </PageSection>

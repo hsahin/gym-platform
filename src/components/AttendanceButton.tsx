@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { toast } from "sonner";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CONTRACT_IMPORT_REQUIRED_CSV_HEADER,
+  MEMBERSHIP_BILLING_CYCLE_OPTIONS,
   addMonthsToIsoDate,
   getMembershipBillingCycleMonths,
   getMembershipBillingCycleLabel,
@@ -25,6 +26,16 @@ describe("membership helpers", () => {
     expect(getMembershipBillingCycleLabel("semiannual")).toBe("6 maanden");
     expect(getMembershipBillingCycleLabel("annual")).toBe("Per jaar");
     expect(getMembershipBillingCycleLabel("custom" as never)).toBe("custom");
+  });
+
+  it("keeps billing-cycle helper copy Dutch and member-friendly", () => {
+    const helperCopy = MEMBERSHIP_BILLING_CYCLE_OPTIONS.map((option) => option.helper).join("\n");
+
+    expect(helperCopy).toContain("lidmaatschappen");
+    expect(helperCopy).not.toContain("memberships");
+    expect(helperCopy).not.toContain("members");
+    expect(helperCopy).not.toContain("commitments");
+    expect(helperCopy).not.toContain("cashflow");
   });
 
   it("maps billing cycles to renewal month counts", () => {

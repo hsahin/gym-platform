@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Button,
   Card,
   Chip,
   Input,
@@ -17,10 +16,11 @@ import {
   Switch,
   TextArea,
 } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
 import { Kanban } from "@heroui-pro/react/kanban";
-import { NativeSelect } from "@heroui-pro/react/native-select";
-import { Segment } from "@heroui-pro/react/segment";
+import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
 import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
@@ -37,6 +37,7 @@ import {
   CONTRACT_IMPORT_REQUIRED_CSV_HEADER,
   MEMBERSHIP_BILLING_CYCLE_OPTIONS,
 } from "@/lib/memberships";
+import { formatEuroFromCents, parseEuroInputToCents } from "@/lib/currency";
 import {
   getPlatformWorkbenchExperience,
   type PlatformWorkbenchStep,
@@ -123,7 +124,7 @@ function Field({
   readonly children: ReactNode;
 }) {
   return (
-    <div className="field-stack">
+    <div className="field-stack min-w-0 max-w-full">
       <Label>{label}</Label>
       {children}
     </div>
@@ -166,6 +167,30 @@ function SelectField({
   );
 }
 
+function formatMissingFields(fields: ReadonlyArray<string>) {
+  if (fields.length === 0) {
+    return "";
+  }
+
+  if (fields.length === 1) {
+    return fields[0]!;
+  }
+
+  return `${fields.slice(0, -1).join(", ")} en ${fields.at(-1)}`;
+}
+
+function DisabledActionReason({ reason }: { readonly reason: string | null }) {
+  if (!reason) {
+    return null;
+  }
+
+  return (
+    <p className="text-muted max-w-md text-sm leading-6" data-disabled-reason>
+      {reason}
+    </p>
+  );
+}
+
 function SectionCard({
   title,
   description,
@@ -189,23 +214,23 @@ function SectionCard({
 
   return (
     <Card
-      className={`rounded-[28px] border-border/80 ${
+      className={`min-w-0 max-w-full rounded-[28px] border-border/80 ${
         highlighted ? "ring-2 ring-accent/20" : ""
       } ${disabled ? "opacity-70" : ""}`}
     >
-      <Card.Header className="items-start justify-between gap-4">
-        <div className="space-y-2">
+      <Card.Header className="flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 space-y-2">
           <Card.Title>{title}</Card.Title>
           <Card.Description>{description}</Card.Description>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex min-w-0 flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           <Chip color={chip.color} size="sm" variant={chip.variant}>
             {statusLabel}
           </Chip>
           <span className="text-muted text-sm">{countLabel}</span>
         </div>
       </Card.Header>
-      <Card.Content className="section-stack">{children}</Card.Content>
+      <Card.Content className="section-stack min-w-0 max-w-full">{children}</Card.Content>
     </Card>
   );
 }
@@ -242,7 +267,7 @@ const platformWorkbenchSectionLabels: Record<PlatformWorkbenchSection, string> =
   classes: "Les",
   members: "Lid",
   imports: "Import",
-  staff: "Team",
+  staff: "Medewerkers",
   "remote-access": "Smartdeur",
   payments: "Betalingen",
   legal: "Juridisch",
@@ -408,7 +433,9 @@ export function PlatformWorkbench({
   const [billingPreviewMethod, setBillingPreviewMethod] = useState<
     (typeof snapshot.payments.paymentMethods)[number]
   >(snapshot.payments.paymentMethods[0] ?? "one_time");
-  const [billingPreviewAmount, setBillingPreviewAmount] = useState("2495");
+  const [billingPreviewAmount, setBillingPreviewAmount] = useState(
+    formatEuroFromCents(2495),
+  );
   const [billingPreviewDescription, setBillingPreviewDescription] = useState(
     "Intakepakket",
   );
@@ -645,7 +672,7 @@ export function PlatformWorkbench({
   const nextStep = workbenchExperience.steps.find(
     (step) => step.statusTone === "current" || step.statusTone === "upcoming",
   );
-  const sectionGridClass = stackSections ? "grid content-start gap-4" : "grid gap-4";
+  const sectionGridClass = stackSections ? "grid min-w-0 max-w-full content-start gap-4" : "grid min-w-0 max-w-full gap-4";
   const launchStats = [
     { label: "Vestigingen", value: snapshot.locations.length },
     { label: "Lidmaatschappen", value: snapshot.membershipPlans.length },
@@ -663,16 +690,59 @@ export function PlatformWorkbench({
   )
     ? billingPreviewMethod
     : "one_time";
-  const canCreateBillingTestLink =
-    isMollieConnectConnected || !snapshot.payments.previewMode;
+  const billingPreviewAmountCents = parseEuroInputToCents(billingPreviewAmount);
+  const missingMollieClientLinkFields = [
+    [mollieClientName, "organisatienaam"],
+    [mollieClientEmail, "e-mail"],
+    [mollieClientStreet, "straat en nummer"],
+    [mollieClientPostalCode, "postcode"],
+    [mollieClientCity, "plaats"],
+    [mollieClientCountry, "landcode"],
+    [mollieClientLegalEntity, "rechtsvorm"],
+    [mollieClientRegistrationOffice, "registratiekantoor"],
+  ]
+    .filter(([value]) => !value.trim())
+    .map(([, label]) => label);
+  const billingConnectDisabledReason = isPending
+    ? "Even wachten: er loopt al een betaalactie."
+    : !snapshot.payments.mollieConnectClientConfigured
+      ? "Koppelen kan nog niet: de app-gegevens voor de betaalprovider ontbreken in de omgeving."
+      : null;
+  const mollieClientLinkDisabledReason = isPending
+    ? "Even wachten: er loopt al een betaalactie."
+    : !snapshot.payments.mollieClientLinksConfigured
+      ? "Aanmeldlink kan nog niet: de aanmeldkoppeling met de betaalprovider is niet ingesteld."
+      : missingMollieClientLinkFields.length > 0
+        ? `Aanmeldlink kan nog niet: vul ${formatMissingFields(missingMollieClientLinkFields)} in.`
+        : null;
+  const billingSettingsDisabledReason = isPending
+    ? "Even wachten: er loopt al een betaalactie."
+    : billingPaymentMethods.length === 0
+      ? "Bewaren kan nog niet: kies minimaal één betaalroute voor leden."
+      : null;
+  const missingBillingPreviewFields = [
+    billingProfileId.trim() ? null : "betaalprofiel",
+    snapshot.payments.providerAccessConfigured ? null : "betaalkoppeling",
+    snapshot.payments.webhookUrlConfigured ? null : "webhook-url",
+    billingPaymentMethods.length > 0 ? null : "betaalroute",
+    Number.isFinite(billingPreviewAmountCents) && billingPreviewAmountCents >= 100
+      ? null
+      : "testbedrag",
+    billingPreviewDescription.trim().length >= 2 ? null : "omschrijving",
+  ].filter((field): field is string => Boolean(field));
+  const billingPreviewDisabledReason = isPending
+    ? "Even wachten: er loopt al een betaalactie."
+    : missingBillingPreviewFields.length > 0
+      ? `Testbetaling kan nog niet: vul ${formatMissingFields(missingBillingPreviewFields)} in.`
+      : null;
 
   if (!snapshot.uiCapabilities.canManagePlatform) {
     return (
       <Card className="rounded-[28px] border-border/80">
         <Card.Content>
           <p className="text-muted text-sm">
-            Alleen accounts met beheerrechten kunnen locaties, lidmaatschappen,
-            teamleden, betalingen en lessen toevoegen.
+            Alleen accounts met beheerrechten kunnen vestigingen, lidmaatschappen,
+            medewerkers, betalingen en lessen toevoegen.
           </p>
         </Card.Content>
       </Card>
@@ -680,7 +750,7 @@ export function PlatformWorkbench({
   }
 
   return (
-    <section className="section-stack">
+    <section className="section-stack min-w-0 max-w-full overflow-x-clip">
       {showLaunchHeader ? (
         <>
           <Card className="rounded-[32px] border-border/80">
@@ -689,10 +759,10 @@ export function PlatformWorkbench({
                 <Chip size="sm" variant="soft">
                   Livegang
                 </Chip>
-                <Card.Title>Gym opzetten: live dataset eerst op orde.</Card.Title>
+                <Card.Title>Gym opzetten: echte clubdata eerst op orde.</Card.Title>
                 <Card.Description>
                   Vestigingen, lidmaatschappen, trainers, lessen, leden en
-                  teamaccounts schrijven direct naar de operationele werkruimte.
+                  medewerkeraccounts schrijven direct naar de operationele werkruimte.
                 </Card.Description>
               </div>
               {nextStep ? (
@@ -737,17 +807,17 @@ export function PlatformWorkbench({
               <Chip size="sm" variant="soft">
                 Voortgangsbord
               </Chip>
-              <Card.Title>Doorloop je gym setup als Kanban.</Card.Title>
+              <Card.Title>Doorloop je gym-inrichting als voortgangsbord.</Card.Title>
               <Card.Description>
                 Elke kaart heeft een actieknop naar de juiste dashboardpagina waar je
                 die stap direct kunt afronden.
               </Card.Description>
             </Card.Header>
-            <Card.Content>
+            <Card.Content className="mobile-scroll-strip">
               <Kanban
                 hideScrollBar
                 aria-label="Gym setup voortgang"
-                className="items-start overflow-visible"
+                className="min-w-[720px] items-start"
                 size="sm"
               >
                 {launchKanbanColumns.map((column) => {
@@ -819,7 +889,7 @@ export function PlatformWorkbench({
       {shouldUseSectionTabs ? (
         <Segment
           aria-label="Formuliersecties"
-          className="w-full"
+          className="w-full overflow-x-auto"
           selectedKey={activeSection}
           size="sm"
           onSelectionChange={(key) => setActiveSection(String(key) as PlatformWorkbenchSection)}
@@ -844,7 +914,7 @@ export function PlatformWorkbench({
           >
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Naam">
-                <Input fullWidth placeholder="Downtown Club" value={locationName} onChange={(event) => setLocationName(event.target.value)} />
+                <Input fullWidth placeholder="Hoofdvestiging" value={locationName} onChange={(event) => setLocationName(event.target.value)} />
               </Field>
               <Field label="Manager">
                 <Input fullWidth placeholder="Naam manager" value={locationManagerName} onChange={(event) => setLocationManagerName(event.target.value)} />
@@ -1023,7 +1093,7 @@ export function PlatformWorkbench({
               <>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Titel">
-                    <Input fullWidth placeholder="Morning Strength" value={classTitle} onChange={(event) => setClassTitle(event.target.value)} />
+                    <Input fullWidth placeholder="Ochtendkracht" value={classTitle} onChange={(event) => setClassTitle(event.target.value)} />
                   </Field>
                   <Field label="Start">
                     <Input fullWidth type="datetime-local" value={classStartsAt} onChange={(event) => setClassStartsAt(event.target.value)} />
@@ -1205,7 +1275,7 @@ export function PlatformWorkbench({
           >
             {snapshot.locations.length === 0 || snapshot.membershipPlans.length === 0 ? (
               <p className="text-muted text-sm">
-                Voeg eerst minstens één vestiging en één membership toe.
+                Voeg eerst minstens één vestiging en één lidmaatschap toe.
               </p>
             ) : (
               <>
@@ -1238,7 +1308,7 @@ export function PlatformWorkbench({
                     label="Status"
                     options={[
                       { value: "active", label: "Actief" },
-                      { value: "trial", label: "Trial" },
+                      { value: "trial", label: "Proeflid" },
                       { value: "paused", label: "Gepauzeerd" },
                     ]}
                     value={memberStatus}
@@ -1280,8 +1350,8 @@ export function PlatformWorkbench({
 
                 <div className="flex justify-between gap-3">
                   <div className="text-muted text-sm leading-6">
-                    Vul een wachtwoord in als dit lid direct moet kunnen inloggen op de
-                    reserveringsflow.
+                    Vul een wachtwoord in als dit lid direct moet kunnen inloggen om
+                    lessen te reserveren.
                   </div>
                   <Button
                     isDisabled={isPending}
@@ -1387,11 +1457,11 @@ export function PlatformWorkbench({
             highlighted={isHighlighted("imports")}
             statusLabel={snapshot.locations.length > 0 ? "Import klaar" : "Eerst vestiging"}
             statusTone={snapshot.locations.length > 0 ? "current" : "locked"}
-            title="Contracten en klanten importeren"
+            title="Lidmaatschappen en leden importeren"
           >
             {snapshot.locations.length === 0 ? (
               <p className="text-muted text-sm">
-                Voeg eerst minstens één vestiging toe zodat geïmporteerde klanten meteen een thuislocatie krijgen.
+                Voeg eerst minstens één vestiging toe zodat geïmporteerde leden meteen een thuisvestiging krijgen.
               </p>
             ) : (
               <form
@@ -1436,7 +1506,7 @@ export function PlatformWorkbench({
                   value={importLocationId}
                   onChange={setImportLocationId}
                 />
-                <Field label="Contracten en klantenlijst">
+                <Field label="Lidmaatschappen en ledenlijst">
                   <TextArea fullWidth rows={10} placeholder={CONTRACT_IMPORT_REQUIRED_CSV_HEADER} value={importCsv} onChange={(event) => setImportCsv(event.target.value)} />
                 </Field>
                 <div className="flex justify-end">
@@ -1452,16 +1522,16 @@ export function PlatformWorkbench({
         {shouldShowSection("staff") ? (
           <SectionCard
             countLabel={formatCountLabel(snapshot.staff.length, "account live", "accounts live")}
-            description="Nodig owner-, manager-, trainer- of frontdeskaccounts uit met de juiste rol."
+            description="Nodig eigenaars, managers, trainers of baliemedewerkers uit met de juiste rol."
             disabled={!snapshot.uiCapabilities.canManageStaff}
             highlighted={isHighlighted("staff")}
-            statusLabel={snapshot.uiCapabilities.canManageStaff ? "Owner" : "Alleen owner"}
+            statusLabel={snapshot.uiCapabilities.canManageStaff ? "Eigenaar" : "Alleen eigenaar"}
             statusTone={snapshot.uiCapabilities.canManageStaff ? "current" : "locked"}
-            title="Teamlid uitnodigen"
+            title="Medewerker uitnodigen"
           >
             {!snapshot.uiCapabilities.canManageStaff ? (
               <p className="text-muted text-sm">
-                Alleen de eigenaar kan teamaccounts aanmaken of rechten aanpassen.
+                Alleen de eigenaar kan medewerkeraccounts aanmaken of rechten aanpassen.
               </p>
             ) : (
               <form
@@ -1476,7 +1546,7 @@ export function PlatformWorkbench({
                       roleKey: staffRoleKey,
                     });
 
-                    toast.success("Teamaccount toegevoegd.");
+                    toast.success("Medewerkeraccount toegevoegd.");
                     setStaffName("");
                     setStaffEmail("");
                     setStaffPassword("");
@@ -1486,7 +1556,7 @@ export function PlatformWorkbench({
               >
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Naam">
-                    <Input fullWidth autoComplete="name" placeholder="Naam teamlid" value={staffName} onChange={(event) => setStaffName(event.target.value)} />
+                    <Input fullWidth autoComplete="name" placeholder="Naam medewerker" value={staffName} onChange={(event) => setStaffName(event.target.value)} />
                   </Field>
                   <SelectField
                     label="Rol"
@@ -1498,7 +1568,7 @@ export function PlatformWorkbench({
                     onChange={(value) => setStaffRoleKey(value as typeof staffRoleKey)}
                   />
                   <Field label="E-mail">
-                    <Input fullWidth autoComplete="username" placeholder="teamlid@jouwgym.nl" type="email" value={staffEmail} onChange={(event) => setStaffEmail(event.target.value)} />
+                    <Input fullWidth autoComplete="username" placeholder="medewerker@jouwgym.nl" type="email" value={staffEmail} onChange={(event) => setStaffEmail(event.target.value)} />
                   </Field>
                   <Field label="Tijdelijk wachtwoord">
                     <Input fullWidth autoComplete="new-password" minLength={8} placeholder="Minimaal 8 tekens" type="password" value={staffPassword} onChange={(event) => setStaffPassword(event.target.value)} />
@@ -1506,7 +1576,7 @@ export function PlatformWorkbench({
                 </div>
                 <div className="flex justify-end">
                   <Button isDisabled={isPending} type="submit">
-                    {isPending ? "Opslaan..." : "Teamaccount toevoegen"}
+                    {isPending ? "Opslaan..." : "Medewerkeraccount toevoegen"}
                   </Button>
                 </div>
               </form>
@@ -1517,7 +1587,7 @@ export function PlatformWorkbench({
         {shouldShowSection("remote-access") ? (
           <SectionCard
             countLabel={snapshot.remoteAccess.deviceLabel || "Geen slot gekoppeld"}
-            description="Koppel het slimme slot, wijs het toe aan een vestiging en houd openen op afstand owner-only."
+            description="Koppel het slimme slot, wijs het toe aan een vestiging en beperk openen op afstand tot eigenaren."
             disabled={!snapshot.uiCapabilities.canManageRemoteAccess}
             highlighted={isHighlighted("remote-access")}
             statusLabel={snapshot.remoteAccess.statusLabel}
@@ -1578,7 +1648,7 @@ export function PlatformWorkbench({
                     <Switch.Thumb />
                   </Switch.Control>
                   <Switch.Content>
-                    <Label>Remote toegang actief voor deze gym</Label>
+                    <Label>Toegang op afstand actief voor deze gym</Label>
                   </Switch.Content>
                 </Switch>
 
@@ -1629,7 +1699,7 @@ export function PlatformWorkbench({
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <Button isDisabled={isPending} type="submit">
-                    {isPending ? "Opslaan..." : "Remote toegang opslaan"}
+                    {isPending ? "Opslaan..." : "Toegang op afstand opslaan"}
                   </Button>
                   <Button
                     isDisabled={
@@ -1665,12 +1735,12 @@ export function PlatformWorkbench({
               snapshot.payments.paymentMethods.length > 0
                 ? formatCountLabel(
                     snapshot.payments.paymentMethods.length,
-                    "betaalflow klaar",
-                    "betaalflows klaar",
+                    "betaalroute klaar",
+                    "betaalroutes klaar",
                   )
                 : "Nog niet gekoppeld"
             }
-            description="Koppel Mollie en bepaal welke betaalflows live zijn voor deze gym."
+            description="Koppel betaalgegevens en bepaal welke betaalroutes live zijn voor deze gym."
             disabled={!snapshot.uiCapabilities.canManagePayments}
             highlighted={isHighlighted("payments")}
             statusLabel={snapshot.payments.statusLabel}
@@ -1688,7 +1758,7 @@ export function PlatformWorkbench({
           >
             {!snapshot.uiCapabilities.canManagePayments ? (
               <p className="text-muted text-sm">
-                Alleen de eigenaar kan betaalproviders koppelen of live betaalflows starten.
+                Alleen de eigenaar kan betaalgegevens koppelen of betaalroutes activeren.
               </p>
             ) : (
               <form
@@ -1728,11 +1798,11 @@ export function PlatformWorkbench({
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Header className="items-start justify-between gap-4">
                     <div className="space-y-2">
-                      <Card.Title>Mollie-account</Card.Title>
+                      <Card.Title>Betaalgegevens koppelen</Card.Title>
                       <Card.Description>
                         {isMollieConnectConnected
-                          ? "Het Mollie-account is gekoppeld. Beheer hier SEPA-controle, opnieuw koppelen of ontkoppelen."
-                          : "Mollie-account koppelen of aanmeldlink maken voordat GymOS betalingen kan verwerken."}
+                          ? "De betaalgegevens zijn veilig gekoppeld. Beheer hier mandaatcontrole, opnieuw koppelen of ontkoppelen."
+                          : "Koppel betaalgegevens of maak een aanmeldlink voordat GymOS betalingen kan verwerken."}
                       </Card.Description>
                     </div>
                     <Chip
@@ -1752,7 +1822,7 @@ export function PlatformWorkbench({
                       {isMollieConnectConnected ? (
                         <>
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Mollie-profiel gekoppeld</p>
+                            <p className="text-sm font-medium">Betaalprofiel gekoppeld</p>
                             <p className="text-muted mt-1 text-sm leading-6">
                               {snapshot.payments.profileLabel || "Profielnaam onbekend"}
                               {snapshot.payments.profileId
@@ -1763,22 +1833,22 @@ export function PlatformWorkbench({
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
                             <p className="text-sm font-medium">Betalingen apart activeren</p>
                             <p className="text-muted mt-1 text-sm leading-6">
-                              Het Mollie-account is klaar. Zet betalingen pas actief nadat betaalflows, supportmail en notities kloppen.
+                              De betaalgegevens zijn klaar. Zet betalingen pas actief nadat betaalroutes, supportmail en notities kloppen.
                             </p>
                           </div>
                         </>
                       ) : (
                         <>
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Bestaand Mollie-account</p>
+                            <p className="text-sm font-medium">Bestaande incasso’s herkennen</p>
                             <p className="text-muted mt-1 text-sm leading-6">
-                              Koppel het bestaande Mollie-account van de gym. Bestaande SEPA-mandates uit hetzelfde account kunnen daarna gecontroleerd worden voor migratie.
+                              Koppel de bestaande betaalgegevens van de gym. GymOS kan daarna bestaande incasso’s herkennen en mandaten controleren voor migratie.
                             </p>
                           </div>
                           <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Nieuwe Mollie-klant</p>
+                            <p className="text-sm font-medium">Nieuwe betaalomgeving aanmelden</p>
                             <p className="text-muted mt-1 text-sm leading-6">
-                              Maak een aanmeldlink zodat de gym het Mollie-account met GymOS-context kan afronden.
+                              Maak een aanmeldlink zodat de gym de betaalomgeving met GymOS-context kan afronden.
                             </p>
                           </div>
                         </>
@@ -1787,16 +1857,17 @@ export function PlatformWorkbench({
                     <p className="text-muted text-sm leading-6">
                       {snapshot.payments.mollieConnectMigrationHint}
                     </p>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-3">
                       <Button
-                        isDisabled={isPending || !snapshot.payments.mollieConnectClientConfigured}
+                        isDisabled={Boolean(billingConnectDisabledReason)}
                         type="button"
                         variant="outline"
                         onPress={() => {
                           window.location.href = "/api/platform/billing/mollie/connect";
                         }}
                       >
-                        {isMollieConnectConnected ? "Opnieuw koppelen" : "Bestaand account koppelen"}
+                        {isMollieConnectConnected ? "Opnieuw veilig koppelen" : "Betaalgegevens veilig koppelen"}
                       </Button>
                       {!isMollieConnectConnected && snapshot.payments.mollieConnectOnboardingUrl ? (
                         <Button
@@ -1810,7 +1881,7 @@ export function PlatformWorkbench({
                             )
                           }
                         >
-                          Laatste onboarding openen
+                          Laatste aanmeldlink openen
                         </Button>
                       ) : null}
                       {isMollieConnectConnected ? (
@@ -1827,19 +1898,19 @@ export function PlatformWorkbench({
                                 }>("/api/platform/billing/mollie/mandates", {});
 
                                 toast.success(
-                                  `${preview.reusableMandates} van ${preview.totalMandates} Mollie-mandates zijn direct herbruikbaar.`,
+                                  `${preview.reusableMandates} van ${preview.totalMandates} mandaten zijn direct herbruikbaar.`,
                                 );
                               })
                             }
                           >
-                            SEPA mandates scannen
+                            Mandaten controleren
                           </Button>
                           <Button
                             isDisabled={isPending}
                             type="button"
                             variant="danger"
                             onPress={() => {
-                              if (!window.confirm("Mollie-koppeling verwijderen?")) {
+                              if (!window.confirm("Betaalgegevens ontkoppelen?")) {
                                 return;
                               }
 
@@ -1848,7 +1919,7 @@ export function PlatformWorkbench({
                                   "/api/platform/billing/mollie/disconnect",
                                   {},
                                 );
-                                toast.success("Mollie-koppeling verwijderd.");
+                                toast.success("Betaalgegevens ontkoppeld.");
                               });
                             }}
                           >
@@ -1856,6 +1927,8 @@ export function PlatformWorkbench({
                           </Button>
                         </>
                       ) : null}
+                      </div>
+                      <DisabledActionReason reason={billingConnectDisabledReason} />
                     </div>
                   </Card.Content>
                 </Card>
@@ -1865,12 +1938,12 @@ export function PlatformWorkbench({
                     <p className="font-medium">
                       {isMollieConnectConnected
                         ? "Koppeling klaar, verwerking nog bewust apart"
-                        : "Koppel Mollie voordat je live verwerking aanzet"}
+                        : "Koppel betaalgegevens voordat je live verwerking aanzet"}
                     </p>
                     <p className="text-muted text-sm leading-6">
                       {isMollieConnectConnected
-                        ? "De Mollie-koppeling geeft GymOS toegang tot het gekoppelde betaalprofiel. De schakelaar hieronder bepaalt of deze gym daadwerkelijk betaalverzoeken en incasso's mag verwerken."
-                        : "Zodra Mollie gekoppeld is, vult GymOS profielnaam en profiel-ID vanuit Mollie in. Daarna kies je de betaalflows en activeer je verwerking."}
+                        ? "De veilige koppeling geeft GymOS toegang tot het gekoppelde betaalprofiel. De schakelaar hieronder bepaalt of deze gym daadwerkelijk betaalverzoeken en incasso's mag verwerken."
+                        : "Zodra betaalgegevens gekoppeld zijn, vult GymOS profielnaam en profiel-ID automatisch in. Daarna kies je de betaalroutes en activeer je verwerking."}
                     </p>
                   </Card.Content>
                 </Card>
@@ -1891,14 +1964,14 @@ export function PlatformWorkbench({
                       {snapshot.payments.providerLabel}
                     </p>
                   </div>
-                  <Field label="Gekoppeld Mollie-profiel">
+                  <Field label="Gekoppeld betaalprofiel">
                     <Input fullWidth readOnly value={billingProfileLabel || "Nog niet gekoppeld"} />
                   </Field>
-                  <Field label="Technisch profiel-ID">
+                  <Field label="Profiel-ID voor betalingen">
                     <Input fullWidth readOnly value={billingProfileId || "Nog niet bekend"} />
                   </Field>
                   <Field label="Uitbetalingslabel">
-                    <Input fullWidth placeholder="Atlas Forge Club" value={billingSettlementLabel} onChange={(event) => setBillingSettlementLabel(event.target.value)} />
+                    <Input fullWidth placeholder="Jouw sportschool" value={billingSettlementLabel} onChange={(event) => setBillingSettlementLabel(event.target.value)} />
                   </Field>
                   <div className="md:col-span-2">
                     <Field label="Supportmail voor betalingen">
@@ -1910,28 +1983,37 @@ export function PlatformWorkbench({
                 <div className="section-stack rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="font-medium">GymOS betaalflows</p>
+                      <p className="font-medium">Betaalroutes voor leden</p>
                       <p className="text-muted text-sm leading-6">
-                        Bepaal welke betaalroutes GymOS voor deze gym mag gebruiken. Mollie moet de onderliggende betaalmethode ook ondersteunen.
+                        Bepaal welke betaalroutes GymOS voor deze gym mag gebruiken. Automatische incasso int maandelijks; Eenmalige betaling rekent de volledige contractperiode in één keer af.
                       </p>
                     </div>
                     <Chip size="sm" variant="tertiary">
                       {billingPaymentMethods.length} geselecteerd
                     </Chip>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-3 md:grid-cols-3">
                     {BILLING_PAYMENT_METHOD_OPTIONS.map((paymentMethod) => {
                       const active = billingPaymentMethods.includes(paymentMethod.key);
 
                       return (
-                        <Button
+                        <div
                           key={paymentMethod.key}
-                          type="button"
-                          variant={active ? "primary" : "outline"}
-                          onPress={() => toggleBillingMethod(paymentMethod.key)}
+                          className={`rounded-2xl border px-3 py-3 ${
+                            active ? "border-accent/60 bg-accent/10" : "border-border/70 bg-surface"
+                          }`}
                         >
-                          {paymentMethod.label}
-                        </Button>
+                          <Button
+                            type="button"
+                            variant={active ? "primary" : "outline"}
+                            onPress={() => toggleBillingMethod(paymentMethod.key)}
+                          >
+                            {paymentMethod.label}
+                          </Button>
+                          <p className="text-muted mt-2 text-sm leading-6">
+                            {paymentMethod.helper}
+                          </p>
+                        </div>
                       );
                     })}
                   </div>
@@ -1944,9 +2026,9 @@ export function PlatformWorkbench({
                 {!isMollieConnectConnected ? (
                   <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                     <Card.Header>
-                      <Card.Title>Nieuwe Mollie-klant aanmaken</Card.Title>
+                      <Card.Title>Nieuwe betaalomgeving aanmelden</Card.Title>
                       <Card.Description>
-                        Gebruik dit wanneer een gym nog geen Mollie-account heeft. De link opent Mollie in de testomgeving.
+                        Gebruik dit wanneer een gym nog geen betaalaccount heeft. De link opent de testomgeving.
                       </Card.Description>
                     </Card.Header>
                     <Card.Content className="grid gap-4 md:grid-cols-2">
@@ -1986,20 +2068,9 @@ export function PlatformWorkbench({
                         </Field>
                       </div>
                     </Card.Content>
-                    <Card.Footer className="justify-end">
+                    <Card.Footer className="flex-col items-stretch gap-2 sm:items-end">
                       <Button
-                        isDisabled={
-                          isPending ||
-                          !snapshot.payments.mollieClientLinksConfigured ||
-                          !mollieClientName ||
-                          !mollieClientEmail ||
-                          !mollieClientStreet ||
-                          !mollieClientPostalCode ||
-                          !mollieClientCity ||
-                          !mollieClientCountry ||
-                          !mollieClientLegalEntity ||
-                          !mollieClientRegistrationOffice
-                        }
+                        isDisabled={Boolean(mollieClientLinkDisabledReason)}
                         type="button"
                         variant="outline"
                         onPress={() =>
@@ -2026,27 +2097,28 @@ export function PlatformWorkbench({
                               },
                             });
 
-                            toast.success("Mollie onboardinglink aangemaakt.");
+                            toast.success("Aanmeldlink aangemaakt.");
                             window.open(receipt.onboardingUrl, "_blank", "noopener,noreferrer");
                           })
                         }
                       >
                         Aanmeldlink maken
                       </Button>
+                      <DisabledActionReason reason={mollieClientLinkDisabledReason} />
                     </Card.Footer>
                   </Card>
                 ) : null}
 
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                   <Card.Header>
-                    <Card.Title>Betaallink testen</Card.Title>
+                    <Card.Title>Testbetaling starten</Card.Title>
                     <Card.Description>
-                      Maak een Mollie testlink voor een eenmalige betaling of betaalverzoek. Automatische incasso controleer je via SEPA-mandates.
+                      Start los van de opgeslagen instellingen een testcheckout voor eenmalige betaling of betaalverzoek. Automatische incasso controleer je apart via mandaten.
                     </Card.Description>
                   </Card.Header>
                   <Card.Content className="grid gap-4 md:grid-cols-2">
                     <SelectField
-                      label="Flow"
+                      label="Betaalroute"
                       options={checkoutPreviewMethodOptions.map((paymentMethod) => ({
                         value: paymentMethod.key,
                         label: paymentMethod.label,
@@ -2054,8 +2126,20 @@ export function PlatformWorkbench({
                       value={selectedBillingPreviewMethod}
                       onChange={(value) => setBillingPreviewMethod(value as typeof billingPreviewMethod)}
                     />
-                    <Field label="Bedrag in centen">
-                      <Input fullWidth min={100} step={5} type="number" value={billingPreviewAmount} onChange={(event) => setBillingPreviewAmount(event.target.value)} />
+                    <Field label="Testbedrag (€)">
+                      <Input
+                        fullWidth
+                        inputMode="decimal"
+                        placeholder="€ 24,95"
+                        type="text"
+                        value={billingPreviewAmount}
+                        onBlur={() =>
+                          setBillingPreviewAmount(
+                            formatEuroFromCents(billingPreviewAmountCents),
+                          )
+                        }
+                        onChange={(event) => setBillingPreviewAmount(event.target.value)}
+                      />
                     </Field>
                     <Field label="Omschrijving">
                       <Input fullWidth placeholder="Intakepakket" value={billingPreviewDescription} onChange={(event) => setBillingPreviewDescription(event.target.value)} />
@@ -2068,48 +2152,49 @@ export function PlatformWorkbench({
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <p className="text-muted mr-auto max-w-2xl text-sm leading-6">
-                    Slaat de gekozen betaalroutes, supportmail en aan/uit-stand voor deze gym op. Testlink maken opent alleen een losse Mollie testbetaling.
+                    Betaalinstellingen bewaren bewaart alleen actieve betaalroutes, supportmail en aan/uit-stand voor deze gym. Testbetaling starten maakt los daarvan een losse testcheckout.
                   </p>
-                  <Button
-                    isDisabled={isPending || billingPaymentMethods.length === 0}
-                    type="submit"
-                  >
-                    {isPending ? "Opslaan..." : "Instellingen opslaan"}
-                  </Button>
-                  <Button
-                    isDisabled={
-                      isPending ||
-                      !canCreateBillingTestLink ||
-                      Number(billingPreviewAmount) <= 0 ||
-                      billingPreviewDescription.trim().length < 2
-                    }
-                    type="button"
-                    variant="outline"
-                    onPress={() =>
-                      runAction(async () => {
-                        const receipt = await submitJson<{
-                          summary: string;
-                          checkoutUrl?: string;
-                        }>(
-                          "/api/platform/billing/preview",
-                          {
-                            paymentMethod: selectedBillingPreviewMethod,
-                            amountCents: Number(billingPreviewAmount),
-                            currency: "EUR",
-                            description: billingPreviewDescription,
-                            memberName: billingPreviewMemberName || undefined,
-                          },
-                        );
+                  <div className="flex max-w-full flex-col items-start gap-2 sm:items-end">
+                    <Button
+                      isDisabled={Boolean(billingSettingsDisabledReason)}
+                      type="submit"
+                    >
+                      {isPending ? "Opslaan..." : "Betaalinstellingen bewaren"}
+                    </Button>
+                    <DisabledActionReason reason={billingSettingsDisabledReason} />
+                  </div>
+                  <div className="flex max-w-full flex-col items-start gap-2 sm:items-end">
+                    <Button
+                      isDisabled={Boolean(billingPreviewDisabledReason)}
+                      type="button"
+                      variant="outline"
+                      onPress={() =>
+                        runAction(async () => {
+                          const receipt = await submitJson<{
+                            summary: string;
+                            checkoutUrl?: string;
+                          }>(
+                            "/api/platform/billing/preview",
+                            {
+                              paymentMethod: selectedBillingPreviewMethod,
+                              amountCents: billingPreviewAmountCents,
+                              currency: "EUR",
+                              description: billingPreviewDescription,
+                              memberName: billingPreviewMemberName || undefined,
+                            },
+                          );
 
-                        toast.success(receipt.summary);
-                        if (receipt.checkoutUrl) {
-                          window.open(receipt.checkoutUrl, "_blank", "noopener,noreferrer");
-                        }
-                      })
-                    }
-                  >
-                    Testlink maken
-                  </Button>
+                          toast.success(receipt.summary);
+                          if (receipt.checkoutUrl) {
+                            window.open(receipt.checkoutUrl, "_blank", "noopener,noreferrer");
+                          }
+                        })
+                      }
+                    >
+                      Testbetaling starten
+                    </Button>
+                    <DisabledActionReason reason={billingPreviewDisabledReason} />
+                  </div>
                 </div>
               </form>
             )}
@@ -2119,7 +2204,7 @@ export function PlatformWorkbench({
         {shouldShowSection("legal") ? (
           <SectionCard
             countLabel={snapshot.legal.statusLabel}
-            description="Leg voorwaarden, privacy, SEPA-machtiging, contracttemplate en waiver-bewaartermijn vast voordat betalingen live gaan."
+            description="Leg voorwaarden, privacy, incassomachtiging, contractsjabloon en waiver-bewaartermijn vast voordat betalingen live gaan."
             highlighted={isHighlighted("legal")}
             statusLabel={snapshot.legal.statusLabel}
             statusTone={
@@ -2161,7 +2246,7 @@ export function PlatformWorkbench({
                 <Field label="Privacyverklaring URL">
                   <Input fullWidth placeholder="https://jouwgym.nl/privacy" value={legalPrivacyUrl} onChange={(event) => setLegalPrivacyUrl(event.target.value)} />
                 </Field>
-                <Field label="SEPA creditor ID">
+                <Field label="Incassant-ID">
                   <Input fullWidth placeholder="NL00ZZZ..." value={legalSepaCreditorId} onChange={(event) => setLegalSepaCreditorId(event.target.value)} />
                 </Field>
                 <Field label="Contract-PDF template key">
@@ -2174,7 +2259,7 @@ export function PlatformWorkbench({
                   <Input fullWidth min={1} type="number" value={legalWaiverRetentionMonths} onChange={(event) => setLegalWaiverRetentionMonths(event.target.value)} />
                 </Field>
               </div>
-              <Field label="SEPA machtigingstekst">
+              <Field label="Tekst voor incassomachtiging">
                 <TextArea fullWidth rows={6} value={legalSepaMandateText} onChange={(event) => setLegalSepaMandateText(event.target.value)} />
               </Field>
               <div className="flex justify-end">

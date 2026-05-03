@@ -137,24 +137,24 @@ export function getDashboardPages(
       key: "overview",
       title: "Overzicht",
       value: formatCountLabel(input.membersCount, "lid", "leden"),
-      helper: "Kerncijfers, planning, recente reserveringen en launchsignalen.",
+      helper: "Kerncijfers, planning, recente reserveringen en livegangsignalen.",
     },
     {
       key: "classes",
       title: "Lessen",
       value: formatCountLabel(input.classSessionsCount, "les", "lessen"),
-      helper: "Rooster, reserveringen, check-ins, capaciteit en wachtlijstbeheer.",
+      helper: "Rooster, reserveringen, aanwezigheid, capaciteit en wachtlijstbeheer.",
     },
     {
       key: "members",
       title: "Leden",
       value: formatCountLabel(input.membersCount, "lid", "leden"),
-      helper: "Leden, intake-status, tags en membercontext per vestiging.",
+      helper: "Leden, intake-status, tags en ledencontext per vestiging.",
     },
     {
       key: "contracts",
       title: "Contracten",
-      value: formatCountLabel(input.membershipPlansCount, "contract", "contracten"),
+      value: formatCountLabel(input.membershipPlansCount, "lidmaatschap", "lidmaatschappen"),
       helper: "Maand-, 6-maanden- en jaarcontracten beheren voor lidmaatschappen.",
     },
     {
@@ -165,7 +165,7 @@ export function getDashboardPages(
         "module actief",
         "modules actief",
       ),
-      helper: "Workoutflows, voeding, voortgang en premium coachmomenten.",
+      helper: "Trainingsschema's, voeding, voortgang en verdiepende coachmomenten.",
     },
     {
       key: "retention",
@@ -175,20 +175,20 @@ export function getDashboardPages(
         "module actief",
         "modules actief",
       ),
-      helper: "Uitdagingen, community's, vragenlijsten en retentieflows.",
+      helper: "Uitdagingen, community's, vragenlijsten en retentieroutes.",
     },
     {
       key: "access",
       title: "Toegang",
       value: input.canManageRemoteAccess
         ? input.remoteAccessStatusLabel
-        : "Alleen owner",
-      helper: "Remote toegang voor Nuki en andere gangbare slimme sloten.",
+        : "Alleen eigenaar",
+      helper: "Toegang op afstand voor Nuki en andere gangbare slimme sloten.",
     },
     {
       key: "payments",
       title: "Betalingen",
-      value: input.canManagePayments ? input.paymentsStatusLabel : "Alleen owner",
+      value: input.canManagePayments ? input.paymentsStatusLabel : "Alleen eigenaar",
       helper: "Mollie, incasso, eenmalige betalingen en betaalverzoeken per gym.",
     },
     {
@@ -199,13 +199,13 @@ export function getDashboardPages(
         "module actief",
         "modules actief",
       ),
-      helper: "White-label, mobile check-in en app-ervaringen voor leden en coaching.",
+      helper: "Merkapp, aankomstregistratie en app-ervaringen voor leden en coaching.",
     },
     {
       key: "marketing",
       title: "Marketing",
       value: input.bookingsCount > 0 ? "Segmenten klaar" : "Eerste data nodig",
-      helper: "Campagnes, retentie-signalen en bookingmomenten zonder losse tooling.",
+      helper: "Campagnes, retentiesignalen en reserveringsmomenten zonder losse tooling.",
     },
     {
       key: "integrations",
@@ -215,7 +215,7 @@ export function getDashboardPages(
         "koppeling live",
         "koppelingen live",
       ),
-      helper: "Hardware, software, equipment en migratiekoppelingen per gym.",
+      helper: "Apparaten, software, meetapparatuur en migratiekoppelingen per gym.",
     },
     {
       key: "settings",
@@ -226,23 +226,25 @@ export function getDashboardPages(
           : formatCountLabel(input.healthAttentionCount, "check", "checks")
         : formatCountLabel(input.locationsCount, "vestiging", "vestigingen"),
       helper: input.canViewPlatformChecks
-        ? "Vestigingen, personeel, imports, platformstatus en owner-instellingen."
-        : "Vestigingen, personeel, imports en owner-instellingen.",
+        ? "Vestigingen, medewerkers, import, systeemstatus en eigenaarsinstellingen."
+        : "Vestigingen, medewerkers, import en eigenaarsinstellingen.",
     },
     {
       key: "superadmin",
       title: "Superadmin",
       value: input.canManageOwnerAccounts
-        ? "Owner beheer"
+        ? "Eigenaarsbeheer"
         : input.canManageFeatureFlags
-          ? "Flags beheer"
+          ? "Modulebeheer"
           : "Geen toegang",
-      helper: "Owner accounts, moduleflags en rolloutcontrole voor het platform.",
+      helper: "Eigenaarsaccounts en clubmodules beheren.",
     },
   ];
 
-  return pages.map((page) => ({
-    ...page,
-    href: getDashboardPageHref(page.key),
-  }));
+  return pages
+    .filter((page) => page.key !== "superadmin" || input.canManageOwnerAccounts)
+    .map((page) => ({
+      ...page,
+      href: getDashboardPageHref(page.key),
+    }));
 }

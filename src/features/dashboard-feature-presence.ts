@@ -39,58 +39,58 @@ function formatCadenceLabel(value: "weekly" | "biweekly" | "monthly") {
 function formatCheckInMode(value: GymDashboardSnapshot["mobileExperience"]["checkInMode"]) {
   switch (value) {
     case "qr":
-      return "QR only";
+      return "Alleen QR";
     case "frontdesk":
-      return "frontdesk only";
+      return "Alleen balie";
     case "hybrid":
-      return "hybrid";
+      return "QR en balie";
   }
 }
 
 function formatPosMode(value: GymDashboardSnapshot["revenueWorkspace"]["pointOfSaleMode"]) {
   switch (value) {
     case "frontdesk":
-      return "frontdesk";
+      return "balie";
     case "kiosk":
       return "kiosk";
     case "hybrid":
-      return "hybrid";
+      return "balie en kiosk";
   }
 }
 
 const FEATURE_PRESENCE_BUILDERS: Record<DashboardFeatureKey, FeaturePresenceBuilder> = {
   "membership.management": (snapshot) =>
-    `${formatCount(snapshot.members.length, "lid", "leden")}, ${formatCount(snapshot.membershipPlans.length, "contract", "contracten")} en ${formatCount(snapshot.waivers.length, "waiver", "waivers")} in beheer.`,
+    `${formatCount(snapshot.members.length, "lid", "leden")}, ${formatCount(snapshot.membershipPlans.length, "contract", "contracten")} en ${formatCount(snapshot.waivers.length, "toestemming", "toestemmingen")} in beheer.`,
   "staff.management": (snapshot) =>
-    `${formatCount(snapshot.staff.length, "teamaccount", "teamaccounts")} verdeeld over ${formatCount(snapshot.locations.length, "vestiging", "vestigingen")}.`,
+    `${formatCount(snapshot.staff.length, "medewerkeraccount", "medewerkeraccounts")} verdeeld over ${formatCount(snapshot.locations.length, "vestiging", "vestigingen")}.`,
   "access.24_7": (snapshot) =>
     `${snapshot.remoteAccess.statusLabel} via ${snapshot.remoteAccess.providerLabel}${snapshot.remoteAccess.locationName ? ` bij ${snapshot.remoteAccess.locationName}` : ""}.`,
   "checkin.studio": (snapshot) =>
-    `${formatCount(snapshot.attendance.length, "check-in", "check-ins")} verwerkt op ${formatCount(snapshot.classSessions.length, "les", "lessen")}.`,
+    `${formatCount(snapshot.attendance.length, "aanwezigheidsregistratie", "aanwezigheidsregistraties")} verwerkt op ${formatCount(snapshot.classSessions.length, "les", "lessen")}.`,
   "analytics.advanced": (snapshot) =>
     snapshot.uiCapabilities.canViewPlatformChecks
-      ? `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} en ${formatCount(snapshot.healthReport.checks.length, "platformcheck", "platformchecks")} live op de overview.`
-      : `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} live op de overview.`,
+      ? `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} en ${formatCount(snapshot.healthReport.checks.length, "statuscheck", "statuschecks")} live op het overzicht.`
+      : `${formatCount(snapshot.metrics.length, "KPI", "KPI's")} live op het overzicht.`,
   "clubs.multi_location": (snapshot) =>
-    `${formatCount(snapshot.locations.length, "vestiging", "vestigingen")} actief onder dezelfde tenant.`,
+    `${formatCount(snapshot.locations.length, "vestiging", "vestigingen")} actief binnen dezelfde clubomgeving.`,
   "commerce.webshop_pos": (snapshot) =>
     `${snapshot.revenueWorkspace.webshopCollectionName} draait in ${formatPosMode(snapshot.revenueWorkspace.pointOfSaleMode)} modus.`,
   "booking.scheduling": (snapshot) =>
-    `${formatCount(snapshot.classSessions.length, "les", "lessen")} gepland binnen een window van ${snapshot.bookingWorkspace.schedulingWindowDays} dagen, met ${snapshot.bookingPolicy.maxDailyBookingsPerMember} boeking${snapshot.bookingPolicy.maxDailyBookingsPerMember === 1 ? "" : "en"} per lid per dag.`,
+    `${formatCount(snapshot.classSessions.length, "les", "lessen")} gepland binnen een periode van ${snapshot.bookingWorkspace.schedulingWindowDays} dagen, met ${snapshot.bookingPolicy.maxDailyBookingsPerMember} boeking${snapshot.bookingPolicy.maxDailyBookingsPerMember === 1 ? "" : "en"} per lid per dag.`,
   "booking.group_classes": (snapshot) =>
     `${formatCount(snapshot.bookings.length, "reservering", "reserveringen")} verwerkt, waarvan ${snapshot.bookings.filter((booking) => booking.status === "waitlisted").length} op de wachtlijst.`,
   "booking.one_to_one": (snapshot) =>
-    `${snapshot.bookingWorkspace.oneToOneSessionName} staat klaar als ${snapshot.bookingWorkspace.oneToOneDurationMinutes}-minuten flow.`,
+    `${snapshot.bookingWorkspace.oneToOneSessionName} staat klaar als ${snapshot.bookingWorkspace.oneToOneDurationMinutes}-minutenroute.`,
   "booking.online_trial": (snapshot) =>
     snapshot.bookingWorkspace.trialBookingUrl
-      ? `Trialflow gekoppeld via ${snapshot.bookingWorkspace.trialBookingUrl}.`
-      : "Trialflow aanwezig, maar de publieke trial-URL moet nog worden ingevuld.",
+      ? `Proeflesroute gekoppeld via ${snapshot.bookingWorkspace.trialBookingUrl}.`
+      : "Proeflesroute aanwezig, maar de publieke proefleslink moet nog worden ingevuld.",
   "booking.credit_system": (snapshot) =>
-    `${snapshot.bookingWorkspace.defaultCreditPackSize} credits per standaard pack voor class packs en intro flows.`,
+    `${snapshot.bookingWorkspace.defaultCreditPackSize} ritten per standaard strippenkaart voor lesbundels en introductieroutes.`,
   "coaching.workout_plans": (snapshot) =>
-    `Workout focus staat op ${snapshot.coachingWorkspace.workoutPlanFocus}.`,
+    `Trainingsfocus staat op ${snapshot.coachingWorkspace.workoutPlanFocus}.`,
   "coaching.nutrition": (snapshot) =>
-    `Voedingscoaching loopt ${formatCadenceLabel(snapshot.coachingWorkspace.nutritionCadence)} vanuit dezelfde coachworkspace.`,
+    `Voedingscoaching loopt ${formatCadenceLabel(snapshot.coachingWorkspace.nutritionCadence)} vanuit dezelfde coachwerkruimte.`,
   "coaching.on_demand_videos": (snapshot) =>
     snapshot.coachingWorkspace.videoLibraryUrl
       ? `Videobibliotheek gekoppeld op ${snapshot.coachingWorkspace.videoLibraryUrl}.`
@@ -98,17 +98,17 @@ const FEATURE_PRESENCE_BUILDERS: Record<DashboardFeatureKey, FeaturePresenceBuil
   "coaching.progress_tracking": (snapshot) =>
     `Progressie wordt gemeten op ${snapshot.coachingWorkspace.progressMetric}.`,
   "coaching.heart_rate": (snapshot) =>
-    `Hartslagcoaching gebruikt ${snapshot.coachingWorkspace.heartRateProvider} als provider.`,
+    `Hartslagcoaching gebruikt ${snapshot.coachingWorkspace.heartRateProvider} als koppeling.`,
   "coaching.ai_max": (snapshot) =>
     `MAX AI Coach staat klaar in modus "${snapshot.coachingWorkspace.aiCoachMode}".`,
   "retention.planner": (snapshot) =>
     `Retentieplanner draait ${formatCadenceLabel(snapshot.retentionWorkspace.retentionCadence)} met live clubsignalen.`,
   "retention.community_groups": (snapshot) =>
-    `Community en groups lopen via ${snapshot.retentionWorkspace.communityChannel}.`,
+    `Clubgroepen lopen via ${snapshot.retentionWorkspace.communityChannel}.`,
   "retention.challenges_rewards": (snapshot) =>
-    `Challenge-thema staat op ${snapshot.retentionWorkspace.challengeTheme}.`,
+    `Uitdagingsthema staat op ${snapshot.retentionWorkspace.challengeTheme}.`,
   "retention.questionnaire": (snapshot) =>
-    `Questionnaires worden getriggerd op ${snapshot.retentionWorkspace.questionnaireTrigger}.`,
+    `Vragenlijsten worden gestart op ${snapshot.retentionWorkspace.questionnaireTrigger}.`,
   "retention.pro_content": (snapshot) =>
     snapshot.retentionWorkspace.proContentPath
       ? `PRO+ contentpad ingesteld op ${snapshot.retentionWorkspace.proContentPath}.`
@@ -124,33 +124,33 @@ const FEATURE_PRESENCE_BUILDERS: Record<DashboardFeatureKey, FeaturePresenceBuil
   "billing.direct_debit": (snapshot) =>
     `${snapshot.payments.paymentMethods.includes("direct_debit") ? "SEPA incasso actief" : "SEPA incasso nog niet actief"} met ${snapshot.revenueWorkspace.directDebitLeadDays} dagen voorbereiding.`,
   "billing.autocollect": (snapshot) =>
-    `AutoCollect volgt "${snapshot.revenueWorkspace.autocollectPolicy}" met ${formatCount(snapshot.collectionCases.length, "collection case", "collection cases")} in de opvolgqueue.`,
+    `AutoCollect volgt "${snapshot.revenueWorkspace.autocollectPolicy}" met ${formatCount(snapshot.collectionCases.length, "opvolgdossier", "opvolgdossiers")} in de opvolging.`,
   "mobile.white_label": (snapshot) =>
     `${snapshot.mobileExperience.appDisplayName}${snapshot.mobileExperience.whiteLabelDomain ? ` op ${snapshot.mobileExperience.whiteLabelDomain}` : ""}.`,
   "mobile.fitness_coaching": (snapshot) =>
-    `${formatCount(snapshot.memberPortalAccessMemberIds.length, "lid", "leden")} klaar voor coaching journeys in de app.`,
+    `${formatCount(snapshot.memberPortalAccessMemberIds.length, "lid", "leden")} klaar voor coachingtrajecten in de app.`,
   "mobile.nutrition_coaching": (snapshot) =>
-    `Nutrition app-flow gebruikt onboarding "${snapshot.mobileExperience.onboardingHeadline}".`,
+    `Voedingsroute in de app gebruikt welkomsttekst "${snapshot.mobileExperience.onboardingHeadline}".`,
   "mobile.checkin": (snapshot) =>
-    `${formatCheckInMode(snapshot.mobileExperience.checkInMode)} check-in met ${formatCount(snapshot.supportedLanguages.length, "taal", "talen")} beschikbaar.`,
+    `${formatCheckInMode(snapshot.mobileExperience.checkInMode)} aankomstregistratie met ${formatCount(snapshot.supportedLanguages.length, "taal", "talen")} beschikbaar.`,
   "marketing.email": (snapshot) =>
     `E-mailmarketing verzendt als ${snapshot.marketingWorkspace.emailSenderName} via ${snapshot.marketingWorkspace.emailReplyTo}.`,
   "marketing.promotions": (snapshot) =>
-    `Promoties gebruiken de headline "${snapshot.marketingWorkspace.promotionHeadline}".`,
+    `Promoties gebruiken de kopregel "${snapshot.marketingWorkspace.promotionHeadline}".`,
   "marketing.leads": (snapshot) =>
-    `${formatCount(snapshot.leads.length, "lead", "leads")} in pipeline ${snapshot.marketingWorkspace.leadPipelineLabel}.`,
+    `${formatCount(snapshot.leads.length, "aanvraag", "aanvragen")} in proces ${snapshot.marketingWorkspace.leadPipelineLabel}.`,
   "integrations.hardware": (snapshot) =>
-    `Hardware vendors: ${formatPreviewList(snapshot.integrationWorkspace.hardwareVendors)}.`,
+    `Hardwareleveranciers: ${formatPreviewList(snapshot.integrationWorkspace.hardwareVendors)}.`,
   "integrations.software": (snapshot) =>
     `Softwarekoppelingen: ${formatPreviewList(snapshot.integrationWorkspace.softwareIntegrations)}.`,
   "integrations.equipment": (snapshot) =>
-    `Equipmentintegraties: ${formatPreviewList(snapshot.integrationWorkspace.equipmentIntegrations)}.`,
+    `Apparaatkoppelingen: ${formatPreviewList(snapshot.integrationWorkspace.equipmentIntegrations)}.`,
   "integrations.virtuagym_connect": (snapshot) =>
     `Migratiebron voor Virtuagym Connect staat op ${snapshot.integrationWorkspace.migrationProvider}.`,
   "integrations.body_composition": (snapshot) =>
     snapshot.integrationWorkspace.bodyCompositionProvider
-      ? `Body composition provider gekoppeld: ${snapshot.integrationWorkspace.bodyCompositionProvider}.`
-      : "Body composition feature aanwezig; koppel nog een scanprovider om live data te ontvangen.",
+      ? `Lichaamssamenstelling gekoppeld via ${snapshot.integrationWorkspace.bodyCompositionProvider}.`
+      : "Lichaamssamenstelling aanwezig; koppel nog een scanleverancier om live data te ontvangen.",
 };
 
 export function getFeaturePresenceCoverageKeys() {

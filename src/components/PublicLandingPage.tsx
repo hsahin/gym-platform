@@ -101,7 +101,7 @@ export function PublicLandingPage({
               prefetch={false}
               className="text-muted transition hover:text-foreground"
             >
-              Team login
+              Inloggen
             </Link>
           </nav>
           <LazyThemeModeSwitch />
@@ -218,12 +218,12 @@ export function PublicLandingPage({
           copy="Pagina's zijn ingedeeld op werk: lessen, leden, contracten, toegang, betalingen en instellingen."
         />
         <FeatureCard
-          title="Echte inrichtflows"
-          copy="De workbench helpt je locaties, memberships, trainers, team, betalingen en juridische basis opzetten."
+          title="Echte inrichting"
+          copy="De werkbank helpt je vestigingen, lidmaatschappen, trainers, medewerkers, betalingen en juridische basis opzetten."
         />
         <FeatureCard
-          title="Ledenflow inbegrepen"
-          copy="Elke club krijgt een eigen reserveringsflow en live rooster, zonder aparte tooling ernaast."
+          title="Ledenroute inbegrepen"
+          copy="Elke club krijgt een eigen reserveringsproces en live rooster, zonder aparte tooling ernaast."
         />
       </section>
     </main>

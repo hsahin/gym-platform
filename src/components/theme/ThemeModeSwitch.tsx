@@ -1,7 +1,7 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { Segment } from "@heroui-pro/react/segment";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { type ThemePreference, isThemePreference } from "@/lib/theme-mode";
 import { useThemeMode } from "@/components/theme/ThemeModeProvider";
 

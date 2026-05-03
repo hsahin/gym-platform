@@ -3,31 +3,26 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Languages, QrCode, Smartphone, UserRoundCheck } from "lucide-react";
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
+import { Card, Chip, Input, Label } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
-import { NativeSelect } from "@heroui-pro/react/native-select";
+import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { toast } from "sonner";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import {
+  DisabledActionReason,
   EmptyPanel,
   formatDateTime,
   PageSection,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
-
-function getRequestStatusLabel(status: string) {
-  switch (status) {
-    case "approved":
-      return "Goedgekeurd";
-    case "rejected":
-      return "Afgewezen";
-    case "pending":
-      return "Open";
-    default:
-      return status;
-  }
-}
+import {
+  getEntityStatusLabel,
+  getMemberStatusLabel,
+  getReviewRequestStatusLabel,
+} from "@/lib/ui-labels";
+import { formatEuroFromCents } from "@/lib/currency";
 
 function getReviewDecisionLabel(decision: "approved" | "rejected") {
   return decision === "approved" ? "Goedkeuren" : "Afwijzen";
@@ -65,6 +60,11 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
   );
   const locationsById = new Map(snapshot.locations.map((location) => [location.id, location.name]));
   const mobileCheckInEnabled = mobileFeatures.find((feature) => feature.key === "mobile.checkin")?.enabled;
+  const mobileMemberActionDisabledReason = isPending
+    ? "Even wachten: er loopt al een actie."
+    : !selectedMemberId
+      ? "Kies eerst een lid voordat je een verzoek maakt."
+      : null;
 
   useEffect(() => {
     setAppDisplayName(snapshot.mobileExperience.appDisplayName);
@@ -81,7 +81,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
     <div className="section-stack">
       <PageSection
         title="Mobiele app instellen"
-        description="Configureer je white-label app, onboarding en check-in ervaring voor leden."
+        description="Configureer je merkapp, welkomsttekst en aankomstervaring voor leden."
         actions={
           <Button
             isDisabled={isPending}
@@ -124,7 +124,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <Label>Onboardingkop</Label>
+              <Label>Welkomstkop</Label>
               <Input
                 fullWidth
                 value={onboardingHeadline}
@@ -149,7 +149,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               />
             </div>
             <div className="field-stack">
-              <label className="text-sm font-medium">Check-inmodus</label>
+              <label className="text-sm font-medium">Aankomstmodus</label>
               <NativeSelect fullWidth>
                 <NativeSelect.Trigger
                   value={checkInMode}
@@ -160,14 +160,14 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                   }
                 >
                   <NativeSelect.Option value="qr">Alleen QR</NativeSelect.Option>
-                  <NativeSelect.Option value="frontdesk">Alleen frontdesk</NativeSelect.Option>
+                  <NativeSelect.Option value="frontdesk">Alleen balie</NativeSelect.Option>
                   <NativeSelect.Option value="hybrid">Hybride</NativeSelect.Option>
                   <NativeSelect.Indicator />
                 </NativeSelect.Trigger>
               </NativeSelect>
             </div>
             <div className="field-stack">
-              <Label>White-label domein</Label>
+              <Label>Merkapp-domein</Label>
               <Input
                 fullWidth
                 placeholder="app.jegym.nl"
@@ -183,21 +183,21 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
         {[
           {
             icon: Smartphone,
-            label: "Portalaccounts",
+            label: "Ledenaccounts",
             value: String(portalMembers.length),
             helper: "Leden die nu al direct een app- of portalervaring kunnen krijgen.",
           },
           {
             icon: QrCode,
-            label: "Mobiele check-in",
+            label: "Mobiele aankomst",
             value: mobileCheckInEnabled ? "Actief" : "Uit",
-            helper: "QR en mobiele aankomstflow voor lessen en studio-bezoek.",
+            helper: "QR en mobiele aankomstroute voor lessen en studiobezoek.",
           },
           {
             icon: Languages,
             label: "Talen live",
             value: String(snapshot.supportedLanguages.length),
-            helper: "Gebruik dit als basis voor een bredere, white-label member app.",
+            helper: "Gebruik dit als basis voor een bredere ledenapp.",
           },
           {
             icon: UserRoundCheck,
@@ -220,17 +220,17 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
       </div>
 
       <PageSection
-        title="Leden klaar voor app-uitrol"
-        description="Leden met portaltoegang zijn de eerste groep die je direct kunt onboarden in mobiele journeys."
+        title="Leden klaar voor app-lancering"
+        description="Leden met portaltoegang zijn de eerste groep die je direct kunt meenemen in mobiele trajecten."
       >
         {portalMembers.length > 0 ? (
-          <ListView aria-label="Leden klaar voor app-uitrol" items={portalMembers.slice(0, 6)}>
+          <ListView aria-label="Leden klaar voor app-lancering" items={portalMembers.slice(0, 6)}>
             {(member) => (
               <ListView.Item id={member.id} textValue={member.fullName}>
                 <ListView.ItemContent>
                   <ListView.Title>{member.fullName}</ListView.Title>
                   <ListView.Description>
-                    {member.email} · {member.status}
+                    {member.email} · {getMemberStatusLabel(member.status)}
                   </ListView.Description>
                 </ListView.ItemContent>
                 <p className="text-muted text-xs">
@@ -242,7 +242,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
         ) : (
           <EmptyPanel
             title="Nog geen app-kandidaten"
-            description="Zodra je leden portaltoegang geeft, verschijnen ze hier als eerste rolloutgroep."
+            description="Zodra je leden portaltoegang geeft, verschijnen ze hier als eerste groep."
           />
         )}
       </PageSection>
@@ -284,9 +284,9 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                   <Input fullWidth value={paymentMethodNote} onChange={(event) => setPaymentMethodNote(event.target.value)} />
                 </div>
               </Card.Content>
-              <Card.Content className="pt-0">
+              <Card.Content className="space-y-2 pt-0">
                 <Button
-                  isDisabled={isPending || !selectedMemberId}
+                  isDisabled={Boolean(mobileMemberActionDisabledReason)}
                   variant="outline"
                   onPress={() =>
                     startTransition(async () => {
@@ -310,6 +310,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                 >
                   Betaalmethodeverzoek maken
                 </Button>
+                <DisabledActionReason reason={mobileMemberActionDisabledReason} />
               </Card.Content>
             </Card>
 
@@ -328,9 +329,9 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                   <Input fullWidth value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} />
                 </div>
               </Card.Content>
-              <Card.Content className="pt-0">
+              <Card.Content className="space-y-2 pt-0">
                 <Button
-                  isDisabled={isPending || !selectedMemberId}
+                  isDisabled={Boolean(mobileMemberActionDisabledReason)}
                   variant="outline"
                   onPress={() =>
                     startTransition(async () => {
@@ -355,6 +356,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                 >
                   Pauzeverzoek maken
                 </Button>
+                <DisabledActionReason reason={mobileMemberActionDisabledReason} />
               </Card.Content>
             </Card>
 
@@ -368,7 +370,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                         <p className="text-muted text-sm">{request.requestedMethodLabel}</p>
                       </div>
                       <Chip size="sm" variant={request.status === "pending" ? "soft" : "tertiary"}>
-                        {getRequestStatusLabel(request.status)}
+                        {getReviewRequestStatusLabel(request.status)}
                       </Chip>
                     </div>
                     <p className="text-muted text-sm">{request.note ?? "Geen notitie"}</p>
@@ -419,7 +421,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                         </p>
                       </div>
                       <Chip size="sm" variant={request.status === "pending" ? "soft" : "tertiary"}>
-                        {getRequestStatusLabel(request.status)}
+                        {getReviewRequestStatusLabel(request.status)}
                       </Chip>
                     </div>
                     <p className="text-muted text-sm">{request.reason}</p>
@@ -475,7 +477,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                     <div key={receipt.invoiceId} className="rounded-2xl border border-border/70 bg-surface p-4">
                       <p className="font-medium">{receipt.memberName}</p>
                       <p className="text-muted text-sm">
-                        {receipt.description} · {receipt.amountCents} {receipt.currency}
+                        {receipt.description} · {formatEuroFromCents(receipt.amountCents)}
                       </p>
                       <p className="text-muted text-sm">{formatDateTime(receipt.paidAt)}</p>
                     </div>
@@ -500,7 +502,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                         {contract.contractName} · {contract.documentLabel}
                       </p>
                       <p className="text-muted text-sm">
-                        {contract.documentUrl} · {contract.status}
+                        {contract.documentUrl} · {getEntityStatusLabel(contract.status)}
                       </p>
                     </div>
                   ))
@@ -518,7 +520,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
 
       <PageSection
         title="Mobiele modules"
-        description="Compact overzicht van white-label, mobiele check-in en coaching-app uitbreidingen."
+        description="Compact overzicht van merkapp, mobiele aankomst en coachinguitbreidingen."
       >
         <FeatureModuleBoard currentPage="mobile" features={mobileFeatures} snapshot={snapshot} />
       </PageSection>

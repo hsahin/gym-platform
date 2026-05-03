@@ -40,11 +40,11 @@ const stepTargets: Record<
   },
   memberships: {
     href: "/dashboard/contracts",
-    ctaLabel: "Contract toevoegen",
+    ctaLabel: "Lidmaatschap toevoegen",
   },
   staff: {
     href: "/dashboard/settings",
-    ctaLabel: "Team beheren",
+    ctaLabel: "Medewerkers beheren",
   },
   trainers: {
     href: "/dashboard/settings",
@@ -77,7 +77,7 @@ export function getPlatformWorkbenchExperience(
       title: "Vestiging live",
       count: input.locationsCount,
       countLabel: formatCountLabel(input.locationsCount, "vestiging", "vestigingen"),
-      helper: "Locaties vormen de basis voor trainers, leden, lessen en capaciteit.",
+      helper: "Vestigingen vormen de basis voor trainers, leden, lessen en capaciteit.",
     },
     {
       key: "memberships" as const,
@@ -89,7 +89,7 @@ export function getPlatformWorkbenchExperience(
         "lidmaatschap",
         "lidmaatschappen",
       ),
-      helper: "Actieve plannen maken omzet, renewals en member-context direct geloofwaardig.",
+      helper: "Actieve lidmaatschappen maken omzet, verlengingen en ledencontext direct geloofwaardig.",
     },
     {
       key: "trainers" as const,
@@ -105,7 +105,7 @@ export function getPlatformWorkbenchExperience(
       title: "Rooster open",
       count: input.classSessionsCount,
       countLabel: formatCountLabel(input.classSessionsCount, "les", "lessen"),
-      helper: "Met live lessen schakelt het platform vanzelf door naar bookings en check-ins.",
+      helper: "Met live lessen schakelt het platform vanzelf door naar reserveringen en aanwezigheid.",
     },
   ];
 
@@ -160,36 +160,36 @@ export function getPlatformWorkbenchExperience(
 
   const staffCountLabel = formatCountLabel(
     input.staffCount,
-    "account live",
-    "accounts live",
+    "medewerkeraccount live",
+    "medewerkeraccounts live",
   );
 
   const staffStep: PlatformWorkbenchStepBase = !input.canManageStaff
     ? {
         key: "staff",
         order: 6,
-        title: "Teamrollen activeren",
+        title: "Medewerkers activeren",
         countLabel: staffCountLabel,
-        helper: "Operations kan de vloer runnen, maar alleen de eigenaar opent of wijzigt teamaccounts.",
-        statusLabel: "Alleen owner",
+        helper: "Operatie kan de vloer runnen, maar alleen de eigenaar opent of wijzigt medewerkeraccounts.",
+        statusLabel: "Alleen eigenaar",
         statusTone: "locked",
       }
     : input.staffCount > 1
       ? {
           key: "staff",
           order: 6,
-          title: "Teamrollen activeren",
+          title: "Medewerkers activeren",
           countLabel: staffCountLabel,
-          helper: "Je team kan nu owner-, operations-, trainer- en frontdeskflows gebruiken.",
-          statusLabel: "Live team",
+          helper: "Je medewerkers kunnen nu eigenaars-, operatie-, trainer- en balieroutes gebruiken.",
+          statusLabel: "Medewerkers live",
           statusTone: "complete",
         }
       : {
           key: "staff",
           order: 6,
-          title: "Teamrollen activeren",
+          title: "Medewerkers activeren",
           countLabel: staffCountLabel,
-          helper: "Nodig operations, trainer of frontdesk uit zodra je team klaar is om mee te werken.",
+          helper: "Nodig operatie, trainers of balie uit zodra je medewerkers klaar zijn om mee te werken.",
           statusLabel: currentStepIndex === -1 ? "Optioneel" : "Daarna",
           statusTone: currentStepIndex === -1 ? "current" : "upcoming",
         };

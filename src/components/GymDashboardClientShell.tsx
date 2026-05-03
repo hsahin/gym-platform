@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Avatar, Button, Chip } from "@heroui/react";
+import { Avatar, Chip } from "@heroui/react";
 import { AppLayout } from "@heroui-pro/react/app-layout";
 import { Navbar } from "@heroui-pro/react/navbar";
 import { Sidebar } from "@heroui-pro/react/sidebar";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import {
   AppWindow,
   Dumbbell,
@@ -21,9 +22,11 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
+import { FunctionalitySearch } from "@/components/FunctionalitySearch";
 import { GymDashboard } from "@/components/GymDashboard";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
+import { getVisibleFunctionalitySearchEntries } from "@/lib/functionality-search";
 import type { GymDashboardSnapshot } from "@/server/types";
 
 const pageCopy: Record<
@@ -32,57 +35,57 @@ const pageCopy: Record<
 > = {
   overview: {
     title: "Overzicht",
-    description: "Leden, reserveringen, omzetgereedheid en setupstatus in één beeld.",
+    description: "Leden, reserveringen, omzetgereedheid en inrichtingsstatus in één beeld.",
     ctaLabel: "Open reserveringen",
     ctaHref: "/reserve",
   },
   classes: {
     title: "Lessen",
-    description: "Plan lessen, beheer reserveringen en registreer check-ins.",
+    description: "Plan lessen, beheer reserveringen en registreer aanwezigheid.",
   },
   members: {
     title: "Leden",
-    description: "Lidcyclus, waivers en operationele context per club.",
+    description: "Lidcyclus, toestemmingen en operationele context per club.",
   },
   contracts: {
     title: "Contracten",
-    description: "Memberships, prijzen en imports in één beheerlaag.",
+    description: "Lidmaatschappen, prijzen en import in één beheerlaag.",
   },
   coaching: {
     title: "Coaching",
-    description: "Workoutflows, voeding, voortgang en premium coachmomenten.",
+    description: "Trainingsschema's, voeding, voortgang en verdiepende coachmomenten.",
   },
   retention: {
     title: "Retentie",
-    description: "Community, rewards, questionnaires en loyale ledenflows.",
+    description: "Community, beloningen, vragenlijsten en loyale ledenroutes.",
   },
   access: {
     title: "Toegang",
-    description: "Remote toegang, deurkoppelingen en owner-acties op afstand.",
+    description: "Toegang op afstand, deurkoppelingen en beheerdersacties.",
   },
   payments: {
     title: "Betalingen",
-    description: "Billingprofiel, live betaalflows en de huidige verwerkingsstatus.",
+    description: "Betaalprofiel, actieve betaalroutes en de huidige verwerkingsstatus.",
   },
   mobile: {
     title: "Mobiele app",
-    description: "White-label appflows, check-in en memberervaring voor mobiel gebruik.",
+    description: "Merkapp, aankomstregistratie en ledenervaring voor mobiel gebruik.",
   },
   marketing: {
     title: "Marketing",
-    description: "E-mail, promoties, leads en conversiesignalen uit live gymdata.",
+    description: "E-mail, promoties, leads en conversiesignalen uit actuele clubdata.",
   },
   integrations: {
     title: "Integraties",
-    description: "Hardware, software, equipment en migratiekoppelingen rondom je gymstack.",
+    description: "Apparaten, software, meetapparatuur en migratiekoppelingen rondom je gym.",
   },
   settings: {
     title: "Gym instellingen",
-    description: "Vestigingen, team, juridische status en runtimegezondheid.",
+    description: "Vestigingen, medewerkers, juridische status en systeemstatus.",
   },
   superadmin: {
     title: "Superadmin",
-    description: "Beheer gym owners, tenant-flags en platform-rollout centraal.",
+    description: "Beheer eigenaarsaccounts en clubmodules centraal.",
   },
 };
 
@@ -133,22 +136,23 @@ export function GymDashboardClientShell({
   const ctaHref =
     copy.ctaHref === "/reserve" ? `/reserve?gym=${tenantId}` : copy.ctaHref;
   const visibleNavigationItems = navigationItems.filter(
-    (item) =>
-      item.key !== "superadmin" ||
-      snapshot.uiCapabilities.canManageFeatureFlags ||
-      snapshot.uiCapabilities.canManageOwnerAccounts,
+    (item) => item.key !== "superadmin" || snapshot.uiCapabilities.canManageOwnerAccounts,
   );
+  const visibleFunctionalitySearchEntries = getVisibleFunctionalitySearchEntries({
+    canManageFeatureFlags: snapshot.uiCapabilities.canManageFeatureFlags,
+    canManageOwnerAccounts: snapshot.uiCapabilities.canManageOwnerAccounts,
+  });
 
   return (
     <AppLayout
-      className="min-h-screen bg-background"
+      className="min-h-screen min-w-0 overflow-x-clip bg-background"
       navbar={
         <Navbar
           className="border-b border-border/80 bg-background/88 backdrop-blur"
           maxWidth="full"
         >
-          <Navbar.Header className="px-4 py-3 lg:px-6">
-            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <Navbar.Header className="px-3 py-3 sm:px-4 lg:px-6">
+            <div className="flex w-full min-w-0 max-w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 <AppLayout.MenuToggle />
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -165,7 +169,14 @@ export function GymDashboardClientShell({
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <FunctionalitySearch
+                ariaLabel="Functionaliteit zoeken"
+                entries={visibleFunctionalitySearchEntries}
+                placeholder="Zoek functionaliteit"
+                tenantId={tenantId}
+              />
+
+              <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 sm:justify-end lg:shrink-0">
                 {ctaHref && copy.ctaLabel ? (
                   <Button
                     size="sm"
@@ -236,8 +247,8 @@ export function GymDashboardClientShell({
         </Sidebar>
       }
     >
-      <main className="app-page section-stack py-6 md:py-8">
-        <header className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+      <main className="app-page section-stack min-w-0 max-w-full overflow-x-clip py-6 md:py-8">
+        <header className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
           <div className="min-w-0 space-y-3">
             <Chip size="sm" variant="tertiary" className="w-fit sm:hidden">
               {roleLabel}

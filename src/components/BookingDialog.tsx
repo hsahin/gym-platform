@@ -3,10 +3,15 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Button, Card, Chip, Label, TextArea } from "@heroui/react";
-import { NativeSelect } from "@heroui-pro/react/native-select";
+import { Card, Chip, Label, TextArea } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
+import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { toast } from "sonner";
 import { HeroPhoneNumberField } from "@/components/HeroPhoneNumberField";
+import {
+  getBookingStatusLabel,
+  getMemberStatusLabel,
+} from "@/lib/ui-labels";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type { ClassSession, GymMember } from "@/server/types";
 
@@ -126,11 +131,13 @@ export function BookingDialog({
         if (!response.ok || !payload.ok || !payload.data) {
           throw new Error(payload.error?.message ?? "Boeking kon niet worden aangemaakt.");
         }
+        const { booking } = payload.data;
+        const bookingStatusLabel = getBookingStatusLabel(booking.status);
 
         toast.success(
           payload.data.alreadyExisted
-            ? "Deze booking bestond al en is hergebruikt."
-            : `Boeking opgeslagen als ${payload.data.booking.status}.`,
+            ? "Deze reservering bestond al en is hergebruikt."
+            : `Boeking opgeslagen als ${bookingStatusLabel}.`,
         );
 
         setOpen(false);
@@ -151,7 +158,7 @@ export function BookingDialog({
         variant="outline"
         onPress={() => setOpen(true)}
       >
-        Nieuwe booking
+        Nieuwe reservering
       </Button>
 
       {open && typeof document !== "undefined"
@@ -170,9 +177,9 @@ export function BookingDialog({
                 >
                   <Card.Header className="items-start justify-between gap-4">
                     <div className="space-y-2">
-                      <Card.Title>Nieuwe booking</Card.Title>
+                      <Card.Title>Nieuwe reservering</Card.Title>
                       <Card.Description>
-                        Kies lid, les en contactgegevens. De reserveringsflow verwerkt de rest.
+                        Kies lid, les en contactgegevens. GymOS verwerkt de reservering direct.
                       </Card.Description>
                     </div>
                     <Button size="sm" variant="ghost" onPress={() => setOpen(false)}>
@@ -246,7 +253,7 @@ export function BookingDialog({
                       {selectedMember ? (
                         <div className="flex flex-wrap gap-2">
                           <Chip size="sm" variant="soft">
-                            {selectedMember.status}
+                            {getMemberStatusLabel(selectedMember.status)}
                           </Chip>
                           <Chip size="sm" variant="tertiary">
                             {selectedMember.email}

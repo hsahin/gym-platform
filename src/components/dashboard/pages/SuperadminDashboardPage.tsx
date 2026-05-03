@@ -3,14 +3,17 @@
 import { useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, ShieldCheck, ToggleLeft, UserCog, Zap } from "lucide-react";
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
+import { Card, Chip, Input, Label } from "@heroui/react";
 import { toast } from "sonner";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import {
   EmptyPanel,
   PageSection,
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
+import { getDashboardFeatureCategoryLabel } from "@/features/dashboard-feature-copy";
+import { getEntityStatusLabel } from "@/lib/ui-labels";
 import { MUTATION_CSRF_TOKEN } from "@/server/http/platform-api";
 import type { FeatureState } from "@/server/types";
 
@@ -32,7 +35,7 @@ function groupFeaturesByCategory(features: ReadonlyArray<FeatureState>) {
     }
 
     groups.set(feature.categoryKey, {
-      title: feature.categoryTitle,
+      title: getDashboardFeatureCategoryLabel(feature),
       features: [feature],
     });
   }
@@ -59,7 +62,7 @@ async function submitOwnerAccountMutation(
   };
 
   if (!response.ok || !result.ok) {
-    throw new Error(result.error?.message ?? "Owner-account kon niet worden opgeslagen.");
+    throw new Error(result.error?.message ?? "Eigenaarsaccount kon niet worden opgeslagen.");
   }
 }
 
@@ -67,14 +70,11 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  if (
-    !snapshot.uiCapabilities.canManageFeatureFlags &&
-    !snapshot.uiCapabilities.canManageOwnerAccounts
-  ) {
+  if (!snapshot.uiCapabilities.canManageOwnerAccounts) {
     return (
       <EmptyPanel
         title="Superadmin toegang vereist"
-        description="Alleen superadmins kunnen owner accounts beheren. Owners kunnen alleen tenant-instellingen beheren."
+        description="Alleen superadmins kunnen eigenaarsaccounts beheren. Eigenaren kunnen alleen clubinstellingen beheren."
       />
     );
   }
@@ -104,11 +104,11 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
           email: String(formData.get("email") ?? ""),
           password: String(formData.get("password") ?? ""),
         });
-        toast.success("Owner-account aangemaakt.");
+        toast.success("Eigenaarsaccount aangemaakt.");
         event.currentTarget.reset();
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Owner-account kon niet worden aangemaakt.");
+        toast.error(error instanceof Error ? error.message : "Eigenaarsaccount kon niet worden aangemaakt.");
       }
     });
   }
@@ -127,10 +127,10 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
           email: String(formData.get("email") ?? ""),
           status: String(formData.get("status") ?? "active"),
         });
-        toast.success("Owner-account bijgewerkt.");
+        toast.success("Eigenaarsaccount bijgewerkt.");
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Owner-account kon niet worden bijgewerkt.");
+        toast.error(error instanceof Error ? error.message : "Eigenaarsaccount kon niet worden bijgewerkt.");
       }
     });
   }
@@ -143,10 +143,10 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
           userId: account.id,
           expectedUpdatedAt: account.updatedAt,
         });
-        toast.success("Owner-account verwijderd.");
+        toast.success("Eigenaarsaccount verwijderd.");
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Owner-account kon niet worden verwijderd.");
+        toast.error(error instanceof Error ? error.message : "Eigenaarsaccount kon niet worden verwijderd.");
       }
     });
   }
@@ -157,25 +157,25 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
         {[
           {
             icon: ToggleLeft,
-            label: "Actieve features",
+            label: "Actieve modules",
             value: `${enabledFeatures}/${snapshot.featureFlags.length}`,
-            helper: "Modules die nu tenant-breed live staan in het dashboard.",
+            helper: "Modules die nu clubbreed live staan in het dashboard.",
           },
           {
             icon: Zap,
-            label: "Nieuwe launches",
+            label: "Nieuwe uitrol",
             value: String(newFeatures),
             helper: "Nieuwe modules die je bewust kunt vrijgeven voor deze gym.",
           },
           {
             icon: ShieldCheck,
-            label: "Owner accounts",
+            label: "Eigenaarsaccounts",
             value: snapshot.uiCapabilities.canManageOwnerAccounts
               ? String(snapshot.superadmin.activeOwnerAccounts)
-              : "Tenant scope",
+              : "Clubrechten",
             helper: snapshot.uiCapabilities.canManageOwnerAccounts
-              ? `${snapshot.superadmin.archivedOwnerAccounts} gearchiveerde owner accounts.`
-              : "Deze login beheert alleen feature flags binnen de huidige gym.",
+              ? `${snapshot.superadmin.archivedOwnerAccounts} gearchiveerde eigenaarsaccounts.`
+              : "Deze login beheert alleen modules binnen de huidige gym.",
           },
         ].map((item) => (
           <Card key={item.label} className="rounded-[24px] border border-border/80 bg-surface shadow-none">
@@ -193,15 +193,15 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
 
       {snapshot.uiCapabilities.canManageOwnerAccounts ? (
         <PageSection
-          title="Gym owner accounts"
-          description="Beheer welke eigenaren toegang hebben tot hun gym. Dit is platform-breed en los van tenant feature flags."
+          title="Eigenaren"
+          description="Beheer welke eigenaren toegang hebben tot hun gym. Dit is platformbreed en los van clubmodules."
         >
           <div className="section-stack">
             <Card className="rounded-[24px] border border-border/80 bg-surface shadow-none">
               <Card.Header className="space-y-2">
                 <div className="flex items-center gap-2">
                   <UserCog className="h-4 w-4 text-muted" />
-                  <Card.Title>Nieuwe owner toevoegen</Card.Title>
+                  <Card.Title>Nieuwe eigenaar toevoegen</Card.Title>
                 </div>
                 <Card.Description>
                   Kies de gym, voeg een eigenaar toe en deel daarna veilig de inloggegevens.
@@ -224,19 +224,19 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
                     </select>
                   </label>
                   <div className="field-stack">
-                    <Label>Naam owner</Label>
+                    <Label>Naam eigenaar</Label>
                     <Input fullWidth name="displayName" placeholder="Naam eigenaar" required />
                   </div>
                   <div className="field-stack">
                     <Label>E-mail</Label>
-                    <Input fullWidth name="email" placeholder="owner@gym.nl" required type="email" />
+                    <Input fullWidth name="email" placeholder="eigenaar@gym.nl" required type="email" />
                   </div>
                   <div className="field-stack">
                     <Label>Tijdelijk wachtwoord</Label>
                     <Input fullWidth name="password" minLength={8} required type="password" />
                   </div>
                   <Button isDisabled={isPending} type="submit" variant="primary">
-                    Owner-account aanmaken
+                    Eigenaarsaccount aanmaken
                   </Button>
                 </form>
               </Card.Content>
@@ -255,7 +255,7 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
                             variant={account.status === "active" ? "soft" : "tertiary"}
                             color={account.status === "active" ? "success" : "default"}
                           >
-                            {account.status}
+                            {getEntityStatusLabel(account.status)}
                           </Chip>
                         </div>
                         <p className="text-muted text-sm">{account.email}</p>
@@ -315,7 +315,7 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
         <PageSection
           key={group.title}
           title={group.title}
-          description="Schakel modules per tenant in of uit zonder verborgen configuraties."
+          description="Schakel modules per club in of uit zonder verborgen configuraties."
         >
           <FeatureModuleBoard
             currentPage="superadmin"

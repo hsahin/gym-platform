@@ -27,8 +27,8 @@ export function getReservationExperience(snapshot: PublicReservationSnapshot) {
   return {
     hasClasses,
     heroBadges: hasClasses
-      ? ["Member journey", "Live rooster", "Direct bevestigd"]
-      : ["Founder edition", "Binnenkort live", "Member-ready"],
+      ? ["Ledentraject", "Live rooster", "Direct bevestigd"]
+      : ["Oprichtingseditie", "Binnenkort live", "Ledenklaar"],
     rosterSummary: hasClasses
       ? {
           label: "Roosterpulse",
@@ -37,13 +37,13 @@ export function getReservationExperience(snapshot: PublicReservationSnapshot) {
             "les live",
             "lessen live",
           ),
-          helper: `${formatCountLabel(openSpots, "openstaande plek", "openstaande plekken")} en ${formatCountLabel(totalWaitlist, "wachtende", "wachtenden")} in de huidige flow.`,
+          helper: `${formatCountLabel(openSpots, "openstaande plek", "openstaande plekken")} en ${formatCountLabel(totalWaitlist, "wachtende", "wachtenden")} in de huidige route.`,
         }
       : {
           label: "Opening in opbouw",
           value: "Opening in opbouw",
           helper:
-            "Deze member-ervaring staat klaar. Publiceer je eerste les en laat reserveringen direct binnenstromen.",
+            "Deze ledenervaring staat klaar. Publiceer je eerste les en laat reserveringen direct binnenstromen.",
         },
     insightCards: hasClasses
       ? [
@@ -61,39 +61,39 @@ export function getReservationExperience(snapshot: PublicReservationSnapshot) {
       : [
           {
             label: "Eerste drop",
-            value: "Founder members",
-            helper: "Gebruik je eerste classes om schaarste en clubgevoel meteen goed neer te zetten.",
+            value: "Oprichtingsleden",
+            helper: "Gebruik je eerste lessen om schaarste en clubgevoel meteen goed neer te zetten.",
           },
           {
             label: "Na publicatie",
             value: "Direct bevestigd",
-            helper: "Reserveringen, confirmations en beheer worden direct actief zodra je eerste les live staat.",
+            helper: "Reserveringen, bevestigingen en beheer worden direct actief zodra je eerste les live staat.",
           },
         ],
     emptyState: hasClasses
       ? null
       : {
-          title: "Nieuwe class drops openen hier als eerste.",
+          title: "Nieuwe lesmomenten openen hier als eerste.",
           description:
-            "De booking-ervaring staat al klaar in premium vorm. Voeg alleen nog je eerste live les toe om van pre-launch naar directe conversie te gaan.",
+            "De reserveringservaring staat al klaar in sterke vorm. Voeg alleen nog je eerste live les toe om van voorbereiding naar directe conversie te gaan.",
           highlights: [
-            "De eerste live les activeert direct reserveringen, wachtlijst en confirmations.",
-            "Je frontdesk en owner-dashboard zien dezelfde flow terug zonder extra inrichting.",
-            "Deze pagina voelt nu al als een high-end studio in plaats van een kale placeholder.",
+            "De eerste live les activeert direct reserveringen, wachtlijst en bevestigingen.",
+            "Je balie en eigenaarsdashboard zien dezelfde route terug zonder extra inrichting.",
+            "Deze pagina voelt nu al als een sterke studio in plaats van een kale placeholder.",
           ],
         },
     promiseCards: [
       {
         title: "Snelle keuze",
-        copy: "Les, coach, beschikbaarheid en locatie staan direct op één plek.",
+        copy: "Les, coach, beschikbaarheid en vestiging staan direct op één plek.",
       },
       {
-        title: "Premium gevoel",
-        copy: "De ervaring voelt als een studio-brand, niet als een utilitair portaal.",
+        title: "Sterk merkgevoel",
+        copy: "De ervaring voelt als een studiomerk, niet als een utilitair portaal.",
       },
       {
         title: "Beheer loopt mee",
-        copy: "Balie, operations en owner zien dezelfde reservering direct terug in het platform.",
+        copy: "Balie, operatie en eigenaar zien dezelfde reservering direct terug in het platform.",
       },
     ],
   };

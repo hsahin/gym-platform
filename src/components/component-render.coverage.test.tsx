@@ -77,10 +77,10 @@ describe("component render coverage", () => {
       <LoginExperiencePanel accountCount={4} isSetupComplete />,
     );
 
-    expect(setupMarkup).toContain("Owner experience");
+    expect(setupMarkup).toContain("Eigenaarservaring");
     expect(setupMarkup).toContain("Start de launch");
     expect(liveMarkup).toContain("Launch actief");
-    expect(liveMarkup).toContain("Ga naar owner login");
+    expect(liveMarkup).toContain("Ga naar inloggen");
   });
 
   it("renders class session occupancy variants", () => {
@@ -101,7 +101,7 @@ describe("component render coverage", () => {
     expect(regularMarkup).toContain("50% vol");
     expect(regularMarkup).toContain("Romy de Wit");
     expect(packedMarkup).toContain("95% vol");
-    expect(packedMarkup).toContain("TBA");
+    expect(packedMarkup).toContain("Nog geen coach");
   });
 
   it("renders location amenity overflow and compact variants", () => {
@@ -142,7 +142,7 @@ describe("component render coverage", () => {
     expect(activeMarkup).toContain("Unlimited Jaar");
     expect(activeMarkup).toContain("+1 extra");
     expect(pausedMarkup).toContain("Onbekend");
-    expect(pausedMarkup).toContain("waiver pending");
+    expect(pausedMarkup).toContain("Waiver open");
   });
 
   it("renders shared Hero compatibility primitives across supported variants", () => {

@@ -79,6 +79,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 html {
   background:
     radial-gradient(circle at top left, color-mix(in oklch, var(--accent) 12%, transparent), transparent 28%),
@@ -92,6 +98,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
   line-height: 1.5;
+  overflow-wrap: break-word;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -106,6 +113,8 @@ input,
 select,
 textarea {
   font: inherit;
+  min-width: 0;
+  max-width: 100%;
 }
 
 img,
@@ -130,12 +139,16 @@ h6 {
 }
 
 p {
+  overflow-wrap: anywhere;
   text-wrap: pretty;
 }
 
 .app-page {
   margin-inline: auto;
+  min-width: 0;
   width: min(100%, 1280px);
+  max-width: 100%;
+  overflow-x: clip;
   padding: 1.25rem;
 }
 
@@ -167,24 +180,32 @@ p {
 
 .metric-stack {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 0.9rem;
   align-content: start;
 }
 
 .section-stack {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1.25rem;
   align-content: start;
 }
 
 .field-stack {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 0.65rem;
   align-content: start;
 }
 
 .app-header {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
@@ -206,6 +227,7 @@ p {
 
 .app-header__actions {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
@@ -214,6 +236,7 @@ p {
 
 .app-header__nav {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1rem;
@@ -225,24 +248,32 @@ p {
 
 [data-slot="card"] {
   min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 [data-slot="card-header"] {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
   gap: 0.875rem;
 }
 
 [data-slot="card-title"] {
   letter-spacing: 0;
   line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 [data-slot="card-description"] {
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 [data-slot="card-content"],
 [data-slot="card-footer"] {
   min-width: 0;
+  max-width: 100%;
 }
 
 .metric-stack > * ,
@@ -257,8 +288,103 @@ p {
   overflow-wrap: anywhere;
 }
 
+.mobile-safe-grid,
+.mobile-safe-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mobile-scroll-strip {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-kpi-group {
+  min-width: 1040px;
+  max-width: 100%;
+}
+
+.mobile-feature-module-board,
+.mobile-feature-module-board > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mobile-feature-module-board [data-slot="item-card"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mobile-feature-module-board [data-slot="item-card-title"] {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  white-space: normal;
+}
+
+.mobile-feature-module-board [data-slot="item-card-action"] {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .app-page {
+    padding-inline: 0.875rem;
+  }
+
+  .app-page :where(.grid, [class*="grid-cols-"]) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-page :where(button, .button) {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .app-page :where(p, span, a, dt, dd, label, h1, h2, h3, h4, h5, h6) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-kpi-group {
+    display: grid;
+    min-width: 0 !important;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-kpi-group [data-slot="kpi-group-separator"] {
+    display: none;
+  }
+
+  .dashboard-kpi-group [data-slot="kpi"] {
+    min-width: 0;
+  }
+
+  .dashboard-kpi-group [data-slot="kpi-content"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-feature-module-board {
+    --item-card-group-columns: 1 !important;
+  }
+
+  .mobile-feature-module-board [data-slot="item-card"] {
+    flex-wrap: wrap;
+  }
+
+  .mobile-feature-module-board [data-slot="item-card-action"] {
+    width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+  }
+}
+
 .theme-mode-switch {
   min-width: max-content;
+  max-width: 100%;
 }
 
 .theme-mode-switch.segment {

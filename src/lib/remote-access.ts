@@ -171,7 +171,7 @@ export function getRemoteAccessHelpText(
   }
 
   if (status === "attention") {
-    return `Vul locatie, slotnaam en device-id aan om ${providerLabel} betrouwbaar te kunnen gebruiken.`;
+    return `Vul vestiging, slotnaam en device-id aan om ${providerLabel} betrouwbaar te kunnen gebruiken.`;
   }
 
   return "Koppel een slim slot zoals Nuki en bewaar per gym welke deur op afstand geopend mag worden.";

@@ -13,7 +13,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Card, Chip } from "@heroui/react";
 import { KPI, KPIGroup } from "@heroui-pro/react";
-import { Segment } from "@heroui-pro/react/segment";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
@@ -25,6 +25,11 @@ import {
   type DashboardPageProps,
 } from "@/components/dashboard/shared";
 import { getDashboardPages } from "@/lib/dashboard-pages";
+import {
+  getBookingSourceLabel,
+  getBookingStatusLabel,
+  getEntityStatusLabel,
+} from "@/lib/ui-labels";
 
 type HighlightedDashboardMetric = {
   readonly icon: LucideIcon;
@@ -155,7 +160,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
   );
   const healthAttentionSummary =
     openHealthChecks.length === 0
-      ? "Alles staat goed. Er zijn geen open platformchecks."
+      ? "Alles staat goed. Er zijn geen open statuschecks."
       : openHealthChecks.map((check) => check.summary).join(" ");
   const openHealthCheckNames = openHealthChecks.map((check) => check.name).join(", ");
 
@@ -214,31 +219,31 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
       valueKind: "decimal",
       helper:
         openHealthChecks[0]?.summary ??
-        "Geen open healthchecks, waivers of runtime-acties op de overview.",
+        "Geen open statuschecks, toestemmingen of systeemacties op het overzicht.",
     });
   }
   const overviewActivityTabs = [
     { id: "lessons", label: "Volgende lessen", count: upcomingSessions.length },
     {
       id: "status",
-      label: "Platformstatus",
+      label: "Clubstatus",
       count: openHealthChecks.length,
     },
     { id: "reservations", label: "Recente reserveringen", count: recentBookings.length },
-    { id: "notes", label: "Teamnotities", count: recentAuditEntries.length },
+    { id: "notes", label: "Medewerkersnotities", count: recentAuditEntries.length },
   ] as const;
 
   return (
-    <div className="section-stack">
-      <div className="overflow-x-auto pb-1">
+    <div className="section-stack min-w-0 max-w-full overflow-x-clip">
+      <div className="mobile-scroll-strip pb-1">
         <KPIGroup
           aria-label="Belangrijkste dashboardcijfers"
-          className="min-w-[1040px] rounded-[30px] border border-border/80 bg-surface/95 shadow-[0_24px_80px_rgba(15,23,42,0.08)]"
+          className="dashboard-kpi-group rounded-[30px] border border-border/80 bg-surface/95 shadow-[0_24px_80px_rgba(15,23,42,0.08)]"
         >
           {highlightedMetrics.map((metric, index) => (
             <Fragment key={metric.label}>
               {index > 0 ? <KPIGroup.Separator /> : null}
-              <KPI className="min-w-[190px] bg-transparent shadow-none">
+              <KPI className="min-w-0 bg-transparent shadow-none sm:min-w-[190px]">
                 <KPI.Header>
                   <KPI.Icon status={metric.iconStatus}>
                     <metric.icon className="h-4 w-4" />
@@ -287,7 +292,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
             <div className="space-y-1">
               <p className="text-sm font-semibold">Waar stel je Aandacht in?</p>
               <p className="text-sm leading-6">
-                Dit zijn automatische platformchecks. Open <strong>Integraties</strong> om te zien
+                Dit zijn automatische statuschecks. Open <strong>Integraties</strong> om te zien
                 welke checks nog openstaan en welke actie nodig is.
               </p>
               <p className="text-xs opacity-80">
@@ -305,8 +310,8 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
       ) : null}
 
       <PageSection
-        title="Platform modules"
-        description="Elke kernfunctie heeft nu een eigen dashboardpagina en kan tenant-breed worden uitgezet vanuit Superadmin."
+        title="Clubmodules"
+        description="Elke kernfunctie heeft een eigen dashboardpagina en kan per club worden beheerd."
       >
         <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
           {dashboardModules.map((module) => (
@@ -314,7 +319,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
               key={module.key}
               href={module.href}
               prefetch={false}
-              className="group rounded-[24px] border border-border/80 bg-surface p-5 shadow-none transition hover:border-foreground/20 hover:bg-surface-secondary"
+              className="group min-w-0 rounded-[24px] border border-border/80 bg-surface p-5 shadow-none transition hover:border-foreground/20 hover:bg-surface-secondary"
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -331,7 +336,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
 
       <PageSection
         title="Dagelijkse cockpit"
-        description="Schakel snel tussen lessen, platformstatus, reserveringen en teamnotities zonder lange dashboardblokken."
+        description="Schakel snel tussen lessen, clubstatus, reserveringen en medewerkersnotities zonder lange dashboardblokken."
       >
         <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
           <Card.Content className="space-y-5">
@@ -374,7 +379,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                             </ListView.Description>
                           </ListView.ItemContent>
                           <Chip color={chip.color} size="sm" variant={chip.variant}>
-                            {session.status}
+                            {getEntityStatusLabel(session.status)}
                           </Chip>
                         </ListView.Item>
                       );
@@ -392,9 +397,9 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
             {overviewActivityTab === "status" ? (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-xl font-semibold">Platformstatus</h3>
+                  <h3 className="text-xl font-semibold">Clubstatus</h3>
                   <p className="text-muted text-sm leading-6">
-                    De huidige status van betalingen, toegang en runtimechecks.
+                    De huidige status van betalingen, toegang en systeemcontroles.
                   </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -412,14 +417,14 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                     ...(canViewPlatformChecks
                       ? [
                           {
-                            label: "Gezondheid",
+                            label: "Systeemstatus",
                             value:
                               openHealthChecks.length === 0
                                 ? "Alles gezond"
                                 : `${openHealthChecks.length} aandachtspunt${openHealthChecks.length === 1 ? "" : "en"}`,
                             helper:
                               openHealthChecks[0]?.summary ??
-                              "Runtime en synchronisatiechecks.",
+                              "Systeem- en synchronisatiechecks.",
                           },
                         ]
                       : []),
@@ -432,7 +437,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                         <p className="text-muted text-sm">{item.label}</p>
                         <p className="text-lg font-semibold">{item.value}</p>
                         <p className="text-muted text-sm leading-6">{item.helper}</p>
-                        {item.label === "Gezondheid" && openHealthChecks.length > 0 ? (
+                        {item.label === "Systeemstatus" && openHealthChecks.length > 0 ? (
                           <Link
                             className="mt-1 inline-flex w-fit items-center justify-center rounded-full border border-border/80 px-3 py-1.5 text-sm font-medium transition hover:border-foreground/30 hover:bg-surface-secondary"
                             href="/dashboard/integrations"
@@ -465,11 +470,11 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
                           <ListView.ItemContent>
                             <ListView.Title>{booking.memberName}</ListView.Title>
                             <ListView.Description>
-                              {booking.source} · {booking.phone}
+                              {getBookingSourceLabel(booking.source)} · {booking.phone}
                             </ListView.Description>
                           </ListView.ItemContent>
                           <Chip color={chip.color} size="sm" variant={chip.variant}>
-                            {booking.status}
+                            {getBookingStatusLabel(booking.status)}
                           </Chip>
                         </ListView.Item>
                       );
@@ -487,9 +492,9 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
             {overviewActivityTab === "notes" ? (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-xl font-semibold">Teamnotities</h3>
+                  <h3 className="text-xl font-semibold">Medewerkersnotities</h3>
                   <p className="text-muted text-sm leading-6">
-                    Herbruikbare context voor het team.
+                    Herbruikbare context voor medewerkers.
                   </p>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
@@ -535,7 +540,7 @@ export function OverviewDashboardPage({ snapshot }: DashboardPageProps) {
 
       {overviewFeatures.length > 0 ? (
         <PageSection
-          title="Owner-inzicht"
+          title="Eigenaarsinzicht"
           description="Compact overzicht van analytics en operationele signalen."
         >
           <FeatureModuleBoard currentPage="overview" features={overviewFeatures} snapshot={snapshot} />

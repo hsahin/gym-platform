@@ -20,27 +20,27 @@ export const PLATFORM_ROLE_OPTIONS: ReadonlyArray<{
       "Voor overzicht over omzet, vestigingen, teambeheer en platforminstellingen.",
     highlights: [
       "Vestigingen, trainers en lessen beheren",
-      "Leden en memberships inrichten",
+      "Leden en lidmaatschappen inrichten",
       "Teamaccounts en platforminstellingen beheren",
     ],
   },
   {
     key: "manager",
-    label: "Operations manager",
+    label: "Operatiemanager",
     scopeLabel: "dagelijkse operatie",
     badgeVariant: "info",
     description:
-      "Voor front-of-house, roosters en operationeel overzicht over meerdere locaties.",
+      "Voor balie, roosters en operationeel overzicht over meerdere locaties.",
     highlights: [
       "Leden en boekingen beheren",
-      "Check-ins verwerken",
-      "Gezondheid en audit van de tenant volgen",
+      "Aanwezigheid verwerken",
+      "Gezondheid en audit van de club volgen",
     ],
   },
   {
     key: "trainer",
     label: "Trainer",
-    scopeLabel: "coach workflow",
+    scopeLabel: "coachroute",
     badgeVariant: "warning",
     description:
       "Voor coaches die klassen, aanwezigheid en ledencontext nodig hebben.",
@@ -52,14 +52,14 @@ export const PLATFORM_ROLE_OPTIONS: ReadonlyArray<{
   },
   {
     key: "frontdesk",
-    label: "Frontdesk",
-    scopeLabel: "balie flow",
+    label: "Balie",
+    scopeLabel: "balieroute",
     badgeVariant: "secondary",
     description:
-      "Voor trialboekingen, waivers en contact-updates aan de receptie.",
+      "Voor proeflesboekingen, toestemmingen en contactupdates aan de receptie.",
     highlights: [
-      "Trial- en class-bookings aanmaken",
-      "Waiverstatus bekijken",
+      "Proefles- en lesboekingen aanmaken",
+      "Toestemmingsstatus bekijken",
       "Basisledenoverzicht raadplegen",
     ],
   },

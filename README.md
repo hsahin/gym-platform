@@ -117,11 +117,9 @@ Aanbevolen live-instellingen:
 
 ## Verificatie
 
-Deze checks zijn al succesvol gedraaid:
+Gebruik voor CI en releasechecks één sequentieel commando. Dit voorkomt dat
+`typecheck` tegelijk met `build` aan `.next/types` werkt:
 
 ```bash
-npm run typecheck
-npm test
-npm run lint
-npm run build
+npm run ci:verify
 ```

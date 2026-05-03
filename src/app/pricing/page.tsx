@@ -6,25 +6,25 @@ const plans = [
     name: "Start",
     price: "€49",
     helper: "Voor één gym die snel live wil.",
-    features: ["Ledenbeheer", "Rooster en reserveringen", "Contracten", "Ownerdashboard"],
+    features: ["Ledenbeheer", "Rooster en reserveringen", "Lidmaatschappen", "Eigenaarsdashboard"],
   },
   {
     name: "Groei",
     price: "€99",
-    helper: "Voor gyms met teamrollen en automatisering.",
+    helper: "Voor gyms met medewerkerrollen en automatisering.",
     features: [
       "Alles uit Start",
       "Mollie-betalingen",
       "Slimme deuren",
-      "Import van leden en contracten",
+      "Import van leden en lidmaatschappen",
     ],
     highlighted: true,
   },
   {
     name: "Multi-gym",
     price: "Op maat",
-    helper: "Voor ondernemers met meerdere locaties of labels.",
-    features: ["Meerdere gyms", "Teamrollen per gym", "Segmenten en marketing", "Livegang begeleiding"],
+    helper: "Voor ondernemers met meerdere vestigingen of labels.",
+    features: ["Meerdere gyms", "Medewerkerrollen per gym", "Segmenten en marketing", "Livegang begeleiding"],
   },
 ];
 

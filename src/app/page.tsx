@@ -36,7 +36,7 @@ export default async function Home() {
         detail={
           error instanceof Error
             ? error.message
-            : "De runtime kon de live configuratie niet laden."
+            : "De live systeemconfiguratie kon niet worden geladen."
         }
       />
     );

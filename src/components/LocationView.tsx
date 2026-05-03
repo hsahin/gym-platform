@@ -1,4 +1,5 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/HeroCompat";
+import { getEntityStatusLabel } from "@/lib/ui-labels";
 import type { GymLocation } from "@/server/types";
 
 export function LocationView({ location }: { location: GymLocation }) {
@@ -13,10 +14,10 @@ export function LocationView({ location }: { location: GymLocation }) {
       <CardHeader className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="eyebrow">Club location</p>
+            <p className="eyebrow">Vestiging</p>
             <CardTitle className="text-lg">{location.name}</CardTitle>
           </div>
-          <Badge variant="outline">{location.status}</Badge>
+          <Badge variant="outline">{getEntityStatusLabel(location.status)}</Badge>
         </div>
         <p className="text-sm text-slate-600">
           {location.neighborhood}, {location.city}

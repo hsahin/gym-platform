@@ -8,6 +8,33 @@ import {
 } from "@/features/dashboard-feature-presence";
 import type { GymDashboardSnapshot } from "@/server/types";
 
+const mixedFeatureSummaryFragments = [
+  "waiver",
+  "waivers",
+  "check-in",
+  "check-ins",
+  "overview",
+  "tenant",
+  "window",
+  " flow",
+  "Trialflow",
+  "class packs",
+  "credits per standaard pakket",
+  "Workout focus",
+  "coachworkspace",
+  "provider",
+  "collection case",
+  "collection cases",
+  "coaching journeys",
+  "Nutrition app-flow",
+  "lead",
+  "leads",
+  "pipeline",
+  "frontdesk only",
+  "QR only",
+  "hybrid",
+] as const;
+
 function createSnapshotFixture() {
   return {
     tenantName: "Northside Athletics",
@@ -57,6 +84,8 @@ function createSnapshotFixture() {
       statusLabel: "Live",
       helpText: "Betalingen zijn gekoppeld.",
       previewMode: true,
+      providerAccessConfigured: true,
+      webhookUrlConfigured: true,
     },
     legal: {
       termsUrl: "https://northside.test/terms",
@@ -379,7 +408,7 @@ describe("dashboard feature presence", () => {
     ).toContain("Incasso elke eerste werkdag van de maand");
     expect(
       buildFeaturePresenceSummary({ key: "mobile.checkin" }, snapshot),
-    ).toContain("QR only");
+    ).toContain("Alleen QR");
     expect(
       buildFeaturePresenceSummary({ key: "integrations.virtuagym_connect" }, snapshot),
     ).toContain("Virtuagym");
@@ -396,10 +425,21 @@ describe("dashboard feature presence", () => {
     };
 
     expect(buildFeaturePresenceSummary({ key: "analytics.advanced" }, ownerSnapshot)).toBe(
-      "2 KPI's live op de overview.",
+      "2 KPI's live op het overzicht.",
     );
     expect(buildFeaturePresenceSummary({ key: "analytics.advanced" }, superadminSnapshot)).toBe(
-      "2 KPI's en 1 platformcheck live op de overview.",
+      "2 KPI's en 1 statuscheck live op het overzicht.",
     );
+  });
+
+  it("keeps feature presence summaries free of internal mixed-language copy", () => {
+    const snapshot = createSnapshotFixture();
+    const summaries = DASHBOARD_FEATURE_CATALOG.map((feature) =>
+      buildFeaturePresenceSummary(feature, snapshot),
+    ).join("\n");
+
+    for (const fragment of mixedFeatureSummaryFragments) {
+      expect(summaries).not.toContain(fragment);
+    }
   });
 });

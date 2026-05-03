@@ -580,6 +580,8 @@ export interface BillingSummary {
   readonly statusLabel: string;
   readonly helpText: string;
   readonly previewMode: boolean;
+  readonly providerAccessConfigured: boolean;
+  readonly webhookUrlConfigured: boolean;
   readonly notes?: string;
   readonly lastValidatedAt?: string;
   readonly lastPaymentActionAt?: string;
@@ -766,6 +768,8 @@ export interface PublicMembershipSignupSnapshot {
   >;
   readonly legalReady: boolean;
   readonly billingReady: boolean;
+  readonly legalMissingFields: ReadonlyArray<string>;
+  readonly billingMissingFields: ReadonlyArray<string>;
   readonly testMode: boolean;
   readonly billingMessage: string;
   readonly legalMessage: string;

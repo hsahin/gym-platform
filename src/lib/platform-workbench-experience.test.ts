@@ -29,7 +29,7 @@ describe("platform workbench experience", () => {
         }),
         expect.objectContaining({
           key: "staff",
-          countLabel: "1 account live",
+          countLabel: "1 medewerkeraccount live",
           statusLabel: "Daarna",
           statusTone: "upcoming",
         }),
@@ -58,7 +58,7 @@ describe("platform workbench experience", () => {
         expect.objectContaining({
           key: "memberships",
           href: "/dashboard/contracts",
-          ctaLabel: "Contract toevoegen",
+          ctaLabel: "Lidmaatschap toevoegen",
         }),
         expect.objectContaining({
           key: "trainers",
@@ -78,7 +78,7 @@ describe("platform workbench experience", () => {
         expect.objectContaining({
           key: "staff",
           href: "/dashboard/settings",
-          ctaLabel: "Team beheren",
+          ctaLabel: "Medewerkers beheren",
         }),
       ]),
     );
@@ -113,7 +113,7 @@ describe("platform workbench experience", () => {
     );
   });
 
-  it("switches the team step to live once owner setup is complete", () => {
+  it("switches the employee step to live once owner setup is complete", () => {
     const experience = getPlatformWorkbenchExperience({
       locationsCount: 1,
       membershipPlansCount: 1,
@@ -129,13 +129,13 @@ describe("platform workbench experience", () => {
     );
     expect(experience.steps[5]).toMatchObject({
       key: "staff",
-      countLabel: "4 accounts live",
-      statusLabel: "Live team",
+      countLabel: "4 medewerkeraccounts live",
+      statusLabel: "Medewerkers live",
       statusTone: "complete",
     });
   });
 
-  it("keeps team invitation optional when the launch core is done but only owner exists", () => {
+  it("keeps employee invitation optional when the launch core is done but only owner exists", () => {
     const experience = getPlatformWorkbenchExperience({
       locationsCount: 1,
       membershipPlansCount: 1,
@@ -148,7 +148,7 @@ describe("platform workbench experience", () => {
 
     expect(experience.steps[5]).toMatchObject({
       key: "staff",
-      countLabel: "1 account live",
+      countLabel: "1 medewerkeraccount live",
       statusLabel: "Optioneel",
       statusTone: "current",
     });
@@ -167,7 +167,7 @@ describe("platform workbench experience", () => {
 
     expect(experience.steps[5]).toMatchObject({
       key: "staff",
-      statusLabel: "Alleen owner",
+      statusLabel: "Alleen eigenaar",
       statusTone: "locked",
     });
   });

@@ -18,7 +18,7 @@ export function LoginExperiencePanel({
       <section className="stage-card space-y-5">
         <div className="space-y-2">
           <p className="eyebrow">
-            {isSetupComplete ? "Launch actief" : "Owner experience"}
+            {isSetupComplete ? "Launch actief" : "Eigenaarservaring"}
           </p>
           <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
             {content.heroTitle}
@@ -33,7 +33,7 @@ export function LoginExperiencePanel({
           <div className="signal-card">
             <p className="text-lg font-semibold text-slate-950">{content.ownerHighlights[0]}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Owners zien direct een merkwaardige ervaring die verkoopt nog voordat
+              Eigenaren zien direct een merkwaardige ervaring die verkoopt nog voordat
               er een gesprek plaatsvindt.
             </p>
           </div>
@@ -42,7 +42,7 @@ export function LoginExperiencePanel({
               {content.ownerHighlights[1]}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Planning, leden, reserveringen en teamaccounts landen in één systeem
+              Planning, leden, reserveringen en medewerkeraccounts landen in één systeem
               dat er ook nog premium uitziet.
             </p>
           </div>
@@ -60,7 +60,7 @@ export function LoginExperiencePanel({
             </p>
           </div>
           <div className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700">
-            {isSetupComplete ? "Klaar voor teamgebruik" : "Zero demo-data"}
+            {isSetupComplete ? "Klaar voor teamgebruik" : "Schone start"}
           </div>
         </div>
 
@@ -73,7 +73,7 @@ export function LoginExperiencePanel({
             {content.reservationCta}
           </Link>
           <Link href="/login" className="cta-primary">
-            {isSetupComplete ? "Ga naar owner login" : "Start de launch"}
+            {isSetupComplete ? "Ga naar inloggen" : "Start de launch"}
           </Link>
         </div>
       </section>

@@ -21,11 +21,11 @@ describe("dashboard page layout", () => {
     expect(getDashboardPageLayout("classes").formTitles).toEqual(["Les plannen"]);
     expect(getDashboardPageLayout("members").formTitles).toEqual(["Lid toevoegen"]);
     expect(getDashboardPageLayout("contracts").formTitles).toEqual([
-      "Contract toevoegen",
-      "Contracten en klanten importeren",
+      "Lidmaatschap toevoegen",
+      "Lidmaatschappen en leden importeren",
     ]);
     expect(getDashboardPageLayout("coaching").formTitles).toEqual([
-      "Workout flow configureren",
+      "Trainingsroute configureren",
     ]);
     expect(getDashboardPageLayout("retention").formTitles).toEqual([
       "Retentiecampagne starten",
@@ -43,12 +43,12 @@ describe("dashboard page layout", () => {
     expect(getDashboardPageLayout("settings").formTitles).toEqual([
       "Vestiging toevoegen",
       "Trainer toevoegen",
-      "Teamlid uitnodigen",
-      "Contracten en klanten importeren",
+      "Medewerker uitnodigen",
+      "Lidmaatschappen en leden importeren",
     ]);
     expect(getDashboardPageLayout("superadmin").formTitles).toEqual([
-      "Gym owner account toevoegen",
-      "Feature flags beheren",
+      "Eigenaar toevoegen",
+      "Clubmodules beheren",
     ]);
   });
 });

@@ -2,15 +2,23 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Chip, Input, Label } from "@heroui/react";
+import { Chip, Input, Label } from "@heroui/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
-import { Segment } from "@heroui-pro/react/segment";
+import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
 import { DashboardEntityActions } from "@/components/DashboardEntityActions";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import { filterManagementRecords } from "@/lib/dashboard-management";
+import {
+  getBillingPaymentMethodLabel,
+  getMemberSignupStatusLabel,
+  getMemberStatusLabel,
+  getWaiverRecordStatusLabel,
+  getWaiverStatusLabel,
+} from "@/lib/ui-labels";
 import {
   EmptyPanel,
   PageSection,
@@ -93,7 +101,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                   >
                     <option value="all">Alle statussen</option>
                     <option value="active">Actief</option>
-                    <option value="trial">Trial</option>
+                    <option value="trial">Proeflid</option>
                     <option value="paused">Gepauzeerd</option>
                     <option value="archived">Gearchiveerd</option>
                   </select>
@@ -114,10 +122,10 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                       </ListView.ItemContent>
                       <div className="flex flex-wrap gap-2">
                         <Chip color={chip.color} size="sm" variant={chip.variant}>
-                          {member.status}
+                          {getMemberStatusLabel(member.status)}
                         </Chip>
                         <Chip size="sm" variant="tertiary">
-                          {member.waiverStatus}
+                          {getWaiverStatusLabel(member.waiverStatus)}
                         </Chip>
                         {snapshot.memberPortalAccessMemberIds.includes(member.id) ? (
                           <Chip size="sm" variant="soft">
@@ -156,7 +164,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                           },
                           {
                             name: "membershipPlanId",
-                            label: "Contract",
+                            label: "Lidmaatschap",
                             defaultValue: member.membershipPlanId,
                             type: "select",
                             options: snapshot.membershipPlans.map((plan) => ({
@@ -181,7 +189,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                             type: "select",
                             options: [
                               { value: "active", label: "Actief" },
-                              { value: "trial", label: "Trial" },
+                              { value: "trial", label: "Proeflid" },
                               { value: "paused", label: "Gepauzeerd" },
                               { value: "archived", label: "Gearchiveerd" },
                             ],
@@ -231,7 +239,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                       </ListView.Description>
                     </ListView.ItemContent>
                     <Chip color={chip.color} size="sm" variant={chip.variant}>
-                      {waiver.status}
+                      {getWaiverRecordStatusLabel(waiver.status)}
                     </Chip>
                   </ListView.Item>
                 );
@@ -258,16 +266,16 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                     <div>
                       <p className="font-medium">{signup.fullName}</p>
                       <p className="text-muted text-sm">
-                        {signup.email} · {signup.paymentMethod}
+                        {signup.email} · {getBillingPaymentMethodLabel(signup.paymentMethod)}
                       </p>
                     </div>
                     <Chip size="sm" variant={signup.status === "pending_review" ? "soft" : "tertiary"}>
-                      {signup.status}
+                      {getMemberSignupStatusLabel(signup.status)}
                     </Chip>
                   </div>
                   <div className="grid gap-1 text-sm">
                     <p className="text-muted">
-                      Contract:{" "}
+                      Lidmaatschap:{" "}
                       {membershipPlansById.get(signup.membershipPlanId) ?? signup.membershipPlanId}
                     </p>
                     <p className="text-muted">
@@ -286,7 +294,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                     <div className="grid gap-3">
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="field-stack">
-                          <Label>Owner notitie</Label>
+                          <Label>Eigenaarsnotitie</Label>
                           <Input
                             fullWidth
                             placeholder="Bijv. intake inplannen na eerste check-in"
@@ -299,7 +307,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                           />
                         </div>
                         <div className="field-stack">
-                          <Label>Portal wachtwoord</Label>
+                          <Label>Ledenportaalwachtwoord</Label>
                           <Input
                             fullWidth
                             placeholder="minimaal 8 tekens"
@@ -385,7 +393,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
           ) : (
             <EmptyPanel
               title="Nog geen self-signups"
-              description="Publieke aanmeldingen verschijnen hier zodra prospects het join-formulier gebruiken."
+              description="Publieke aanmeldingen verschijnen hier zodra prospects het aanmeldformulier gebruiken."
             />
           )}
         </PageSection>
@@ -396,7 +404,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
 
       <PageSection
         title="Ledenmodules"
-        description="Compact overzicht van ledenbeheer, intake en membership lifecycle."
+        description="Compact overzicht van ledenbeheer, intake en lidmaatschapscyclus."
       >
         <FeatureModuleBoard currentPage="members" features={memberFeatures} snapshot={snapshot} />
       </PageSection>

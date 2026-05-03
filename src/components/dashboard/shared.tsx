@@ -59,7 +59,7 @@ export function PageSection({
   readonly children: ReactNode;
 }) {
   return (
-    <section className="grid content-start gap-4">
+    <section className="grid min-w-0 max-w-full content-start gap-4 overflow-x-clip">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 space-y-1.5">
           <h2 className="text-xl font-semibold leading-tight">{title}</h2>
@@ -67,7 +67,7 @@ export function PageSection({
             <p className="text-muted max-w-3xl text-sm leading-6">{description}</p>
           ) : null}
         </div>
-        {actions ? <div className="shrink-0">{actions}</div> : null}
+        {actions ? <div className="min-w-0 md:shrink-0">{actions}</div> : null}
       </div>
       {children}
     </section>
@@ -90,6 +90,18 @@ export function EmptyPanel({
         <EmptyState.Description>{description}</EmptyState.Description>
       </EmptyState.Content>
     </EmptyState>
+  );
+}
+
+export function DisabledActionReason({ reason }: { readonly reason: string | null }) {
+  if (!reason) {
+    return null;
+  }
+
+  return (
+    <p className="text-muted max-w-md text-sm leading-6" data-disabled-reason>
+      {reason}
+    </p>
   );
 }
 

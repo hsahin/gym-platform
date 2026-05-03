@@ -11,17 +11,17 @@ export const MEMBERSHIP_BILLING_CYCLE_OPTIONS: ReadonlyArray<{
   {
     key: "monthly",
     label: "Per maand",
-    helper: "Doorlopend maandcontract voor standaard memberships.",
+    helper: "Doorlopend maandcontract voor standaard lidmaatschappen.",
   },
   {
     key: "semiannual",
     label: "6 maanden",
-    helper: "Halve jaartermijn voor commitments met meer retentie en voorspelbare omzet.",
+    helper: "Halve jaartermijn voor leden die langer blijven en voorspelbare omzet geven.",
   },
   {
     key: "annual",
     label: "Per jaar",
-    helper: "Jaarcontract voor langlopende members en sterkere cashflow.",
+    helper: "Jaarcontract voor langlopende leden en sterkere kasstroom.",
   },
 ] as const;
 

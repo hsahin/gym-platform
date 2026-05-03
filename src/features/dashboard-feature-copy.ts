@@ -13,7 +13,7 @@ export const DASHBOARD_FEATURE_CATEGORY_LABELS: Record<
   string
 > = {
   business: "Bedrijf beheren",
-  booking: "Boekingsopties",
+  booking: "Reserveringen",
   coaching: "Coaching",
   retention: "Retentie",
   billing: "Betalingen",
@@ -28,16 +28,16 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
     description: "Beheer leden, lidmaatschappen, waivers en toegang tot het ledenportaal.",
   },
   "staff.management": {
-    title: "Teambeheer",
-    description: "Nodig owners, managers, trainers en frontdeskmedewerkers uit per gym.",
+    title: "Medewerkers",
+    description: "Nodig eigenaren, managers, trainers en baliemedewerkers uit per gym.",
   },
   "access.24_7": {
     title: "24/7 toegang",
-    description: "Beheer remote toegang, owner-acties en beleid voor slimme sloten.",
+    description: "Beheer toegang op afstand, beheerdersacties en beleid voor slimme sloten.",
   },
   "checkin.studio": {
-    title: "Studio check-in",
-    description: "Registreer frontdesk- en QR-check-ins direct op lesaanwezigheid.",
+    title: "Studio-aanwezigheid",
+    description: "Registreer balie- en QR-aanwezigheid direct op lessen.",
   },
   "analytics.advanced": {
     title: "Geavanceerde analytics",
@@ -45,15 +45,15 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
   },
   "clubs.multi_location": {
     title: "Meerdere vestigingen",
-    description: "Beheer meerdere gyms vanuit één tenant met vestigingsspecifieke context.",
+    description: "Beheer meerdere gyms vanuit één clubomgeving met vestigingsspecifieke context.",
   },
   "commerce.webshop_pos": {
     title: "Webshop en kassa",
-    description: "Activeer verkoop op locatie, productbundels en eenvoudige retail-checkout.",
+    description: "Activeer verkoop per vestiging, productbundels en eenvoudige kassa-afrekening.",
   },
   "booking.scheduling": {
     title: "Roosterplanning",
-    description: "Plan herhalende lessen, capaciteit, trainers en focus vanuit één flow.",
+    description: "Plan herhalende lessen, capaciteit, trainers en focus vanuit één scherm.",
   },
   "booking.group_classes": {
     title: "Groepslessen boeken",
@@ -68,20 +68,20 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
     description: "Publiceer proeflesmomenten vanuit dezelfde roosterlaag.",
   },
   "booking.credit_system": {
-    title: "Creditsysteem",
-    description: "Koppel lesbundels en credits aan lidmaatschappen en losse producten.",
+    title: "Strippenkaarten",
+    description: "Koppel rittenkaarten en lesbundels aan lidmaatschappen en losse producten.",
   },
   "coaching.workout_plans": {
-    title: "Workoutplannen",
+    title: "Trainingsplannen",
     description: "Bouw programma's, templates en progressies voor leden.",
   },
   "coaching.nutrition": {
     title: "Voedingscoaching",
-    description: "Deel voedingsbegeleiding, check-ins en doelgerichte ondersteuning.",
+    description: "Deel voedingsbegeleiding, voortgangsmomenten en doelgerichte ondersteuning.",
   },
   "coaching.on_demand_videos": {
-    title: "On-demand video's",
-    description: "Bied premium videotheken en member-only techniekcontent aan.",
+    title: "Videotheek op aanvraag",
+    description: "Bied verdiepende videotheken en techniekcontent alleen voor leden aan.",
   },
   "coaching.progress_tracking": {
     title: "Voortgang bijhouden",
@@ -89,7 +89,7 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
   },
   "coaching.heart_rate": {
     title: "Hartslagcoaching",
-    description: "Gebruik wearables en zone-signalen in trainingsflows.",
+    description: "Gebruik sporthorloges en zonesignalen in trainingsbegeleiding.",
   },
   "coaching.ai_max": {
     title: "MAX AI Coach",
@@ -97,27 +97,27 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
   },
   "retention.planner": {
     title: "Retentieplanner",
-    description: "Volg churn-signalen en start opvolging voordat leden afhaken.",
+    description: "Volg opzegsignalen en start opvolging voordat leden afhaken.",
   },
   "retention.community_groups": {
-    title: "Community en groepen",
-    description: "Maak clubgroepen, community's en accountability-cirkels aan.",
+    title: "Clubgroepen",
+    description: "Maak clubgroepen en vaste verantwoordingskringen aan.",
   },
   "retention.challenges_rewards": {
-    title: "Challenges en beloningen",
-    description: "Run challenges, streaks en beloningen om leden betrokken te houden.",
+    title: "Uitdagingen en beloningen",
+    description: "Organiseer uitdagingen, reeksen en beloningen om leden betrokken te houden.",
   },
   "retention.questionnaire": {
     title: "Vragenlijsten",
-    description: "Verzamel feedback, readiness en intentie met configureerbare vragenlijsten.",
+    description: "Verzamel feedback, paraatheid en intentie met configureerbare vragenlijsten.",
   },
   "retention.pro_content": {
-    title: "PRO+ content",
-    description: "Publiceer premium educatie en gestructureerde journeys voor leden.",
+    title: "PRO+ ledencontent",
+    description: "Publiceer verdiepende educatie en gestructureerde ledentrajecten.",
   },
   "retention.fitzone": {
     title: "FitZone",
-    description: "Bouw branded ervaringen rond gewoontes, herstel en lifestyle.",
+    description: "Bouw merkervaringen rond gewoontes, herstel en leefstijl.",
   },
   "billing.processing": {
     title: "Betaalverwerking",
@@ -133,22 +133,22 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
   },
   "billing.autocollect": {
     title: "AutoCollect",
-    description: "Automatiseer opvolging, retries en collection queues voor owners.",
+    description: "Automatiseer betaalopvolging, herinneringen en open betaalacties voor gymteams.",
   },
   "mobile.white_label": {
-    title: "White-label app",
+    title: "Merkapp",
     description: "Toon het gymmerk in een configureerbare mobiele app voor leden.",
   },
   "mobile.fitness_coaching": {
     title: "Fitnesscoaching-app",
-    description: "Breng coachingacties, roosters en member journeys naar mobiel.",
+    description: "Breng coachingacties, roosters en ledentrajecten naar mobiel.",
   },
   "mobile.nutrition_coaching": {
     title: "Voedingscoaching-app",
-    description: "Maak voeding, accountability en check-ins beschikbaar in de app.",
+    description: "Maak voeding, opvolging en voortgangsmomenten beschikbaar in de app.",
   },
   "mobile.checkin": {
-    title: "Mobiele check-in",
+    title: "Mobiele aankomst",
     description: "Laat leden mobiel of via QR aankomen bij lessen en studio's.",
   },
   "marketing.email": {
@@ -160,8 +160,8 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
     description: "Publiceer banners, upsells en conversiemomenten in de app.",
   },
   "marketing.leads": {
-    title: "Leadbeheer",
-    description: "Volg leads, opvolging en conversie van proefles naar contract.",
+    title: "Aanvraagbeheer",
+    description: "Volg aanvragen, opvolging en conversie van proefles naar contract.",
   },
   "integrations.hardware": {
     title: "Ondersteunde hardware",
@@ -172,8 +172,8 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
     description: "Koppel CRM, messaging, BI en externe bedrijfssoftware.",
   },
   "integrations.equipment": {
-    title: "Equipmentkoppelingen",
-    description: "Gebruik workout- en aanwezigheidsdata uit verbonden apparatuur.",
+    title: "Apparaatkoppelingen",
+    description: "Gebruik trainings- en aanwezigheidsdata uit verbonden apparatuur.",
   },
   "integrations.virtuagym_connect": {
     title: "Virtuagym Connect",
@@ -181,7 +181,7 @@ export const DASHBOARD_FEATURE_UI_COPY: Record<string, FeatureCopy> = {
   },
   "integrations.body_composition": {
     title: "Lichaamssamenstelling",
-    description: "Koppel metingen en scanapparatuur aan member progressie.",
+    description: "Koppel metingen en scanapparatuur aan ledenvoortgang.",
   },
 };
 
@@ -224,11 +224,11 @@ export function getDashboardFeatureFlagStateLabel(enabled: boolean) {
 export function getDashboardFeatureReasonLabel(reason: string) {
   switch (reason) {
     case "tenant_override":
-      return "Tenantinstelling";
+      return "Clubinstelling";
     case "actor_override":
       return "Gebruikersinstelling";
     case "rollout":
-      return "Rollout";
+      return "Standaard beschikbaar";
     default:
       return "Standaard";
   }

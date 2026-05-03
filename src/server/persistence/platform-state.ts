@@ -4018,7 +4018,7 @@ export async function createLocalTenantAppointmentPack(
     const tenant = requireTenantForMutation(
       current,
       tenantId,
-      "Richt eerst het platform in voordat je credit packs toevoegt.",
+      "Richt eerst het platform in voordat je strippenkaarten toevoegt.",
       "Gym niet gevonden voor appointments.",
     );
     const now = new Date().toISOString();
@@ -4072,13 +4072,13 @@ export async function updateLocalTenantAppointmentPack(
     const tenant = requireTenantForMutation(
       current,
       tenantId,
-      "Richt eerst het platform in voordat je credit packs bijwerkt.",
+      "Richt eerst het platform in voordat je strippenkaarten bijwerkt.",
       "Gym niet gevonden voor appointments.",
     );
     const existing = tenant.moduleData.appointments.creditPacks.find((entry) => entry.id === input.id);
 
     if (!existing) {
-      throw new AppError("Credit pack niet gevonden.", {
+      throw new AppError("Strippenkaart niet gevonden.", {
         code: "RESOURCE_NOT_FOUND",
         details: { tenantId, packId: input.id },
       });
