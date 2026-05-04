@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src next.config.mjs vitest.config.ts --ext .js,.mjs,.ts,.tsx --max-warnings=0",
+    "lint": "eslint src next.config.mjs vitest.config.ts capacitor.config.ts --ext .js,.mjs,.ts,.tsx --max-warnings=0",
+    "mobile:sync": "cap sync",
+    "mobile:ios": "cap open ios",
+    "mobile:android": "cap open android",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -14,6 +17,7 @@
     "ci:verify": "npm run lint && npm run typecheck && npm run build && npm run test:coverage"
   },
   "dependencies": {
+    "@capacitor/core": "^8.3.1",
     "@claimtech/auth": "0.2.3",
     "@claimtech/cache": "0.2.3",
     "@claimtech/core": "0.2.3",
@@ -48,6 +52,9 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/ios": "^8.3.1",
     "@types/node": "^20",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

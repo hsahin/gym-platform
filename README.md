@@ -82,6 +82,33 @@ dashboardpagina's zoals `/dashboard/members`, `/dashboard/contracts`,
 `/dashboard/payments`, `/dashboard/smartdoors`, `/dashboard/locations` en
 `/dashboard/staff`.
 
+## Native leden-app
+
+De iOS- en Android-apps staan in `ios/` en `android/` en gebruiken Capacitor.
+Deze app is gericht op leden en start op de ledenomgeving `/reserve`, niet op
+het eigenaar-dashboard.
+
+De live ledenportal staat standaard ingesteld op:
+
+```bash
+https://gym-platform-vc9yk.ondigitalocean.app/reserve
+```
+
+Voor een andere omgeving kun je tijdens syncen of bouwen `CAPACITOR_SERVER_URL`
+zetten, bijvoorbeeld:
+
+```bash
+CAPACITOR_SERVER_URL=https://gym-platform-vc9yk.ondigitalocean.app/reserve npm run mobile:sync
+```
+
+Handige commands:
+
+```bash
+npm run mobile:sync
+npm run mobile:ios
+npm run mobile:android
+```
+
 ## Productie-eisen
 
 De app draait bewust niet op local state, browser localStorage of memory

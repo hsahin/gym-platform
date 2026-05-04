@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GymOS Leden</string>
+    <string name="title_activity_main">GymOS Leden</string>
+    <string name="package_name">nl.gymos.members</string>
+    <string name="custom_url_scheme">nl.gymos.members</string>
+</resources>
