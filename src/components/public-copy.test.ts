@@ -97,8 +97,14 @@ describe("public surface copy", () => {
     expect(source).toContain('action="/api/auth/logout"');
     expect(source).toContain("Uitloggen");
     expect(source).toContain("Mijn reserveringen");
+    expect(source).toContain("Vandaag in je club");
+    expect(source).toContain("Snel regelen");
+    expect(source).toContain("Annuleer plek");
+    expect(source).toContain("Rooster bekijken");
+    expect(source).toContain("Betalingen en contracten");
     expect(source).toContain("aangemeld");
     expect(source).toContain("Lessen en gymplekken waarvoor je al bent aangemeld.");
+    expect(source).toContain("cancelMemberReservation");
     expect(source).toContain("canUseSelfService");
     expect(source).toContain("snapshot.selfServiceEnabled");
     expect(source).toContain("shouldShowSelfService");

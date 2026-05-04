@@ -3,6 +3,19 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Card, Chip, Input, Label, TextArea } from "@heroui/react";
+import {
+  CalendarDays,
+  CreditCard,
+  Dumbbell,
+  FileText,
+  LifeBuoy,
+  ReceiptText,
+  RotateCcw,
+  Sparkles,
+  TicketCheck,
+  WalletCards,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
@@ -16,6 +29,7 @@ import { formatEuroFromCents } from "@/lib/currency";
 import { buildMutationHeaders } from "@/lib/mutation-security-client";
 import type {
   MemberReservationSnapshot,
+  MemberReservationSummary,
   PublicReservationSnapshot,
 } from "@/server/types";
 
@@ -24,11 +38,29 @@ type ReservationPortalSnapshot =
   | MemberReservationSnapshot
   | PublicReservationSnapshot;
 
+const EMPTY_MEMBER_RESERVATIONS: ReadonlyArray<MemberReservationSummary> = [];
+
 function formatSessionMoment(startsAt: string) {
   return new Intl.DateTimeFormat("nl-NL", {
     weekday: "long",
     day: "2-digit",
     month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Amsterdam",
+  }).format(new Date(startsAt));
+}
+
+function formatSessionDateLabel(startsAt: string) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "Europe/Amsterdam",
+  }).format(new Date(startsAt));
+}
+
+function formatSessionTimeLabel(startsAt: string) {
+  return new Intl.DateTimeFormat("nl-NL", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Europe/Amsterdam",
@@ -76,7 +108,9 @@ export function PublicReservationPortal({
     Boolean(snapshot.tenantSlug) &&
     canUseSelfService &&
     Boolean(selfService);
-  const myReservations = isMemberFlow ? snapshot.myReservations : [];
+  const myReservations = isMemberFlow
+    ? snapshot.myReservations
+    : EMPTY_MEMBER_RESERVATIONS;
   const publicBookingAccess = isMemberFlow
     ? null
     : snapshot.bookingAccess ?? {
@@ -119,6 +153,13 @@ export function PublicReservationPortal({
     alreadyExisted: boolean;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [cancelledReservationIds, setCancelledReservationIds] = useState<
+    ReadonlyArray<string>
+  >([]);
+  const [cancelingReservationId, setCancelingReservationId] = useState<string | null>(
+    null,
+  );
+  const [isCancelPending, startCancelTransition] = useTransition();
 
   useEffect(() => {
     setBookingStep(snapshot.tenantSlug ? "classes" : "club");
@@ -130,6 +171,7 @@ export function PublicReservationPortal({
     setPauseStartsAt("");
     setPauseEndsAt("");
     setPauseReason("");
+    setCancelledReservationIds([]);
   }, [snapshot.classSessions, snapshot.tenantSlug]);
 
   const selectedClass = useMemo(
@@ -153,7 +195,21 @@ export function PublicReservationPortal({
   const remainingSpots = selectedClass
     ? Math.max(selectedClass.capacity - selectedClass.bookedCount, 0)
     : 0;
+  const visibleReservations = useMemo(
+    () =>
+      myReservations.filter(
+        (reservation) => !cancelledReservationIds.includes(reservation.id),
+      ),
+    [cancelledReservationIds, myReservations],
+  );
+  const nextReservation = visibleReservations[0] ?? null;
+  const nextBookableClass = snapshot.classSessions[0] ?? null;
   const primaryContract = selfService?.contracts[0] ?? null;
+  const memberServiceItemCount =
+    (selfService?.contracts.length ?? 0) +
+    (selfService?.receipts.length ?? 0) +
+    (selfService?.paymentMethodRequests.length ?? 0) +
+    (selfService?.pauseRequests.length ?? 0);
   const paymentMethodRequestReady = Boolean(
     primaryContract && requestedMethodLabel.trim(),
   );
@@ -238,6 +294,67 @@ export function PublicReservationPortal({
     });
   }
 
+  function cancelMemberReservation(reservation: MemberReservationSummary) {
+    if (!isMemberFlow || !snapshot.tenantSlug) {
+      toast.error("Annuleren kan alleen als je bent ingelogd als lid.");
+      return;
+    }
+
+    if (reservation.status === "checked_in") {
+      toast.error("Een ingecheckte reservering kan niet meer geannuleerd worden.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Wil je je plek voor ${reservation.classTitle} echt annuleren?`,
+      )
+    ) {
+      return;
+    }
+
+    startCancelTransition(async () => {
+      setCancelingReservationId(reservation.id);
+
+      try {
+        const response = await fetch(
+          `/api/member/reservations/${encodeURIComponent(reservation.id)}/cancel`,
+          {
+            method: "PATCH",
+            headers: await buildMutationHeaders(),
+            body: JSON.stringify({
+              tenantSlug: snapshot.tenantSlug,
+              expectedVersion: reservation.version,
+            }),
+          },
+        );
+        const payload = (await response.json()) as {
+          ok: boolean;
+          error?: { message?: string };
+        };
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(
+            payload.error?.message ?? "Annuleren is op dit moment niet gelukt.",
+          );
+        }
+
+        setCancelledReservationIds((current) =>
+          current.includes(reservation.id) ? current : [...current, reservation.id],
+        );
+        toast.success("Je plek is geannuleerd.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Annuleren is op dit moment niet gelukt.",
+        );
+      } finally {
+        setCancelingReservationId(null);
+      }
+    });
+  }
+
   async function handleMemberSelfServiceSubmit(input: {
     readonly operation: "request_payment_method_update" | "request_pause";
     readonly body: Record<string, unknown>;
@@ -281,7 +398,11 @@ export function PublicReservationPortal({
   }
 
   return (
-    <div className="section-stack py-6 md:py-8">
+    <div
+      className={`member-app-shell section-stack py-6 md:py-8 ${
+        isMemberFlow ? "member-app-shell--member" : ""
+      }`}
+    >
       <header className="app-header">
         <div className="app-header__brand-copy">
           <p className="text-sm font-semibold">Lesreserveringen</p>
@@ -361,6 +482,139 @@ export function PublicReservationPortal({
         </Card>
       ) : null}
 
+      {isMemberFlow && canBrowseClasses ? (
+        <section className="member-app-hero" aria-labelledby="member-app-title">
+          <div className="member-app-hero__copy">
+            <p className="member-app-eyebrow">
+              <Sparkles aria-hidden="true" size={16} />
+              Ledenapp
+            </p>
+            <h1 id="member-app-title">Vandaag in je club</h1>
+            <p>
+              Boek je training, beheer je planning en regel betalingen of service
+              zonder langs de balie te hoeven.
+            </p>
+            <div className="member-app-quick-actions" aria-label="Snel regelen">
+              <button type="button" onClick={() => setBookingStep("classes")}>
+                <CalendarDays aria-hidden="true" size={18} />
+                Rooster bekijken
+              </button>
+              <a href="#mijn-reserveringen">
+                <TicketCheck aria-hidden="true" size={18} />
+                Mijn planning
+              </a>
+              {shouldShowSelfService ? (
+                <>
+                  <a href="#ledenservice">
+                    <LifeBuoy aria-hidden="true" size={18} />
+                    Ledenservice
+                  </a>
+                  <a href="#contracten-betalingen">
+                    <WalletCards aria-hidden="true" size={18} />
+                    Betalingen en contracten
+                  </a>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="member-app-next-panel">
+            <div className="member-app-next-panel__label">
+              <Dumbbell aria-hidden="true" size={18} />
+              {nextReservation ? "Volgende reservering" : "Eerstvolgende optie"}
+            </div>
+            {nextReservation ? (
+              <div className="member-app-next-panel__body">
+                <div className="member-app-date-tile">
+                  <span>{formatSessionDateLabel(nextReservation.startsAt)}</span>
+                  <strong>{formatSessionTimeLabel(nextReservation.startsAt)}</strong>
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <p className="font-semibold">{nextReservation.classTitle}</p>
+                  <p className="text-sm text-muted">
+                    {nextReservation.locationName} · {nextReservation.trainerName}
+                  </p>
+                  <Chip
+                    color={nextReservation.status === "waitlisted" ? "warning" : "success"}
+                    size="sm"
+                    variant="soft"
+                  >
+                    {getBookingStatusLabel(nextReservation.status)}
+                  </Chip>
+                </div>
+              </div>
+            ) : nextBookableClass ? (
+              <div className="member-app-next-panel__body">
+                <div className="member-app-date-tile">
+                  <span>{formatSessionDateLabel(nextBookableClass.startsAt)}</span>
+                  <strong>{formatSessionTimeLabel(nextBookableClass.startsAt)}</strong>
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <p className="font-semibold">{nextBookableClass.title}</p>
+                  <p className="text-sm text-muted">
+                    {nextBookableClass.locationName} ·{" "}
+                    {getReservationCoachLabel(nextBookableClass)}
+                  </p>
+                  <Button
+                    size="sm"
+                    onPress={() => {
+                      setSelectedClassSessionId(nextBookableClass.id);
+                      setBookingStep("confirm");
+                    }}
+                  >
+                    <TicketCheck aria-hidden="true" size={16} />
+                    Kies deze les
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted">
+                Er staat nog geen les open. Check later opnieuw of vraag je club naar het rooster.
+              </p>
+            )}
+          </div>
+
+          <div className="member-app-checklist" aria-label="Wat je als lid kunt regelen">
+            {[
+              {
+                icon: CalendarDays,
+                label: "Lessen boeken",
+                value: `${snapshot.classSessions.length} opties`,
+              },
+              {
+                icon: TicketCheck,
+                label: "Planning beheren",
+                value: `${visibleReservations.length} actief`,
+              },
+              {
+                icon: CreditCard,
+                label: "Betaalzaken",
+                value: shouldShowSelfService
+                  ? `${memberServiceItemCount} onderdelen`
+                  : "Via club",
+              },
+              {
+                icon: FileText,
+                label: "Contracten",
+                value: `${selfService?.contracts.length ?? 0} document${
+                  (selfService?.contracts.length ?? 0) === 1 ? "" : "en"
+                }`,
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div key={item.label} className="member-app-check">
+                  <Icon aria-hidden="true" size={18} />
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       {canReserve && snapshot.tenantSlug ? (
         <Segment selectedKey={bookingStep === "done" ? "confirm" : bookingStep} size="sm">
           <Segment.Item id="classes">Lessen</Segment.Item>
@@ -418,12 +672,12 @@ export function PublicReservationPortal({
             </div>
 
             {isMemberFlow ? (
-              <Card className="rounded-[28px] border-border/80">
+              <Card id="mijn-reserveringen" className="rounded-[28px] border-border/80">
                 <Card.Header className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Card.Title>Mijn reserveringen</Card.Title>
                     <Chip size="sm" variant="soft">
-                      {myReservations.length} aangemeld
+                      {visibleReservations.length} aangemeld
                     </Chip>
                   </div>
                   <Card.Description>
@@ -431,11 +685,11 @@ export function PublicReservationPortal({
                   </Card.Description>
                 </Card.Header>
                 <Card.Content className="grid gap-3">
-                  {myReservations.length > 0 ? (
-                    myReservations.map((reservation) => (
+                  {visibleReservations.length > 0 ? (
+                    visibleReservations.map((reservation) => (
                       <div
                         key={reservation.id}
-                        className="rounded-2xl border border-border/70 bg-surface p-4"
+                        className="member-reservation-card rounded-2xl border border-border/70 bg-surface p-4"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="space-y-1">
@@ -448,15 +702,33 @@ export function PublicReservationPortal({
                               {reservation.trainerName} · {reservation.durationMinutes} min
                             </p>
                           </div>
-                          <Chip
-                            color={
-                              reservation.status === "waitlisted" ? "warning" : "success"
-                            }
-                            size="sm"
-                            variant="soft"
-                          >
-                            {getBookingStatusLabel(reservation.status)}
-                          </Chip>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Chip
+                              color={
+                                reservation.status === "waitlisted" ? "warning" : "success"
+                              }
+                              size="sm"
+                              variant="soft"
+                            >
+                              {getBookingStatusLabel(reservation.status)}
+                            </Chip>
+                            {reservation.status !== "checked_in" ? (
+                              <Button
+                                isDisabled={
+                                  isCancelPending &&
+                                  cancelingReservationId === reservation.id
+                                }
+                                size="sm"
+                                variant="outline"
+                                onPress={() => cancelMemberReservation(reservation)}
+                              >
+                                <XCircle aria-hidden="true" size={15} />
+                                {cancelingReservationId === reservation.id
+                                  ? "Annuleren..."
+                                  : "Annuleer plek"}
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     ))
@@ -764,7 +1036,7 @@ export function PublicReservationPortal({
       ) : null}
 
       {shouldShowSelfService && selfService ? (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section id="ledenservice" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <Card className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
               <Card.Title>Ledenservice</Card.Title>
@@ -827,6 +1099,7 @@ export function PublicReservationPortal({
                    </p>
                  ) : null}
                  <Button isDisabled={isSelfServicePending || !paymentMethodRequestReady} type="submit">
+                   <CreditCard aria-hidden="true" size={16} />
                    {isSelfServicePending ? "Versturen..." : "Vraag update aan"}
                  </Button>
               </form>
@@ -895,13 +1168,14 @@ export function PublicReservationPortal({
                    </p>
                  ) : null}
                  <Button isDisabled={isSelfServicePending || !pauseRequestReady} type="submit" variant="secondary">
+                   <RotateCcw aria-hidden="true" size={16} />
                    {isSelfServicePending ? "Versturen..." : "Vraag pauze aan"}
                  </Button>
               </form>
             </Card.Content>
           </Card>
 
-          <Card className="rounded-[28px] border-border/80">
+          <Card id="contracten-betalingen" className="rounded-[28px] border-border/80">
             <Card.Header className="space-y-3">
               <Card.Title>Jouw contracten en betalingen</Card.Title>
               <Card.Description>
@@ -974,6 +1248,31 @@ export function PublicReservationPortal({
             </Card.Content>
           </Card>
         </section>
+      ) : null}
+
+      {isMemberFlow && canBrowseClasses ? (
+        <nav className="member-app-dock" aria-label="Ledenapp menu">
+          <button type="button" onClick={() => setBookingStep("classes")}>
+            <CalendarDays aria-hidden="true" size={18} />
+            Lessen
+          </button>
+          <a href="#mijn-reserveringen">
+            <TicketCheck aria-hidden="true" size={18} />
+            Planning
+          </a>
+          {shouldShowSelfService ? (
+            <>
+              <a href="#ledenservice">
+                <LifeBuoy aria-hidden="true" size={18} />
+                Service
+              </a>
+              <a href="#contracten-betalingen">
+                <ReceiptText aria-hidden="true" size={18} />
+                Betalen
+              </a>
+            </>
+          ) : null}
+        </nav>
       ) : null}
     </div>
   );

@@ -1807,11 +1807,27 @@ describe("gym platform services", () => {
       title: "Sunday Mobility",
       locationId: location.id,
       trainerId: trainer.id,
-      startsAt: "2026-04-27T10:00:00.000Z",
+      startsAt: daysFromNow(3),
       durationMinutes: 45,
       capacity: 12,
       level: "beginner",
       focus: "Mobility",
+    });
+    const pastClassSession = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Oude les",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-04-01T10:00:00.000Z",
+      durationMinutes: 45,
+      capacity: 12,
+      level: "beginner",
+      focus: "Mobility",
+    });
+    await services.createBooking(ownerActor, tenantContext, {
+      memberId: member.id,
+      classSessionId: pastClassSession.id,
+      idempotencyKey: "past-member-app-booking",
+      source: "frontdesk",
     });
     const memberActor = createMemberViewer(member.email, tenantContext.tenantId, member.fullName);
 
@@ -1839,6 +1855,11 @@ describe("gym platform services", () => {
         status: "confirmed",
       }),
     ]);
+    expect(snapshot.myReservations).not.toContainEqual(
+      expect.objectContaining({
+        classSessionId: pastClassSession.id,
+      }),
+    );
   });
 
   it("allows trial members to reserve trainerless one-hour open gym capacity slots", async () => {
@@ -2316,7 +2337,7 @@ describe("gym platform services", () => {
         expect.objectContaining({
           memberName: "Lena Post",
           amountCents: 1750,
-          reason: expect.stringContaining("Late cancellation"),
+          reason: expect.stringContaining("Annuleringskosten"),
         }),
       ]),
     );

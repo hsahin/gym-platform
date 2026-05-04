@@ -4,6 +4,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { PATCH as memberReservationCancelRoute } from "@/app/api/member/reservations/[bookingId]/cancel/route";
 import { POST as memberMobileSelfServiceRoute } from "@/app/api/member/mobile-self-service/route";
 import { POST as publicMemberSignupRoute } from "@/app/api/public/member-signups/route";
 import { POST as publicReservationsRoute } from "@/app/api/public/reservations/route";
@@ -432,6 +433,111 @@ describe("api route integrations", () => {
     });
     expect(dashboard.bookings).toHaveLength(1);
     expect(dashboard.bookings[0]?.source).toBe("member_app");
+  });
+
+  it("lets members cancel their own reservation from the member app", async () => {
+    const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 50,
+      managerName: "Saar de Jong",
+      amenities: ["Recovery zone"],
+    });
+    const membershipPlan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["All classes"],
+    });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Romy de Wit",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: ["NASM-CPT"],
+    });
+    const session = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Forge HIIT",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-05-04T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 16,
+      level: "mixed",
+      focus: "engine",
+    });
+    await services.createMember(ownerActor, tenantContext, {
+      fullName: "Nina de Boer",
+      email: "nina@northside.test",
+      phone: "0611112222",
+      phoneCountry: "NL",
+      membershipPlanId: membershipPlan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: ["member-app"],
+      waiverStatus: "complete",
+      portalPassword: "member-pass-123",
+    });
+
+    const { token: memberToken } = await loginAndExtractSession(
+      "nina@northside.test",
+      "member-pass-123",
+    );
+    const reservationResponse = await publicReservationsRoute(
+      createMutationRequest(
+        "http://localhost/api/public/reservations",
+        {
+          tenantSlug: state.tenant.id,
+          classSessionId: session.id,
+        },
+        { token: memberToken },
+      ),
+    );
+    const reservationPayload = (await reservationResponse.json()) as {
+      data: {
+        booking: {
+          id: string;
+          version: number;
+        };
+      };
+    };
+
+    const cancelResponse = await memberReservationCancelRoute(
+      createMutationRequest(
+        `http://localhost/api/member/reservations/${reservationPayload.data.booking.id}/cancel`,
+        {
+          tenantSlug: state.tenant.id,
+          expectedVersion: reservationPayload.data.booking.version,
+        },
+        { method: "PATCH", token: memberToken },
+      ),
+      {
+        params: Promise.resolve({ bookingId: reservationPayload.data.booking.id }),
+      },
+    );
+    const cancelPayload = (await cancelResponse.json()) as {
+      ok: boolean;
+      data: {
+        booking: {
+          status: string;
+        };
+      };
+    };
+
+    expect(cancelResponse.status).toBe(200);
+    expect(cancelPayload.ok).toBe(true);
+    expect(cancelPayload.data.booking.status).toBe("cancelled");
+
+    const refreshedServices = await getGymPlatformServices();
+    const refreshedTenantContext = refreshedServices.createRequestTenantContext(
+      ownerActor,
+      tenantContext.tenantId,
+    );
+    const dashboard = await refreshedServices.getDashboardSnapshot(ownerActor, refreshedTenantContext, {
+      page: "classes",
+    });
+    expect(dashboard.bookings[0]?.status).toBe("cancelled");
   });
 
   it("rejects anonymous public reservations and keeps booking member-only", async () => {

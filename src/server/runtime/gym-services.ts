@@ -3264,6 +3264,18 @@ export interface GymPlatformServices {
     messagePreview: string;
     messageReceipt: MessageReceipt;
   }>;
+  cancelMemberReservation(
+    actor: AuthActor,
+    input: {
+      readonly tenantSlug?: string;
+      readonly bookingId: string;
+      readonly expectedVersion: number;
+    },
+  ): Promise<{
+    booking: ClassBooking;
+    promotedBooking?: ClassBooking;
+    promotedMessagePreview?: string;
+  }>;
   cancelBooking(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -3424,6 +3436,116 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       alreadyExisted: bookingResult.alreadyExisted,
       messagePreview,
       messageReceipt,
+    };
+  }
+
+  async function cancelBookingFlow(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: CancelBookingInput,
+  ) {
+    assertAccess(runtime, actor, tenantContext, ["classes.book"]);
+    await assertFeatureEnabled(actor, tenantContext, "booking.group_classes");
+
+    const result = await runtime.store.cancelBooking(tenantContext, input);
+    const classSession = await runtime.store.getClassSession(
+      tenantContext,
+      result.booking.classSessionId,
+    );
+    const location = classSession
+      ? (await runtime.store.listLocations(tenantContext)).find(
+          (entry) => entry.id === classSession.locationId,
+        )
+      : null;
+    const bookingPolicy = await buildBookingPolicySummary(tenantContext);
+
+    await runtime.auditLogger.write({
+      action: "booking.cancelled",
+      category: "bookings",
+      actorId: actor.subjectId,
+      tenantId: tenantContext.tenantId,
+      metadata: {
+        bookingId: result.booking.id,
+        classSessionId: result.booking.classSessionId,
+        memberId: result.booking.memberId,
+      },
+    });
+
+    if (
+      classSession &&
+      bookingPolicy.lateCancelFeeCents > 0 &&
+      hoursUntil(classSession.startsAt) <= bookingPolicy.cancellationWindowHours
+    ) {
+      const [autocollectFeature, paymentRequestFeature] = await Promise.all([
+        evaluateFeatureFlag(actor, tenantContext, "billing.autocollect"),
+        evaluateFeatureFlag(
+          actor,
+          tenantContext,
+          getBillingFeatureForPaymentMethod("payment_request"),
+        ),
+      ]);
+
+      if (autocollectFeature.enabled && paymentRequestFeature.enabled) {
+        await createLocalTenantCollectionCase(tenantContext.tenantId, {
+          memberId: result.booking.memberId,
+          memberName: result.booking.memberName,
+          paymentMethod: "payment_request",
+          status: "open",
+          amountCents: bookingPolicy.lateCancelFeeCents,
+          reason: `Annuleringskosten voor ${classSession.title}`,
+          dueAt: new Date().toISOString(),
+          notes: `Automatisch aangemaakt omdat de annulering binnen ${bookingPolicy.cancellationWindowHours} uur voor aanvang viel.`,
+        });
+      }
+    }
+
+    let promotedMessagePreview: string | undefined;
+
+    if (result.promotedBooking && classSession) {
+      promotedMessagePreview = runtime.templateRenderer.render(
+        "Hoi {{memberName}}, er is een plek vrijgekomen voor {{className}} op {{slot}} bij {{location}}. Je reservering is nu bevestigd.",
+        {
+          memberName: result.promotedBooking.memberName,
+          className: classSession.title,
+          slot: formatClassSlot(classSession.startsAt),
+          location: location?.name ?? "je sportschool",
+        },
+      );
+
+      await runtime.auditLogger.write({
+        action: "booking.promoted_from_waitlist",
+        category: "bookings",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          bookingId: result.promotedBooking.id,
+          classSessionId: result.promotedBooking.classSessionId,
+          memberId: result.promotedBooking.memberId,
+        },
+      });
+
+      await runtime.messagingProvider.send({
+        channel: "whatsapp",
+        recipient: result.promotedBooking.phone,
+        body: promotedMessagePreview,
+        tenantContext,
+        actor,
+        metadata: {
+          bookingId: result.promotedBooking.id,
+          source: "waitlist-promotion",
+        },
+      });
+    }
+
+    await createTenantAwareCache(runtime, tenantContext).delete(
+      "dashboard",
+      actor.subjectId,
+    );
+
+    return {
+      booking: result.booking,
+      promotedBooking: result.promotedBooking,
+      promotedMessagePreview,
     };
   }
 
@@ -3614,11 +3736,16 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     const classSessionById = new Map(
       classSessions.map((classSession) => [classSession.id, classSession] as const),
     );
+    const reservableClassSessions = filterReservationRosterWindow(classSessions);
+    const reservableClassSessionIds = new Set(
+      reservableClassSessions.map((classSession) => classSession.id),
+    );
     const myReservations = bookings
       .filter(
         (booking) =>
           booking.memberId === selectedMembership.member.id &&
-          booking.status !== "cancelled",
+          booking.status !== "cancelled" &&
+          reservableClassSessionIds.has(booking.classSessionId),
       )
       .map((booking) => {
         const classSession = classSessionById.get(booking.classSessionId);
@@ -3629,6 +3756,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
         return {
           id: booking.id,
+          version: booking.version,
           classSessionId: booking.classSessionId,
           classTitle: classSession.title,
           startsAt: classSession.startsAt,
@@ -3658,7 +3786,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         slug: membership.tenant.id,
         name: membership.tenant.name,
       })),
-      classSessions: filterReservationRosterWindow(classSessions)
+      classSessions: reservableClassSessions
         .map((classSession) => ({
           id: classSession.id,
           title: classSession.title,
@@ -7096,110 +7224,49 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         classSession,
       );
     },
-    async cancelBooking(actor, tenantContext, input) {
-      assertAccess(runtime, actor, tenantContext, ["classes.book"]);
-      await assertFeatureEnabled(actor, tenantContext, "booking.group_classes");
-
-      const result = await runtime.store.cancelBooking(tenantContext, input);
-      const classSession = await runtime.store.getClassSession(
-        tenantContext,
-        result.booking.classSessionId,
+    async cancelMemberReservation(actor, input) {
+      const { memberships, selectedMembership } = await resolveReservableTenantSelection(
+        actor,
+        input.tenantSlug,
       );
-      const location = classSession
-        ? (await runtime.store.listLocations(tenantContext)).find(
-            (entry) => entry.id === classSession.locationId,
-          )
-        : null;
-      const bookingPolicy = await buildBookingPolicySummary(tenantContext);
 
-      await runtime.auditLogger.write({
-        action: "booking.cancelled",
-        category: "bookings",
-        actorId: actor.subjectId,
-        tenantId: tenantContext.tenantId,
-        metadata: {
-          bookingId: result.booking.id,
-          classSessionId: result.booking.classSessionId,
-          memberId: result.booking.memberId,
-        },
-      });
-
-      if (
-        classSession &&
-        bookingPolicy.lateCancelFeeCents > 0 &&
-        hoursUntil(classSession.startsAt) <= bookingPolicy.cancellationWindowHours
-      ) {
-        const [autocollectFeature, paymentRequestFeature] = await Promise.all([
-          evaluateFeatureFlag(actor, tenantContext, "billing.autocollect"),
-          evaluateFeatureFlag(
-            actor,
-            tenantContext,
-            getBillingFeatureForPaymentMethod("payment_request"),
-          ),
-        ]);
-
-        if (autocollectFeature.enabled && paymentRequestFeature.enabled) {
-          await createLocalTenantCollectionCase(tenantContext.tenantId, {
-            memberId: result.booking.memberId,
-            memberName: result.booking.memberName,
-            paymentMethod: "payment_request",
-            status: "open",
-            amountCents: bookingPolicy.lateCancelFeeCents,
-            reason: `Late cancellation fee for ${classSession.title}`,
-            dueAt: new Date().toISOString(),
-            notes: `Automatisch aangemaakt omdat de annulering binnen ${bookingPolicy.cancellationWindowHours} uur voor aanvang viel.`,
-          });
-        }
-      }
-
-      let promotedMessagePreview: string | undefined;
-
-      if (result.promotedBooking && classSession) {
-        promotedMessagePreview = runtime.templateRenderer.render(
-          "Hoi {{memberName}}, er is een plek vrijgekomen voor {{className}} op {{slot}} bij {{location}}. Je booking is nu bevestigd.",
+      if (!selectedMembership) {
+        throw new AppError(
+          memberships.length > 1
+            ? "Kies eerst bij welke club je wilt annuleren."
+            : "Je kunt alleen reserveringen annuleren bij clubs waar je een actief lidmaatschap hebt.",
           {
-            memberName: result.promotedBooking.memberName,
-            className: classSession.title,
-            slot: formatClassSlot(classSession.startsAt),
-            location: location?.name ?? "je sportschool",
+            code: "FORBIDDEN",
           },
         );
+      }
 
-        await runtime.auditLogger.write({
-          action: "booking.promoted_from_waitlist",
-          category: "bookings",
-          actorId: actor.subjectId,
-          tenantId: tenantContext.tenantId,
-          metadata: {
-            bookingId: result.promotedBooking.id,
-            classSessionId: result.promotedBooking.classSessionId,
-            memberId: result.promotedBooking.memberId,
-          },
-        });
+      const tenantContext = createPublicTenantContext(selectedMembership.tenant.id);
+      const booking = (await runtime.store.listBookings(tenantContext)).find(
+        (entry) => entry.id === input.bookingId,
+      );
 
-        await runtime.messagingProvider.send({
-          channel: "whatsapp",
-          recipient: result.promotedBooking.phone,
-          body: promotedMessagePreview,
-          tenantContext,
-          actor,
-          metadata: {
-            bookingId: result.promotedBooking.id,
-            source: "waitlist-promotion",
-          },
+      if (!booking) {
+        throw new AppError("Reservering kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { bookingId: input.bookingId },
         });
       }
 
-      await createTenantAwareCache(runtime, tenantContext).delete(
-        "dashboard",
-        actor.subjectId,
-      );
+      if (booking.memberId !== selectedMembership.member.id) {
+        throw new AppError("Je kunt alleen je eigen reserveringen annuleren.", {
+          code: "FORBIDDEN",
+          details: { bookingId: input.bookingId },
+        });
+      }
 
-      return {
-        booking: result.booking,
-        promotedBooking: result.promotedBooking,
-        promotedMessagePreview,
-      };
+      return cancelBookingFlow(actor, tenantContext, {
+        bookingId: input.bookingId,
+        expectedVersion: input.expectedVersion,
+      });
+    },
+    async cancelBooking(actor, tenantContext, input) {
+      return cancelBookingFlow(actor, tenantContext, input);
     },
     async recordAttendance(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["attendance.write"]);

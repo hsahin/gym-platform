@@ -109,6 +109,16 @@ npm run mobile:ios
 npm run mobile:android
 ```
 
+Leden kunnen via deze app:
+
+- lessen en vrije gymblokken bekijken en reserveren
+- eigen reserveringen bekijken en annuleren
+- contractdocumenten en betalingsbewijzen openen
+- betaalmethode-updates aanvragen
+- pauzeverzoeken indienen
+- wisselen tussen gekoppelde clubs wanneer hetzelfde ledenaccount bij meerdere
+  gyms actief is
+
 ## Productie-eisen
 
 De app draait bewust niet op local state, browser localStorage of memory

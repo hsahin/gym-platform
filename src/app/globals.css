@@ -302,6 +302,228 @@ p {
   -webkit-overflow-scrolling: touch;
 }
 
+.member-app-shell {
+  position: relative;
+  padding-bottom: 1.75rem;
+}
+
+.member-app-hero {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--border) 74%, var(--accent));
+  border-radius: 1.75rem;
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--accent) 20%, var(--surface)) 0%, transparent 36%),
+    linear-gradient(315deg, color-mix(in oklch, var(--success) 18%, var(--surface-secondary)) 0%, transparent 42%),
+    linear-gradient(180deg, color-mix(in oklch, var(--surface) 92%, var(--background)), var(--surface-secondary));
+  box-shadow: var(--shadow-surface);
+  padding: clamp(1rem, 4vw, 1.5rem);
+}
+
+.member-app-hero__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.member-app-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--border) 72%, var(--accent));
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--surface) 84%, transparent);
+  padding: 0.4rem 0.75rem;
+  color: color-mix(in oklch, var(--foreground) 86%, var(--accent));
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.member-app-hero h1 {
+  margin: 0;
+  max-width: 12ch;
+  font-size: 3rem;
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.member-app-hero p {
+  max-width: 42rem;
+}
+
+.member-app-quick-actions,
+.member-app-checklist {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.member-app-quick-actions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}
+
+.member-app-quick-actions a,
+.member-app-quick-actions button,
+.member-app-dock a,
+.member-app-dock button {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--border) 80%, var(--background));
+  background: color-mix(in oklch, var(--surface) 86%, transparent);
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.member-app-quick-actions a,
+.member-app-quick-actions button {
+  min-height: 3rem;
+  border-radius: 1rem;
+  padding: 0.75rem 0.9rem;
+  text-align: center;
+}
+
+.member-app-quick-actions a:hover,
+.member-app-quick-actions button:hover {
+  border-color: color-mix(in oklch, var(--accent) 52%, var(--border));
+  background: color-mix(in oklch, var(--accent) 14%, var(--surface));
+}
+
+.member-app-next-panel {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+  border: 1px solid color-mix(in oklch, var(--border) 74%, var(--success));
+  border-radius: 1.5rem;
+  background: color-mix(in oklch, var(--surface) 88%, transparent);
+  padding: 1rem;
+}
+
+.member-app-next-panel__label,
+.member-app-next-panel__body {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.member-app-next-panel__label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.member-app-date-tile {
+  display: grid;
+  flex: 0 0 auto;
+  width: 4.75rem;
+  min-height: 4.75rem;
+  place-items: center;
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--accent) 78%, white), color-mix(in oklch, var(--success) 64%, var(--accent))),
+    var(--accent);
+  color: var(--accent-foreground);
+  text-align: center;
+  box-shadow: 0 14px 32px -22px color-mix(in oklch, black 52%, transparent);
+}
+
+.member-app-date-tile span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.member-app-date-tile strong {
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.member-app-checklist {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+}
+
+.member-app-check {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in oklch, var(--border) 74%, var(--background));
+  border-radius: 1rem;
+  background: color-mix(in oklch, var(--surface) 82%, transparent);
+  padding: 0.9rem;
+}
+
+.member-app-check svg {
+  color: color-mix(in oklch, var(--accent) 78%, var(--foreground));
+}
+
+.member-app-check span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.member-app-check strong {
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.member-reservation-card {
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--accent) 10%, transparent), transparent 44%),
+    var(--surface);
+}
+
+.member-app-dock {
+  display: grid;
+  min-width: 0;
+  max-width: 32rem;
+  grid-template-columns: repeat(auto-fit, minmax(3.75rem, 1fr));
+  gap: 0.4rem;
+  margin: 1.5rem auto 0;
+  border: 1px solid color-mix(in oklch, var(--border) 72%, var(--background));
+  border-radius: 1.25rem;
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  box-shadow: var(--overlay-shadow);
+  backdrop-filter: blur(18px);
+  padding: 0.45rem;
+}
+
+.member-app-dock a,
+.member-app-dock button {
+  min-height: 3.25rem;
+  flex-direction: column;
+  border-radius: 0.9rem;
+  padding: 0.35rem 0.25rem;
+  font-size: 0.72rem;
+}
+
+@media (min-width: 768px) {
+  .member-app-shell {
+    padding-bottom: 1.5rem;
+  }
+
+  .member-app-hero {
+    grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.75fr);
+  }
+
+  .member-app-hero h1 {
+    font-size: 5.2rem;
+  }
+
+  .member-app-checklist {
+    grid-column: 1 / -1;
+  }
+
+  .member-app-dock {
+    display: none;
+  }
+}
+
 .dashboard-kpi-group {
   min-width: 1040px;
   max-width: 100%;

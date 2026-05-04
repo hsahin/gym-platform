@@ -36,7 +36,8 @@
           max(24px, env(safe-area-inset-bottom))
           max(20px, env(safe-area-inset-left));
         background:
-          radial-gradient(circle at 50% 0%, rgba(65, 132, 255, 0.2), transparent 38%),
+          linear-gradient(135deg, rgba(65, 132, 255, 0.18), transparent 34%),
+          linear-gradient(315deg, rgba(135, 241, 180, 0.12), transparent 42%),
           #0b1117;
       }
 
@@ -73,6 +74,46 @@
         font-weight: 700;
         text-decoration: none;
       }
+
+      .panel {
+        display: grid;
+        gap: 12px;
+        border: 1px solid rgba(170, 180, 194, 0.22);
+        border-radius: 22px;
+        background:
+          linear-gradient(135deg, rgba(79, 159, 255, 0.18), transparent 42%),
+          rgba(255, 255, 255, 0.06);
+        padding: 16px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+
+      .mark {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 12px;
+        background: rgba(79, 159, 255, 0.16);
+        color: #87f1b4;
+        font-weight: 800;
+      }
+
+      .row strong {
+        display: block;
+        color: #f4f7fb;
+        font-size: 0.95rem;
+      }
+
+      .row span {
+        color: #aab4c2;
+        font-size: 0.85rem;
+      }
     </style>
   </head>
   <body>
@@ -82,6 +123,29 @@
         Open je lessen, reserveringen, betalingen en ledenservice in de
         GymOS ledenapp.
       </p>
+      <section class="panel" aria-label="Ledenapp onderdelen">
+        <div class="row">
+          <div class="mark">1</div>
+          <div>
+            <strong>Boek je training</strong>
+            <span>Rooster, vrije plekken en wachtlijst.</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="mark">2</div>
+          <div>
+            <strong>Beheer je planning</strong>
+            <span>Bekijk en annuleer je reserveringen.</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="mark">3</div>
+          <div>
+            <strong>Regel ledenservice</strong>
+            <span>Contracten, betalingen en pauzeverzoeken.</span>
+          </div>
+        </div>
+      </section>
       <a href="https://gym-platform-vc9yk.ondigitalocean.app/reserve">
         Open ledenapp
       </a>

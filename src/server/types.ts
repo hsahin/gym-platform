@@ -710,6 +710,7 @@ export interface PublicReservationClassSummary {
 
 export interface MemberReservationSummary {
   readonly id: string;
+  readonly version: number;
   readonly classSessionId: string;
   readonly classTitle: string;
   readonly bookingKind: ClassSessionBookingKind;
