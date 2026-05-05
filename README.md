@@ -134,6 +134,11 @@ worden gevuld:
 - Apple Wallet en Google Wallet issuer-gegevens voordat GymOS echte walletpassen
   kan uitgeven
 
+Mollie-checkouts horen niet in de Capacitor WebView. De native app laat alleen
+GymOS zelf in `allowNavigation`; betaalpagina's openen via de native browser
+zodat 3DS, bankapps en terugkeer naar `/join?payment=return` via app links
+betrouwbaar blijven werken.
+
 ## Productie-eisen
 
 De app draait bewust niet op local state, browser localStorage of memory

@@ -73,8 +73,12 @@ describe("public surface copy", () => {
     expect(source).toContain("snapshot.billingMessage");
     expect(source).toContain("snapshot.legalMessage");
     expect(source).toContain("De club deelt de voorwaarden en privacyinformatie");
-    expect(source).toContain("window.location.assign");
+    expect(source).toContain("openSignupCheckout");
+    expect(source).toContain("window.Capacitor?.Plugins?.Browser");
+    expect(source).toContain('presentationStyle: "fullscreen"');
+    expect(source).toContain("window.open(checkoutUrl,");
     expect(source).not.toContain("Checkout staat nog niet live; deze club moet Mollie eerst activeren.");
+    expect(source).not.toContain("window.location.assign(payload.data.checkoutUrl)");
     expect(source).not.toContain("nog niet ingevuld");
     expect(source).not.toContain("Join the gym");
     expect(source).not.toContain("Checkout methode");

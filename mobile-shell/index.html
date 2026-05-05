@@ -436,6 +436,14 @@
             </button>
           </article>
           <article class="panel">
+            <p class="label">Betaling</p>
+            <h2>Veilige betaalbrowser</h2>
+            <p data-payment-status>
+              Bankbetalingen openen buiten de app, zodat 3DS en bankapps de
+              betaling veilig kunnen afronden.
+            </p>
+          </article>
+          <article class="panel">
             <h2>Lokale herinnering</h2>
             <p>
               Plan een native melding voor je volgende training zonder dat de
@@ -489,6 +497,7 @@
       const stateKey = "gymos-member-shell";
       const secureSessionKey = "gymos-member-secure-session";
       const passUrl = "gymos://member/pass";
+      const paymentReturnPath = "gymos://member/payment-return";
       const calendarFallbackUrl = "assets/next-training.ics";
       const calendarFilename = "gymos-volgende-training.ics";
       const nativePlugins = window.Capacitor?.Plugins || {};
@@ -561,6 +570,14 @@
         capability("secure-storage", "Alleen tijdens deze sessie");
       }
 
+      function setPaymentStatus(message) {
+        const element = document.querySelector("[data-payment-status]");
+        if (element) {
+          element.textContent = message;
+        }
+        return saveState({ paymentStatus: message });
+      }
+
       async function setScreen(screen) {
         activeScreen = screen;
         document.querySelectorAll("[data-screen]").forEach((element) => {
@@ -586,8 +603,87 @@
         );
       }
 
+      function isMolliePaymentUrl(url) {
+        try {
+          const { hostname } = new URL(url);
+          return hostname === "pay.mollie.com" || hostname.endsWith(".mollie.com");
+        } catch {
+          return false;
+        }
+      }
+
+      function isPaymentReturnUrl(url) {
+        try {
+          const parsedUrl = new URL(url, portalOrigin);
+          return (
+            parsedUrl.href.includes("payment-return") ||
+            parsedUrl.searchParams.has("invoice") ||
+            parsedUrl.searchParams.get("payment") === "return" ||
+            parsedUrl.searchParams.has("mollie")
+          );
+        } catch {
+          return url.includes("payment-return") || url.includes("payment=return");
+        }
+      }
+
+      async function closePaymentBrowser() {
+        try {
+          await Browser?.close?.();
+        } catch {
+          // Some platforms close the Custom Tab/Safari view automatically.
+        }
+      }
+
+      async function handlePaymentReturn(url) {
+        await closePaymentBrowser();
+        await saveState({
+          pendingPaymentUrl: null,
+          paymentReturnedAt: new Date().toISOString(),
+          paymentReturnUrl: url,
+        });
+        await setScreen("service");
+        await setPaymentStatus(
+          "Betaling teruggekeerd. We controleren de status met de clubadministratie.",
+        );
+      }
+
+      async function openPaymentCheckout(url) {
+        if (!isMolliePaymentUrl(url)) {
+          await openUrl(url);
+          return;
+        }
+
+        await saveState({
+          pendingPaymentUrl: url,
+          paymentStartedAt: new Date().toISOString(),
+        });
+        await setPaymentStatus(
+          "Betaling veilig geopend. Rond je bankbetaling af; GymOS pakt de terugkeer automatisch op.",
+        );
+
+        try {
+          if (Browser?.open) {
+            await Browser.open({ url, presentationStyle: "fullscreen" });
+            return;
+          }
+
+          const opened = window.open(url, "_blank", "noopener,noreferrer");
+          if (!opened) {
+            window.location.assign(url);
+          }
+        } catch {
+          await setPaymentStatus(
+            "Betaling kon niet worden geopend. Probeer opnieuw of open de ledenomgeving in je browser.",
+          );
+        }
+      }
+
       async function openUrl(url) {
         await saveState({ lastOpenUrl: url });
+        if (isMolliePaymentUrl(url)) {
+          await openPaymentCheckout(url);
+          return;
+        }
         if (url.startsWith("https://") && Browser?.open) {
           await Browser.open({ url });
           return;
@@ -784,6 +880,10 @@
       }
 
       async function handleDeepLink(url) {
+        if (isPaymentReturnUrl(url)) {
+          await handlePaymentReturn(url);
+          return;
+        }
         await saveState({ lastDeepLink: url });
         if (url.includes("/reserve") || url.includes("classes")) {
           await setScreen("classes");
@@ -818,11 +918,32 @@
         }
 
         App?.addListener?.("appUrlOpen", (event) => handleDeepLink(event.url));
+        App?.addListener?.("appStateChange", async (state) => {
+          if (state.isActive && memoryState.pendingPaymentUrl) {
+            await setPaymentStatus(
+              "Betaling onderbroken of bankapp gesloten. Open de ledenomgeving om de status te controleren.",
+            );
+          }
+        });
+        Browser?.addListener?.("browserFinished", async () => {
+          if (memoryState.pendingPaymentUrl) {
+            await setPaymentStatus(
+              "Betaalvenster gesloten. Controleer in je ledenomgeving of de betaling is gelukt.",
+            );
+          }
+        });
         const launch = await App?.getLaunchUrl?.();
         if (launch?.url) {
           await handleDeepLink(launch.url);
         }
       }
+
+      window.GymOSNativePayments = {
+        isMolliePaymentUrl,
+        openPaymentCheckout,
+        handlePaymentReturn,
+        paymentReturnPath,
+      };
 
       document.querySelectorAll("[data-nav]").forEach((button) => {
         button.addEventListener("click", () => setScreen(button.dataset.nav));

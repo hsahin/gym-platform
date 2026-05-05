@@ -9,6 +9,18 @@ import { toast } from "sonner";
 import { buildMutationHeaders } from "@/lib/mutation-security-client";
 import type { PublicMembershipSignupSnapshot } from "@/server/types";
 
+declare global {
+  interface Window {
+    Capacitor?: {
+      Plugins?: {
+        Browser?: {
+          open(options: { readonly url: string; readonly presentationStyle?: "fullscreen" }): Promise<void>;
+        };
+      };
+    };
+  }
+}
+
 function formatMissingFields(fields: ReadonlyArray<string>) {
   if (fields.length === 0) {
     return "";
@@ -75,6 +87,24 @@ export function PublicMembershipSignupPortal({
       ? `Checkout starten kan nog niet: vul ${formatMissingFields(missingCheckoutFields)} in.`
       : null;
 
+  async function openSignupCheckout(checkoutUrl: string) {
+    const nativeBrowser = window.Capacitor?.Plugins?.Browser;
+
+    if (nativeBrowser?.open) {
+      try {
+        await nativeBrowser.open({ url: checkoutUrl, presentationStyle: "fullscreen" });
+        return;
+      } catch {
+        toast.error("Betaling kon niet worden geopend. We proberen je browser te gebruiken.");
+      }
+    }
+
+    const opened = window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      window.location.assign(checkoutUrl);
+    }
+  }
+
   function submitSignup() {
     if (isPending || !signupReady) {
       return;
@@ -115,7 +145,7 @@ export function PublicMembershipSignupPortal({
         setWaiverAccepted(false);
         if (payload.data?.checkoutUrl) {
           toast.success("Checkout gestart. Je wordt doorgestuurd naar de betaling.");
-          window.location.assign(payload.data.checkoutUrl);
+          await openSignupCheckout(payload.data.checkoutUrl);
           return;
         }
 

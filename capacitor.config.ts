@@ -22,9 +22,6 @@ const config: CapacitorConfig = {
     cleartext: false,
     allowNavigation: [
       "gym-platform-vc9yk.ondigitalocean.app",
-      "*.mollie.com",
-      "pay.mollie.com",
-      "www.mollie.com",
     ],
   },
 };

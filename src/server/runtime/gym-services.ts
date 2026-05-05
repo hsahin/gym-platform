@@ -1669,6 +1669,16 @@ function buildBillingRedirectUrl(invoiceId: string) {
   return `${resolveAppBaseUrl()}/dashboard/payments?${params.toString()}`;
 }
 
+function buildMemberSignupPaymentRedirectUrl(tenantId: string, invoiceId: string) {
+  const params = new URLSearchParams({
+    gym: tenantId,
+    payment: "return",
+    invoice: invoiceId,
+  });
+
+  return `${resolveAppBaseUrl()}/join?${params.toString()}`;
+}
+
 function getMissingLegalCheckoutFields(legal: GymDashboardSnapshot["legal"]) {
   return [
     legal.termsUrl ? null : "voorwaardenlink",
@@ -2014,6 +2024,7 @@ async function attachMolliePaymentToInvoice(
       readonly email: string;
     };
     readonly provider?: MolliePaymentProvider;
+    readonly redirectUrl?: string;
   },
 ) {
   const provider =
@@ -2035,7 +2046,7 @@ async function attachMolliePaymentToInvoice(
     sequenceType: options?.sequenceType,
     customer: options?.customer,
     profileId: billing.profileId,
-    redirectUrl: buildBillingRedirectUrl(invoice.id),
+    redirectUrl: options?.redirectUrl ?? buildBillingRedirectUrl(invoice.id),
     webhookUrl: buildMollieWebhookUrl(tenantContext),
     metadata: {
       tenantId: tenantContext.tenantId,
@@ -4046,6 +4057,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
                 }
               : undefined,
           provider: prerequisites.provider ?? undefined,
+          redirectUrl: buildMemberSignupPaymentRedirectUrl(
+            input.tenantContext.tenantId,
+            invoice.id,
+          ),
         },
       );
 

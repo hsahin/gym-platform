@@ -80,6 +80,21 @@ describe("native member app capabilities", () => {
     expect(shell).toContain("files: [writeResult.uri]");
   });
 
+  it("keeps Mollie payments out of the WebView and handles native payment returns", () => {
+    const config = rootFile("capacitor.config.ts");
+    const shell = rootFile("mobile-shell/index.html");
+
+    expect(config).not.toContain("mollie.com");
+    expect(shell).toContain("function isMolliePaymentUrl");
+    expect(shell).toContain("async function openPaymentCheckout");
+    expect(shell).toContain("Browser.open({ url, presentationStyle: \"fullscreen\" })");
+    expect(shell).toContain("browserFinished");
+    expect(shell).toContain("payment-return");
+    expect(shell).toContain("Betaling veilig geopend");
+    expect(shell).toContain("Betaling teruggekeerd");
+    expect(shell).toContain("Betaling kon niet worden geopend");
+  });
+
   it("configures Android permissions and app links for member actions", () => {
     const manifest = rootFile("android/app/src/main/AndroidManifest.xml");
 

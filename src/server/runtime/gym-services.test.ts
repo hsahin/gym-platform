@@ -2595,7 +2595,7 @@ describe("gym platform services", () => {
     });
     expect(paymentRequests[0]).toMatchObject({
       sequenceType: "first",
-      redirectUrl: expect.stringContaining("/dashboard/payments"),
+      redirectUrl: expect.stringContaining("/join?"),
       webhookUrl: expect.stringContaining("/api/platform/billing/mollie/webhook"),
       metadata: {
         tenantId: tenantContext.tenantId,
@@ -2604,6 +2604,8 @@ describe("gym platform services", () => {
         source: "signup_checkout",
       },
     });
+    expect(paymentRequests[0]?.redirectUrl).toContain("payment=return");
+    expect(paymentRequests[0]?.redirectUrl).toContain(`invoice=${checkout.invoice.id}`);
     expect(paymentRequests[0]?.method).toBeUndefined();
     expect(subscriptionRequests[0]).toMatchObject({
       amount: { value: "119.00" },
