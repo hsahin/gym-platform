@@ -372,6 +372,14 @@
             <button class="secondary" type="button" data-calendar>
               Agenda toevoegen
             </button>
+            <button
+              class="secondary"
+              type="button"
+              data-qa-flow="cancel-reservation"
+              data-open-portal="/reserve#mijn-reserveringen"
+            >
+              Planning beheren
+            </button>
           </article>
         </section>
 
@@ -388,7 +396,12 @@
               De native shell blijft lokaal; het actuele rooster open je pas
               wanneer je een live actie wilt doen.
             </p>
-            <button class="primary" type="button" data-open-portal="/reserve">
+            <button
+              class="primary"
+              type="button"
+              data-qa-flow="reserve"
+              data-open-portal="/reserve"
+            >
               Rooster openen
             </button>
           </article>
@@ -431,7 +444,12 @@
               Vraag een betaalmethode-update aan, bekijk contracten of stuur
               een pauzeverzoek naar je club.
             </p>
-            <button class="primary" type="button" data-open-portal="/reserve">
+            <button
+              class="primary"
+              type="button"
+              data-qa-flow="pause-request"
+              data-open-portal="/reserve#ledenservice"
+            >
               Service openen
             </button>
           </article>
@@ -442,6 +460,14 @@
               Bankbetalingen openen buiten de app, zodat 3DS en bankapps de
               betaling veilig kunnen afronden.
             </p>
+            <button
+              class="secondary"
+              type="button"
+              data-qa-flow="payments"
+              data-open-portal="/reserve#contracten-betalingen"
+            >
+              Betalingen bekijken
+            </button>
           </article>
           <article class="panel">
             <h2>Lokale herinnering</h2>
@@ -476,7 +502,12 @@
               Gebruik je ledenaccount om je gekoppelde clubs, reserveringen en
               betaalgegevens te beheren.
             </p>
-            <button class="secondary" type="button" data-open-portal="/login">
+            <button
+              class="secondary"
+              type="button"
+              data-qa-flow="login"
+              data-open-portal="/login"
+            >
               Inloggen
             </button>
           </article>
@@ -489,6 +520,7 @@
             <button
               class="secondary"
               type="button"
+              data-qa-flow="account-delete"
               data-open-portal="/reserve#account-verwijderen"
             >
               Verwijderen beheren
@@ -514,6 +546,7 @@
       const paymentReturnPath = "gymos://member/payment-return";
       const calendarFallbackUrl = "assets/next-training.ics";
       const calendarFilename = "gymos-volgende-training.ics";
+      let nativeQaOpenedUrls = null;
       const nativePlugins = window.Capacitor?.Plugins || {};
       const {
         App,
@@ -590,6 +623,15 @@
           element.textContent = message;
         }
         return saveState({ paymentStatus: message });
+      }
+
+      function captureNativeQaUrl(url) {
+        if (!nativeQaOpenedUrls) {
+          return false;
+        }
+
+        nativeQaOpenedUrls.push(url);
+        return true;
       }
 
       async function setScreen(screen) {
@@ -675,6 +717,10 @@
           "Betaling veilig geopend. Rond je bankbetaling af; GymOS pakt de terugkeer automatisch op.",
         );
 
+        if (captureNativeQaUrl(url)) {
+          return;
+        }
+
         try {
           if (Browser?.open) {
             await Browser.open({ url, presentationStyle: "fullscreen" });
@@ -696,6 +742,9 @@
         await saveState({ lastOpenUrl: url });
         if (isMolliePaymentUrl(url)) {
           await openPaymentCheckout(url);
+          return;
+        }
+        if (captureNativeQaUrl(url)) {
           return;
         }
         if (url.startsWith("https://") && Browser?.open) {
@@ -910,6 +959,24 @@
         await setScreen("pass");
       }
 
+      async function handleAppResume() {
+        if (memoryState.pendingPaymentUrl) {
+          await setPaymentStatus(
+            "Betaling onderbroken of bankapp gesloten. Open de ledenomgeving om de status te controleren.",
+          );
+        }
+      }
+
+      async function simulateNetworkForQa(isOnline) {
+        const label = isOnline ? "Online" : "Offline";
+        document.querySelector("[data-network-status]").textContent = label;
+        capability(
+          "offline",
+          isOnline ? "Laatste pas lokaal bewaard" : "Offline pas actief",
+        );
+        await saveState({ qaNetworkStatus: label.toLowerCase() });
+      }
+
       async function boot() {
         const savedState = await getState();
         Object.assign(memoryState, savedState);
@@ -933,10 +1000,8 @@
 
         App?.addListener?.("appUrlOpen", (event) => handleDeepLink(event.url));
         App?.addListener?.("appStateChange", async (state) => {
-          if (state.isActive && memoryState.pendingPaymentUrl) {
-            await setPaymentStatus(
-              "Betaling onderbroken of bankapp gesloten. Open de ledenomgeving om de status te controleren.",
-            );
+          if (state.isActive) {
+            await handleAppResume();
           }
         });
         Browser?.addListener?.("browserFinished", async () => {
@@ -957,6 +1022,18 @@
         openPaymentCheckout,
         handlePaymentReturn,
         paymentReturnPath,
+      };
+
+      window.GymOSNativeTestHooks = {
+        getActiveScreen: () => activeScreen,
+        getPaymentStatus: () =>
+          document.querySelector("[data-payment-status]")?.textContent ?? "",
+        startUrlCapture: () => {
+          nativeQaOpenedUrls = [];
+        },
+        getOpenedUrls: () => nativeQaOpenedUrls ?? [],
+        handleAppResume,
+        simulateNetworkForQa,
       };
 
       document.querySelectorAll("[data-nav]").forEach((button) => {
