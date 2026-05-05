@@ -100,10 +100,15 @@ https://gym-platform-vc9yk.ondigitalocean.app/reserve
 Handige commands:
 
 ```bash
+npm run mobile:assets
 npm run mobile:sync
 npm run mobile:ios
 npm run mobile:android
 ```
+
+`npm run mobile:assets` genereert de GymOS app-iconen en splashscreens voor
+iOS en Android opnieuw. `npm run mobile:sync` draait deze stap automatisch
+voordat Capacitor de native projecten bijwerkt.
 
 Leden kunnen via deze app:
 

@@ -1,23 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- GymOS member app icon foreground. Regenerate with npm run mobile:assets. -->
+<!-- GymOS member app splash icon. Regenerate with npm run mobile:assets. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#00000000"
-        android:pathData="M76,36 C65,24 44,23 32,34 C18,47 18,69 32,82 C46,96 70,92 80,76"
-        android:strokeColor="#5EEAD4"
-        android:strokeLineCap="round"
-        android:strokeWidth="9" />
+        android:fillColor="#21313A"
+        android:pathData="M20,18 h68 a16,16 0,0 1 16,16 v40 a16,16 0,0 1 -16,16 h-68 a16,16 0,0 1 -16,-16 v-40 a16,16 0,0 1 16,-16 z" />
     <path
         android:fillColor="#00000000"
-        android:pathData="M56,54 L79,54"
-        android:strokeColor="#F8FAFC"
+        android:pathData="M75,36 C64,24 44,24 32,34 C18,47 18,69 32,82 C46,96 70,92 80,76"
+        android:strokeColor="#5EEAD4"
         android:strokeLineCap="round"
         android:strokeWidth="8" />
     <path
+        android:fillColor="#00000000"
+        android:pathData="M56,54 L78,54"
+        android:strokeColor="#F8FAFC"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+    <path
         android:fillColor="#FBBF24"
-        android:pathData="M80,49 a5,5 0,1 0 0.1,0 z" />
+        android:pathData="M79,50 a4,4 0,1 0 0.1,0 z" />
 </vector>

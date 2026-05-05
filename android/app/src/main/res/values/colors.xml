@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#14B8A6</color>
+    <color name="colorPrimaryDark">#111820</color>
+    <color name="colorAccent">#FBBF24</color>
+    <color name="gymos_splash_background">#111820</color>
+    <color name="gymos_splash_icon_background">#18232c</color>
+</resources>
