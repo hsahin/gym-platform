@@ -95,6 +95,42 @@ describe("native member app capabilities", () => {
     expect(shell).toContain("Betaling kon niet worden geopend");
   });
 
+  it("hardens native privacy and backup defaults for member data", () => {
+    const config = rootFile("capacitor.config.ts");
+    const packageJson = rootJson<{
+      scripts: Record<string, string>;
+    }>("package.json");
+    const manifest = rootFile("android/app/src/main/AndroidManifest.xml");
+    const backupRules = rootFile("android/app/src/main/res/xml/backup_rules.xml");
+    const dataExtractionRules = rootFile("android/app/src/main/res/xml/data_extraction_rules.xml");
+    const cordovaHardeningScript = rootFile("scripts/harden-mobile-privacy.mjs");
+    const iosPrivacyManifest = rootFile("ios/App/App/PrivacyInfo.xcprivacy");
+    const iosProject = rootFile("ios/App/App.xcodeproj/project.pbxproj");
+
+    expect(config).toContain('loggingBehavior: "production"');
+    expect(config).not.toContain('loggingBehavior: "debug"');
+    expect(packageJson.scripts["mobile:sync"]).toContain("mobile:privacy");
+    expect(manifest).toContain('android:allowBackup="false"');
+    expect(manifest).toContain('android:usesCleartextTraffic="false"');
+    expect(manifest).toContain('android:fullBackupContent="@xml/backup_rules"');
+    expect(manifest).toContain('android:dataExtractionRules="@xml/data_extraction_rules"');
+    expect(backupRules).toContain('<exclude domain="sharedpref" path="."');
+    expect(backupRules).toContain('<exclude domain="database" path="."');
+    expect(dataExtractionRules).toContain("<cloud-backup");
+    expect(dataExtractionRules).toContain("<device-transfer>");
+    expect(cordovaHardeningScript).not.toContain('<access origin="*"');
+    expect(cordovaHardeningScript).toContain(
+      '<access origin="https://gym-platform-vc9yk.ondigitalocean.app" />',
+    );
+    expect(cordovaHardeningScript).toContain("android/app/src/main/res/xml/config.xml");
+    expect(cordovaHardeningScript).toContain("ios/App/App/config.xml");
+    expect(iosPrivacyManifest).toContain("NSPrivacyTracking");
+    expect(iosPrivacyManifest).toContain("NSPrivacyCollectedDataTypes");
+    expect(iosPrivacyManifest).toContain("NSPrivacyAccessedAPICategoryUserDefaults");
+    expect(iosPrivacyManifest).toContain("NSPrivacyAccessedAPICategoryFileTimestamp");
+    expect(iosProject).toContain("PrivacyInfo.xcprivacy in Resources");
+  });
+
   it("configures Android permissions and app links for member actions", () => {
     const manifest = rootFile("android/app/src/main/AndroidManifest.xml");
 
