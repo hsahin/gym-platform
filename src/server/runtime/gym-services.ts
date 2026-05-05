@@ -182,6 +182,7 @@ import {
   reviewLocalTenantPaymentMethodRequest,
   updateLocalTenantAppointmentPack,
   updateLocalTenantBillingInvoice,
+  type LocalTenantProfile,
 } from "@/server/persistence/platform-state";
 import { toClientPlain } from "@/server/lib/to-client-plain";
 import {
@@ -215,6 +216,7 @@ import type {
 
 const PRODUCT_NAME = "gym-platform";
 const ENVIRONMENT = process.env.NODE_ENV ?? "development";
+const PUBLIC_TENANT_SLUGS_ENV = "PUBLIC_TENANT_SLUGS";
 const requestIdGenerator = createPrefixedIdGenerator({ prefix: "req" });
 
 type MessagingMode = RuntimeState["messagingMode"];
@@ -1295,6 +1297,15 @@ function formatClassSlot(startsAt: string) {
 }
 
 const RESERVATION_ROSTER_WINDOW_DAYS = 31;
+const HIDDEN_PUBLIC_TENANT_PATTERNS = [
+  /\bperf\s+audit\b/i,
+  /\baudit\s+(after|before|codex|fix)\b/i,
+  /\bdopamine\s+punks\b/i,
+  /\bpoep\b/i,
+  /\byomama\b/i,
+  /\bthrowaway\b/i,
+  /\btest[\s_-]*(club|gym|tenant)\b/i,
+] as const;
 
 function filterReservationRosterWindow<
   TClassSession extends { readonly startsAt: string; readonly status: string },
@@ -1315,6 +1326,76 @@ function filterReservationRosterWindow<
       );
     })
     .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+}
+
+function normalizePublicTenantToken(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getPublicTenantSlugAllowlist() {
+  const slugs = (process.env[PUBLIC_TENANT_SLUGS_ENV] ?? "")
+    .split(",")
+    .map(normalizePublicTenantToken)
+    .filter(Boolean);
+
+  return slugs.length > 0 ? new Set(slugs) : null;
+}
+
+function isPublicTenantAllowlisted(
+  tenant: LocalTenantProfile,
+  allowlist: ReadonlySet<string>,
+) {
+  return (
+    allowlist.has(normalizePublicTenantToken(tenant.id)) ||
+    allowlist.has(normalizePublicTenantToken(tenant.name))
+  );
+}
+
+function isHiddenPublicTenant(tenant: LocalTenantProfile) {
+  const searchableTenant = `${tenant.id} ${tenant.name}`;
+
+  return HIDDEN_PUBLIC_TENANT_PATTERNS.some((pattern) =>
+    pattern.test(searchableTenant),
+  );
+}
+
+function listPublicTenantProfiles(tenants: ReadonlyArray<LocalTenantProfile>) {
+  const allowlist = getPublicTenantSlugAllowlist();
+  const visibleTenants = allowlist
+    ? tenants.filter((tenant) => isPublicTenantAllowlisted(tenant, allowlist))
+    : tenants.filter((tenant) => !isHiddenPublicTenant(tenant));
+
+  return [...visibleTenants].sort((left, right) =>
+    left.name.localeCompare(right.name, "nl"),
+  );
+}
+
+function isPublicTenantProfile(
+  tenant: LocalTenantProfile | null,
+  publicTenants: ReadonlyArray<LocalTenantProfile>,
+) {
+  return Boolean(
+    tenant && publicTenants.some((publicTenant) => publicTenant.id === tenant.id),
+  );
+}
+
+function resolvePublicTenantProfile(
+  requestedTenant: LocalTenantProfile | null,
+  publicTenants: ReadonlyArray<LocalTenantProfile>,
+) {
+  if (isPublicTenantProfile(requestedTenant, publicTenants)) {
+    return requestedTenant;
+  }
+
+  return publicTenants.length === 1 ? publicTenants[0] ?? null : null;
+}
+
+function toPublicGymOptions(tenants: ReadonlyArray<LocalTenantProfile>) {
+  return tenants.map((tenant) => ({
+    id: tenant.id,
+    slug: tenant.id,
+    name: tenant.name,
+  }));
 }
 
 function describeBookingStatusForMemberMessage(
@@ -4311,18 +4392,15 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         listLocalTenants(),
         input?.tenantSlug ? getLocalTenantProfileBySlug(input.tenantSlug) : Promise.resolve(null),
       ]);
-      const tenantProfile =
-        requestedTenant ?? (tenants.length === 1 ? tenants[0] ?? null : null);
+      const publicTenants = listPublicTenantProfiles(tenants);
+      const tenantProfile = resolvePublicTenantProfile(requestedTenant, publicTenants);
 
       if (!tenantProfile) {
         return toClientPlain({
-          tenantName: tenants.length > 1 ? "Kies je sportschool" : "Jouw sportschool",
+          tenantName:
+            publicTenants.length > 1 ? "Kies je sportschool" : "Jouw sportschool",
           tenantSlug: null,
-          availableGyms: tenants.map((tenant) => ({
-            id: tenant.id,
-            slug: tenant.id,
-            name: tenant.name,
-          })),
+          availableGyms: toPublicGymOptions(publicTenants),
           bookingAccess: {
             trialEnabled: false,
             trialBookingUrl: "",
@@ -4362,11 +4440,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       return toClientPlain({
         tenantName: tenantProfile.name,
         tenantSlug: tenantProfile.id,
-        availableGyms: tenants.map((tenant) => ({
-          id: tenant.id,
-          slug: tenant.id,
-          name: tenant.name,
-        })),
+        availableGyms: toPublicGymOptions(publicTenants),
         bookingAccess: {
           trialEnabled: trialFeature.enabled,
           trialBookingUrl: bookingWorkspace.trialBookingUrl,
@@ -4399,18 +4473,15 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         listLocalTenants(),
         input?.tenantSlug ? getLocalTenantProfileBySlug(input.tenantSlug) : Promise.resolve(null),
       ]);
-      const tenantProfile =
-        requestedTenant ?? (tenants.length === 1 ? tenants[0] ?? null : null);
+      const publicTenants = listPublicTenantProfiles(tenants);
+      const tenantProfile = resolvePublicTenantProfile(requestedTenant, publicTenants);
 
       if (!tenantProfile) {
         return toClientPlain({
-          tenantName: tenants.length > 1 ? "Kies je sportschool" : "Jouw sportschool",
+          tenantName:
+            publicTenants.length > 1 ? "Kies je sportschool" : "Jouw sportschool",
           tenantSlug: null,
-          availableGyms: tenants.map((tenant) => ({
-            id: tenant.id,
-            slug: tenant.id,
-            name: tenant.name,
-          })),
+          availableGyms: toPublicGymOptions(publicTenants),
           membershipPlans: [],
           locations: [],
           legal: {
@@ -4459,11 +4530,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       return toClientPlain({
         tenantName: tenantProfile.name,
         tenantSlug: tenantProfile.id,
-        availableGyms: tenants.map((tenant) => ({
-          id: tenant.id,
-          slug: tenant.id,
-          name: tenant.name,
-        })),
+        availableGyms: toPublicGymOptions(publicTenants),
         membershipPlans: plans
           .filter((plan) => plan.status === "active")
           .map((plan) => ({
@@ -4496,9 +4563,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       } satisfies PublicMembershipSignupSnapshot);
     },
     async submitPublicMemberSignup(input) {
-      const tenantProfile = input.tenantSlug
-        ? await getLocalTenantProfileBySlug(input.tenantSlug)
-        : (await listLocalTenants())[0] ?? null;
+      const [tenants, requestedTenant] = await Promise.all([
+        listLocalTenants(),
+        input.tenantSlug ? getLocalTenantProfileBySlug(input.tenantSlug) : Promise.resolve(null),
+      ]);
+      const publicTenants = listPublicTenantProfiles(tenants);
+      const tenantProfile = resolvePublicTenantProfile(requestedTenant, publicTenants);
 
       if (!tenantProfile) {
         throw new AppError("Sportschool niet gevonden voor aanmelding.", {
@@ -7138,12 +7208,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         listLocalTenants(),
         input.tenantSlug ? getLocalTenantProfileBySlug(input.tenantSlug) : Promise.resolve(null),
       ]);
-      const tenantProfile =
-        requestedTenant ?? (tenants.length === 1 ? tenants[0] ?? null : null);
+      const publicTenants = listPublicTenantProfiles(tenants);
+      const tenantProfile = resolvePublicTenantProfile(requestedTenant, publicTenants);
 
       if (!tenantProfile) {
         throw new AppError(
-          tenants.length > 1
+          publicTenants.length > 1
             ? "Kies eerst voor welke gym je wilt reserveren."
             : "Het platform is nog niet ingericht.",
           {

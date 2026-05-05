@@ -31,6 +31,7 @@ const originalSpacesAccessKeyId = process.env.SPACES_ACCESS_KEY_ID;
 const originalSpacesSecretAccessKey = process.env.SPACES_SECRET_ACCESS_KEY;
 const originalSpacesAccessKey = process.env.SPACES_ACCESS_KEY;
 const originalSpacesSecretKey = process.env.SPACES_SECRET_KEY;
+const originalPublicTenantSlugs = process.env.PUBLIC_TENANT_SLUGS;
 const originalFetch = globalThis.fetch;
 
 function clearMessagingEnv() {
@@ -120,6 +121,7 @@ function createSuperadminViewer(tenantId: string) {
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
+  delete process.env.PUBLIC_TENANT_SLUGS;
   clearMessagingEnv();
   clearUploadEnv();
 });
@@ -216,6 +218,11 @@ afterEach(async () => {
   } else {
     process.env.SPACES_SECRET_KEY = originalSpacesSecretKey;
   }
+  if (originalPublicTenantSlugs === undefined) {
+    delete process.env.PUBLIC_TENANT_SLUGS;
+  } else {
+    process.env.PUBLIC_TENANT_SLUGS = originalPublicTenantSlugs;
+  }
   globalThis.fetch = originalFetch;
   await rm(tempDir, { recursive: true, force: true });
 });
@@ -302,6 +309,68 @@ describe("gym platform services", () => {
     ]);
     expect(secondSnapshot.availableGyms).toHaveLength(2);
     expect(firstTenantContext.tenantId).toBe(firstTenant.tenant.id);
+  });
+
+  it("limits public club pickers to the configured production tenant list", async () => {
+    const publicTenant = await bootstrapLocalPlatform({
+      tenantName: "Homegym",
+      ownerName: "Saar de Jong",
+      ownerEmail: "owner@homegym.test",
+      password: "strong-pass-123",
+    });
+    const hiddenTenant = await bootstrapLocalPlatform({
+      tenantName: "Dopamine Punks",
+      ownerName: "Demo Owner",
+      ownerEmail: "owner@dopamine.test",
+      password: "strong-pass-123",
+    });
+    process.env.PUBLIC_TENANT_SLUGS = publicTenant.tenant.id;
+
+    const services = await createGymPlatformServices();
+    const reservationSnapshot = await services.getPublicReservationSnapshot({
+      tenantSlug: hiddenTenant.tenant.id,
+    });
+    const signupSnapshot = await services.getPublicMembershipSignupSnapshot();
+
+    expect(reservationSnapshot.tenantName).toBe("Homegym");
+    expect(reservationSnapshot.availableGyms).toEqual([
+      {
+        id: publicTenant.tenant.id,
+        slug: publicTenant.tenant.id,
+        name: "Homegym",
+      },
+    ]);
+    expect(signupSnapshot.tenantName).toBe("Homegym");
+    expect(signupSnapshot.availableGyms.map((gym) => gym.name)).toEqual(["Homegym"]);
+  });
+
+  it("keeps audit and throwaway tenants out of public club pickers by default", async () => {
+    const publicTenant = await bootstrapLocalPlatform({
+      tenantName: "Homegym",
+      ownerName: "Saar de Jong",
+      ownerEmail: "owner@homegym.test",
+      password: "strong-pass-123",
+    });
+    await bootstrapLocalPlatform({
+      tenantName: "Perf Audit Codex 1777386508",
+      ownerName: "Demo Owner",
+      ownerEmail: "owner@perf-audit.test",
+      password: "strong-pass-123",
+    });
+    await bootstrapLocalPlatform({
+      tenantName: "Poep gym",
+      ownerName: "Demo Owner",
+      ownerEmail: "owner@throwaway.test",
+      password: "strong-pass-123",
+    });
+
+    const services = await createGymPlatformServices();
+    const reservationSnapshot = await services.getPublicReservationSnapshot();
+    const signupSnapshot = await services.getPublicMembershipSignupSnapshot();
+
+    expect(reservationSnapshot.tenantSlug).toBe(publicTenant.tenant.id);
+    expect(reservationSnapshot.availableGyms.map((gym) => gym.name)).toEqual(["Homegym"]);
+    expect(signupSnapshot.availableGyms.map((gym) => gym.name)).toEqual(["Homegym"]);
   });
 
   it("keeps public class booking behind trial or membership onboarding", async () => {

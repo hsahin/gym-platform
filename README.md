@@ -144,6 +144,9 @@ Aanbevolen live-instellingen:
 - `MONGODB_BACKUP_POLICY=enabled` nadat automatische backups/PITR aanstaan
 - `MIGRATIONS_LOCKED=true` wanneer database-migraties onderdeel zijn van de releaseflow
 - `MONITORING_WEBHOOK_URL` of `SENTRY_DSN` voor error reporting
+- `PUBLIC_TENANT_SLUGS=homegym` om publieke pagina's zoals `/reserve` en
+  `/join` alleen de live gyms te laten tonen. Gebruik komma's voor meerdere
+  publieke gyms.
 - `ENABLE_REAL_UPLOADS=true` plus `SPACES_BUCKET`, `SPACES_ENDPOINT`,
   `SPACES_REGION`, `SPACES_ACCESS_KEY_ID` en `SPACES_SECRET_ACCESS_KEY` voor
   DigitalOcean Spaces. De app accepteert ook de DigitalOcean aliases
