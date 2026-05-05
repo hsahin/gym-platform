@@ -250,7 +250,7 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
       <div className="section-stack">
         <PageSection
           title="Zelfserviceverzoeken"
-          description="Laat leden betaalmethode-updates en pauzeverzoeken indienen zonder mailverkeer."
+          description="Laat leden betaalvragen, pauzes en accountbeheer regelen zonder mailverkeer."
         >
           <div className="grid gap-4">
             <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
@@ -457,6 +457,27 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
                         ))}
                       </div>
                     ) : null}
+                  </Card.Content>
+                </Card>
+              ))}
+
+              {snapshot.mobileSelfService.accountDeletionRequests.map((request) => (
+                <Card key={request.id} className="rounded-2xl border-border/80 bg-surface-secondary">
+                  <Card.Content className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{request.memberName}</p>
+                        <p className="text-muted text-sm">
+                          Ledenaccount verwijderd · {request.email}
+                        </p>
+                      </div>
+                      <Chip size="sm" variant="tertiary">
+                        {getReviewRequestStatusLabel(request.status)}
+                      </Chip>
+                    </div>
+                    <p className="text-muted text-sm">
+                      {request.reason ?? "Geen reden opgegeven"}
+                    </p>
                   </Card.Content>
                 </Card>
               ))}

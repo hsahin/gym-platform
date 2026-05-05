@@ -438,6 +438,20 @@ export interface MembershipPauseRequest {
   readonly reviewedAt?: string;
 }
 
+export interface MemberAccountDeletionRequest {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly email: string;
+  readonly reason?: string;
+  readonly ownerNotes?: string;
+  readonly status: ReviewRequestStatus;
+  readonly requestedAt: string;
+  readonly reviewedAt?: string;
+  readonly portalAccountDeletedAt?: string;
+}
+
 export interface MemberContractRecord {
   readonly id: string;
   readonly tenantId: TenantId;
@@ -456,6 +470,7 @@ export interface MobileSelfServiceSummary {
   readonly receipts: ReadonlyArray<MobileReceipt>;
   readonly paymentMethodRequests: ReadonlyArray<MobilePaymentMethodRequest>;
   readonly pauseRequests: ReadonlyArray<MembershipPauseRequest>;
+  readonly accountDeletionRequests: ReadonlyArray<MemberAccountDeletionRequest>;
   readonly contracts: ReadonlyArray<MemberContractRecord>;
 }
 

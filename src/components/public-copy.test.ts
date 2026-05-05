@@ -113,6 +113,10 @@ describe("public surface copy", () => {
     expect(source).toContain("snapshot.selfServiceEnabled");
     expect(source).toContain("shouldShowSelfService");
     expect(source).toContain("Ledenservice");
+    expect(source).toContain("Account verwijderen");
+    expect(source).toContain("request_account_deletion");
+    expect(source).toContain('id="account-verwijderen"');
+    expect(source).toContain("Je login wordt direct uitgezet");
     expect(source).toContain("Betalingsbewijzen");
     expect(source).toContain("formatEuroFromCents");
     expect(source).not.toContain("EUR {(receipt.amountCents / 100).toFixed(2)}");

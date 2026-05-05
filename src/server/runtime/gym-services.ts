@@ -125,6 +125,7 @@ import {
 import { MongoGymStore } from "@/server/persistence/mongo-gym-store";
 import {
   createLocalTenantAppointmentPack,
+  createLocalTenantAccountDeletionRequest,
   createLocalTenantBillingInvoice,
   createLocalTenantBillingReconciliationRun,
   createLocalTenantBillingRefund,
@@ -2477,6 +2478,7 @@ async function buildMobileSelfServiceSummary(
       receipts: [],
       paymentMethodRequests: [],
       pauseRequests: [],
+      accountDeletionRequests: [],
       contracts: [],
     }
   );
@@ -2651,6 +2653,7 @@ function slimDashboardSnapshotForPage(
             receipts: [],
             paymentMethodRequests: [],
             pauseRequests: [],
+            accountDeletionRequests: [],
             contracts: [],
           },
     staff: page === "settings" ? snapshot.staff : [],
@@ -2957,6 +2960,19 @@ export interface GymPlatformServices {
       readonly reason: string;
     },
   ): Promise<GymDashboardSnapshot["mobileSelfService"]["pauseRequests"][number]>;
+  requestMemberAccountDeletion(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId?: string;
+      readonly memberName?: string;
+      readonly email: string;
+      readonly reason?: string;
+    },
+  ): Promise<{
+    readonly request: GymDashboardSnapshot["mobileSelfService"]["accountDeletionRequests"][number];
+    readonly deletedPortalAccounts: number;
+  }>;
   reviewMembershipPause(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -3767,6 +3783,59 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     return member;
   }
 
+  async function resolveAccountDeletionMemberAccess(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly memberId?: string;
+      readonly email: string;
+    },
+  ) {
+    if (!actor.email || normalizeEmailValue(actor.email) !== normalizeEmailValue(input.email)) {
+      throw new AppError("Je kunt alleen je eigen ledenaccount verwijderen.", {
+        code: "FORBIDDEN",
+      });
+    }
+
+    if (
+      input.memberId &&
+      runtime.permissionRegistry.hasPermissions(actor, ["operations.manage"], tenantContext)
+    ) {
+      const staffSelectedMember = await runtime.store.getMember(tenantContext, input.memberId);
+
+      if (!staffSelectedMember) {
+        throw new AppError("Lid voor accountverwijdering kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+        });
+      }
+
+      return staffSelectedMember;
+    }
+
+    const accounts = await listLocalMemberPortalAccountsByEmail(actor.email);
+    const account = accounts.find(
+      (entry) =>
+        entry.tenantId === tenantContext.tenantId &&
+        (!input.memberId || entry.linkedMemberId === input.memberId),
+    );
+
+    if (!account?.linkedMemberId) {
+      throw new AppError("Ledenaccount voor verwijdering kon niet gevonden worden.", {
+        code: "RESOURCE_NOT_FOUND",
+      });
+    }
+
+    const member = await runtime.store.getMember(tenantContext, account.linkedMemberId);
+
+    if (!member) {
+      throw new AppError("Lid voor accountverwijdering kon niet gevonden worden.", {
+        code: "RESOURCE_NOT_FOUND",
+      });
+    }
+
+    return member;
+  }
+
   async function buildMemberReservationSnapshot(
     actor: AuthActor,
     input?: { readonly tenantSlug?: string },
@@ -3797,6 +3866,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           receipts: [],
           paymentMethodRequests: [],
           pauseRequests: [],
+          accountDeletionRequests: [],
           contracts: [],
         },
       } satisfies MemberReservationSnapshot);
@@ -3914,6 +3984,9 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           (request) => request.memberId === selectedMembership.member.id,
         ),
         pauseRequests: mobileSelfService.pauseRequests.filter(
+          (request) => request.memberId === selectedMembership.member.id,
+        ),
+        accountDeletionRequests: mobileSelfService.accountDeletionRequests.filter(
           (request) => request.memberId === selectedMembership.member.id,
         ),
         contracts: mobileSelfService.contracts.filter(
@@ -5482,6 +5555,44 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       });
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return request;
+    },
+    async requestMemberAccountDeletion(actor, tenantContext, input) {
+      const member = await resolveAccountDeletionMemberAccess(
+        actor,
+        tenantContext,
+        input,
+      );
+
+      const deletedAt = new Date().toISOString();
+      const request = await createLocalTenantAccountDeletionRequest(tenantContext.tenantId, {
+        memberId: member.id,
+        memberName: member.fullName,
+        email: member.email,
+        reason: input.reason,
+        status: "approved",
+        portalAccountDeletedAt: deletedAt,
+      });
+      const deletedPortalAccounts = await deleteLocalMemberPortalAccountByMemberId(
+        tenantContext.tenantId,
+        member.id,
+      );
+
+      await runtime.auditLogger.write({
+        action: "mobile.member_account_deletion_requested",
+        category: "mobile",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          requestId: request.id,
+          memberId: member.id,
+          deletedPortalAccounts,
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return {
+        request,
+        deletedPortalAccounts,
+      };
     },
     async reviewMembershipPause(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);

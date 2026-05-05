@@ -10,6 +10,7 @@ import { POST as publicMemberSignupRoute } from "@/app/api/public/member-signups
 import { POST as publicReservationsRoute } from "@/app/api/public/reservations/route";
 import { GET as csrfRoute } from "@/app/api/security/csrf/route";
 import {
+  authenticateLocalAccount,
   bootstrapLocalPlatform,
 } from "@/server/persistence/platform-state";
 import {
@@ -776,6 +777,38 @@ describe("api route integrations", () => {
     expect(ownerPayload.ok).toBe(false);
     expect(ownerPayload.error.message).toContain("alleen voor member self-service");
 
+    const deletionResponse = await memberMobileSelfServiceRoute(
+      createMutationRequest(
+        "http://localhost/api/member/mobile-self-service",
+        {
+          operation: "request_account_deletion",
+          memberId: member.id,
+          memberName: "Nina de Boer",
+          email: "nina@northside.test",
+          reason: "Ik wil mijn ledenapp-account verwijderen.",
+        },
+        { token: memberToken },
+      ),
+    );
+    const deletionPayload = (await deletionResponse.json()) as {
+      ok: boolean;
+      data: {
+        deletedPortalAccounts: number;
+        request: {
+          status: string;
+          email: string;
+        };
+      };
+    };
+
+    expect(deletionResponse.status).toBe(200);
+    expect(deletionPayload.ok).toBe(true);
+    expect(deletionPayload.data.deletedPortalAccounts).toBe(1);
+    expect(deletionPayload.data.request.status).toBe("approved");
+    await expect(
+      authenticateLocalAccount("nina@northside.test", "member-pass-123"),
+    ).resolves.toBeNull();
+
     const refreshedServices = await getGymPlatformServices();
     const refreshedTenantContext = refreshedServices.createRequestTenantContext(
       ownerActor,
@@ -786,6 +819,10 @@ describe("api route integrations", () => {
     });
     expect(dashboard.mobileSelfService.pauseRequests).toHaveLength(1);
     expect(dashboard.mobileSelfService.pauseRequests[0]?.memberId).toBe(member.id);
+    expect(dashboard.mobileSelfService.accountDeletionRequests).toHaveLength(1);
+    expect(dashboard.mobileSelfService.accountDeletionRequests[0]?.email).toBe(
+      "nina@northside.test",
+    );
   });
 
   it("returns auth errors when the member self-service route is called without a session", async () => {

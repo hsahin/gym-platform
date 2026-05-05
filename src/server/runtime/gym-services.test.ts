@@ -3729,9 +3729,24 @@ describe("gym platform services", () => {
       endsAt: "2026-06-30T00:00:00.000Z",
       reason: "Vakantie",
     });
+    const deletionRequest = await services.requestMemberAccountDeletion(
+      memberActor,
+      tenantContext,
+      {
+        memberId: member.id,
+        memberName: member.fullName,
+        email: member.email,
+        reason: "Ik gebruik de app niet meer",
+      },
+    );
 
     expect(paymentRequest.status).toBe("pending");
     expect(pauseRequest.status).toBe("pending");
+    expect(deletionRequest.request.status).toBe("approved");
+    expect(deletionRequest.deletedPortalAccounts).toBe(1);
+    await expect(
+      authenticateLocalAccount("kim@northside.test", "kim-member-123"),
+    ).resolves.toBeNull();
 
     await expect(
       services.reviewMobilePaymentMethodUpdate(memberActor, tenantContext, {
@@ -3749,6 +3764,68 @@ describe("gym platform services", () => {
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+
+    const dashboard = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    expect(dashboard.mobileSelfService.accountDeletionRequests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          memberId: member.id,
+          email: "kim@northside.test",
+          status: "approved",
+        }),
+      ]),
+    );
+  });
+
+  it("lets members delete their app account even when their membership is paused", async () => {
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: [],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Lina Pauw",
+      email: "lina@northside.test",
+      phone: "0615151516",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "paused",
+      tags: [],
+      waiverStatus: "complete",
+      portalPassword: "lina-member-123",
+    });
+    const memberActor = createMemberViewer("lina@northside.test", state.tenant.id, "Lina Pauw");
+
+    const reservationSnapshot = await services.getMemberReservationSnapshot(memberActor, {
+      tenantSlug: state.tenant.id,
+    });
+    const deletionRequest = await services.requestMemberAccountDeletion(
+      memberActor,
+      tenantContext,
+      {
+        email: member.email,
+        reason: "Ik wil mijn app-login verwijderen",
+      },
+    );
+
+    expect(reservationSnapshot.hasEligibleMembership).toBe(false);
+    expect(deletionRequest.request.memberId).toBe(member.id);
+    expect(deletionRequest.deletedPortalAccounts).toBe(1);
+    await expect(
+      authenticateLocalAccount("lina@northside.test", "lina-member-123"),
+    ).resolves.toBeNull();
   });
 
   it("includes filtered self-service data in the member reservation snapshot", async () => {

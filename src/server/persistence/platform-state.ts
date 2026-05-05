@@ -98,6 +98,7 @@ const questionnaireIdGenerator = createPrefixedIdGenerator({ prefix: "questionna
 const questionnaireResponseIdGenerator = createPrefixedIdGenerator({ prefix: "qresponse" });
 const paymentMethodRequestIdGenerator = createPrefixedIdGenerator({ prefix: "pmrequest" });
 const pauseRequestIdGenerator = createPrefixedIdGenerator({ prefix: "pause" });
+const accountDeletionRequestIdGenerator = createPrefixedIdGenerator({ prefix: "acctdel" });
 const contractRecordIdGenerator = createPrefixedIdGenerator({ prefix: "contractrec" });
 const mongoPlatformStateCollection = "platform_state";
 const mongoPlatformStateDocumentId = "gym-platform-state";
@@ -450,6 +451,15 @@ export interface ReviewLocalTenantPauseRequestInput {
   readonly id: string;
   readonly status: Exclude<ReviewRequestStatus, "pending">;
   readonly ownerNotes?: string;
+}
+
+export interface CreateLocalTenantAccountDeletionRequestInput {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly email: string;
+  readonly reason?: string;
+  readonly status?: ReviewRequestStatus;
+  readonly portalAccountDeletedAt?: string;
 }
 
 export interface CreateLocalTenantContractRecordInput {
@@ -932,6 +942,7 @@ function createDefaultMobileSelfServiceData(): StoredMobileSelfServiceData {
     receipts: [],
     paymentMethodRequests: [],
     pauseRequests: [],
+    accountDeletionRequests: [],
     contracts: [],
   };
 }
@@ -1528,6 +1539,25 @@ function normalizeMobileSelfServiceData(
         status: normalizeReviewStatus(request.status),
         requestedAt: new Date(request.requestedAt).toISOString(),
         reviewedAt: request.reviewedAt ? new Date(request.reviewedAt).toISOString() : undefined,
+      }))
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)),
+    accountDeletionRequests: (
+      input?.accountDeletionRequests ?? base.accountDeletionRequests
+    )
+      .map((request) => ({
+        ...request,
+        tenantId,
+        memberId: request.memberId.trim(),
+        memberName: request.memberName.trim(),
+        email: request.email.trim().toLowerCase(),
+        reason: request.reason?.trim() || undefined,
+        ownerNotes: request.ownerNotes?.trim() || undefined,
+        status: normalizeReviewStatus(request.status),
+        requestedAt: new Date(request.requestedAt).toISOString(),
+        reviewedAt: request.reviewedAt ? new Date(request.reviewedAt).toISOString() : undefined,
+        portalAccountDeletedAt: request.portalAccountDeletedAt
+          ? new Date(request.portalAccountDeletedAt).toISOString()
+          : undefined,
       }))
       .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)),
     contracts: (input?.contracts ?? base.contracts)
@@ -4622,6 +4652,62 @@ export async function reviewLocalTenantPauseRequest(
                   pauseRequests: entry.moduleData.mobileSelfService.pauseRequests.map((item) =>
                     item.id === input.id ? request : item,
                   ),
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return request;
+  });
+}
+
+export async function createLocalTenantAccountDeletionRequest(
+  tenantId: string,
+  input: CreateLocalTenantAccountDeletionRequestInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je accountverwijderingen toevoegt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const now = new Date().toISOString();
+    const request = normalizeMobileSelfServiceData(tenant.id, {
+      accountDeletionRequests: [
+        {
+          id: accountDeletionRequestIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          email: input.email,
+          reason: input.reason,
+          status: input.status ?? "pending",
+          requestedAt: now,
+          reviewedAt: input.status && input.status !== "pending" ? now : undefined,
+          portalAccountDeletedAt: input.portalAccountDeletedAt,
+        },
+      ],
+    }).accountDeletionRequests[0]!;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  accountDeletionRequests: [
+                    ...entry.moduleData.mobileSelfService.accountDeletionRequests,
+                    request,
+                  ],
                 }),
               },
             }

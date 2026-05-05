@@ -146,6 +146,8 @@ export function PublicReservationPortal({
   const [pauseStartsAt, setPauseStartsAt] = useState("");
   const [pauseEndsAt, setPauseEndsAt] = useState("");
   const [pauseReason, setPauseReason] = useState("");
+  const [accountDeletionReason, setAccountDeletionReason] = useState("");
+  const [accountDeletionConfirmed, setAccountDeletionConfirmed] = useState(false);
   const [lastResult, setLastResult] = useState<{
     bookingId: string;
     status: string;
@@ -205,17 +207,21 @@ export function PublicReservationPortal({
   const nextReservation = visibleReservations[0] ?? null;
   const nextBookableClass = snapshot.classSessions[0] ?? null;
   const primaryContract = selfService?.contracts[0] ?? null;
+  const memberDisplayName = isMemberFlow ? snapshot.memberDisplayName : "";
+  const memberEmail = isMemberFlow ? snapshot.memberEmail : "";
   const memberServiceItemCount =
     (selfService?.contracts.length ?? 0) +
     (selfService?.receipts.length ?? 0) +
     (selfService?.paymentMethodRequests.length ?? 0) +
-    (selfService?.pauseRequests.length ?? 0);
+    (selfService?.pauseRequests.length ?? 0) +
+    (selfService?.accountDeletionRequests.length ?? 0);
   const paymentMethodRequestReady = Boolean(
     primaryContract && requestedMethodLabel.trim(),
   );
   const pauseRequestReady = Boolean(
     primaryContract && pauseStartsAt && pauseEndsAt && pauseReason.trim(),
   );
+  const accountDeletionReady = Boolean(memberEmail && accountDeletionConfirmed);
   const memberReservationReady = canReserve && Boolean(selectedClassSessionId);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -356,7 +362,10 @@ export function PublicReservationPortal({
   }
 
   async function handleMemberSelfServiceSubmit(input: {
-    readonly operation: "request_payment_method_update" | "request_pause";
+    readonly operation:
+      | "request_payment_method_update"
+      | "request_pause"
+      | "request_account_deletion";
     readonly body: Record<string, unknown>;
     readonly successMessage: string;
   }) {
@@ -382,6 +391,13 @@ export function PublicReservationPortal({
         if (input.operation === "request_payment_method_update") {
           setRequestedMethodLabel("Nieuwe SEPA IBAN");
           setPaymentMethodNote("");
+        } else if (input.operation === "request_account_deletion") {
+          setAccountDeletionReason("");
+          setAccountDeletionConfirmed(false);
+          toast.success(input.successMessage);
+          await fetch("/api/auth/logout", { method: "POST" });
+          window.location.assign("/login?account=deleted");
+          return;
         } else {
           setPauseStartsAt("");
           setPauseEndsAt("");
@@ -1041,8 +1057,8 @@ export function PublicReservationPortal({
             <Card.Header className="space-y-3">
               <Card.Title>Ledenservice</Card.Title>
               <Card.Description>
-                Dien hier zelf een betaalmethode-update of pauzeverzoek in. Je club ziet de
-                aanvraag direct in het dashboard.
+                Dien hier zelf betaalvragen, pauzeverzoeken en accountbeheer in.
+                Je club ziet de aanvraag direct in het dashboard.
               </Card.Description>
             </Card.Header>
             <Card.Content className="grid gap-6 md:grid-cols-2">
@@ -1172,6 +1188,73 @@ export function PublicReservationPortal({
                    {isSelfServicePending ? "Versturen..." : "Vraag pauze aan"}
                  </Button>
               </form>
+
+              <form
+                id="account-verwijderen"
+                className="section-stack rounded-2xl border border-border/70 bg-surface p-4 md:col-span-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+
+                  const contract = primaryContract;
+
+                  if (!accountDeletionConfirmed) {
+                    toast.error("Bevestig eerst dat je je ledenaccount wilt verwijderen.");
+                    return;
+                  }
+
+                  void handleMemberSelfServiceSubmit({
+                    operation: "request_account_deletion",
+                    body: {
+                      ...(contract ? { memberId: contract.memberId } : {}),
+                      memberName: memberDisplayName,
+                      email: memberEmail,
+                      reason: accountDeletionReason || undefined,
+                    },
+                    successMessage:
+                      "Je ledenaccount is verwijderd. Je wordt nu uitgelogd.",
+                  });
+                }}
+              >
+                <div className="space-y-1">
+                  <p className="text-base font-semibold">Account verwijderen</p>
+                  <p className="text-muted text-sm leading-6">
+                    Je login wordt direct uitgezet. Je club bewaart contracten,
+                    betalingen en wettelijke administratie alleen zolang dat nodig is.
+                  </p>
+                </div>
+                <div className="field-stack">
+                  <Label>Reden (optioneel)</Label>
+                  <TextArea
+                    fullWidth
+                    rows={3}
+                    value={accountDeletionReason}
+                    onChange={(event) => setAccountDeletionReason(event.target.value)}
+                  />
+                </div>
+                <label className="flex items-start gap-3 text-sm leading-6 text-muted">
+                  <input
+                    checked={accountDeletionConfirmed}
+                    className="mt-1"
+                    type="checkbox"
+                    onChange={(event) => setAccountDeletionConfirmed(event.target.checked)}
+                  />
+                  Ik begrijp dat mijn app-login direct wordt verwijderd en dat ik
+                  daarna niet meer kan inloggen zonder hulp van mijn club.
+                </label>
+                {!accountDeletionReady ? (
+                  <p className="text-muted text-sm">
+                    Bevestig eerst dat je je ledenaccount wilt verwijderen.
+                  </p>
+                ) : null}
+                <Button
+                  isDisabled={isSelfServicePending || !accountDeletionReady}
+                  type="submit"
+                  variant="outline"
+                >
+                  <XCircle aria-hidden="true" size={16} />
+                  Verwijder mijn account
+                </Button>
+              </form>
             </Card.Content>
           </Card>
 
@@ -1223,7 +1306,11 @@ export function PublicReservationPortal({
 
               <div className="space-y-3">
                 <p className="text-sm font-medium">Open verzoeken</p>
-                {[...selfService.paymentMethodRequests, ...selfService.pauseRequests]
+                {[
+                  ...selfService.paymentMethodRequests,
+                  ...selfService.pauseRequests,
+                  ...selfService.accountDeletionRequests,
+                ]
                   .slice(0, 4)
                   .map((request) => (
                     <div key={request.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 p-4">
@@ -1232,7 +1319,9 @@ export function PublicReservationPortal({
                         <p className="text-muted text-sm">
                           {"requestedMethodLabel" in request
                             ? request.requestedMethodLabel
-                            : `${request.startsAt.slice(0, 10)} tot ${request.endsAt.slice(0, 10)}`}
+                            : "startsAt" in request
+                              ? `${request.startsAt.slice(0, 10)} tot ${request.endsAt.slice(0, 10)}`
+                              : "Account verwijderen"}
                         </p>
                       </div>
                       <Chip size="sm" variant="soft">
@@ -1241,13 +1330,81 @@ export function PublicReservationPortal({
                     </div>
                   ))}
                 {selfService.paymentMethodRequests.length === 0 &&
-                selfService.pauseRequests.length === 0 ? (
+                selfService.pauseRequests.length === 0 &&
+                selfService.accountDeletionRequests.length === 0 ? (
                    <p className="text-muted text-sm">Er staan nog geen open zelfserviceverzoeken.</p>
                 ) : null}
               </div>
             </Card.Content>
           </Card>
         </section>
+      ) : null}
+
+      {isMemberFlow && !shouldShowSelfService ? (
+        <Card id="account-verwijderen" className="rounded-[28px] border-border/80">
+          <Card.Header className="space-y-3">
+            <Card.Title>Account verwijderen</Card.Title>
+            <Card.Description>
+              Je kunt je ledenapp-login ook verwijderen wanneer je geen actief
+              lidmaatschap hebt of ledenservice niet aan staat.
+            </Card.Description>
+          </Card.Header>
+          <Card.Content>
+            <form
+              className="section-stack"
+              onSubmit={(event) => {
+                event.preventDefault();
+
+                if (!accountDeletionConfirmed) {
+                  toast.error("Bevestig eerst dat je je ledenaccount wilt verwijderen.");
+                  return;
+                }
+
+                void handleMemberSelfServiceSubmit({
+                  operation: "request_account_deletion",
+                  body: {
+                    memberName: memberDisplayName,
+                    email: memberEmail,
+                    reason: accountDeletionReason || undefined,
+                  },
+                  successMessage:
+                    "Je ledenaccount is verwijderd. Je wordt nu uitgelogd.",
+                });
+              }}
+            >
+              <p className="text-muted text-sm leading-6">
+                Je login wordt direct uitgezet. Contracten, betalingen en wettelijke
+                administratie blijven alleen bewaard zolang dat nodig is.
+              </p>
+              <div className="field-stack">
+                <Label>Reden (optioneel)</Label>
+                <TextArea
+                  fullWidth
+                  rows={3}
+                  value={accountDeletionReason}
+                  onChange={(event) => setAccountDeletionReason(event.target.value)}
+                />
+              </div>
+              <label className="flex items-start gap-3 text-sm leading-6 text-muted">
+                <input
+                  checked={accountDeletionConfirmed}
+                  className="mt-1"
+                  type="checkbox"
+                  onChange={(event) => setAccountDeletionConfirmed(event.target.checked)}
+                />
+                Ik begrijp dat mijn app-login direct wordt verwijderd.
+              </label>
+              <Button
+                isDisabled={isSelfServicePending || !accountDeletionReady}
+                type="submit"
+                variant="outline"
+              >
+                <XCircle aria-hidden="true" size={16} />
+                Verwijder mijn account
+              </Button>
+            </form>
+          </Card.Content>
+        </Card>
       ) : null}
 
       {isMemberFlow && canBrowseClasses ? (

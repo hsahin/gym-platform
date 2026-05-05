@@ -29,6 +29,9 @@ describe("native member app shell", () => {
     expect(source).toContain("Mijn planning");
     expect(source).toContain("Ledenservice");
     expect(source).toContain("Open ledenportaal");
+    expect(source).toContain("Account verwijderen");
+    expect(source).toContain('data-open-portal="/reserve#account-verwijderen"');
+    expect(source).toContain("Je login direct uitzetten");
     expect(source).toContain("navigator.onLine");
     expect(source).toContain("SecureStorage");
     expect(source).toContain("Preferences");

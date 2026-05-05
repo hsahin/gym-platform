@@ -24,6 +24,13 @@ const memberMobileSelfServiceSchema = z.discriminatedUnion("operation", [
     endsAt: z.string().min(10),
     reason: z.string().min(2).max(280),
   }),
+  z.object({
+    operation: z.literal("request_account_deletion"),
+    memberId: z.string().min(1).optional(),
+    memberName: z.string().min(2).optional(),
+    email: z.string().email(),
+    reason: z.string().max(280).optional(),
+  }),
 ]);
 
 export async function POST(request: NextRequest) {
@@ -55,6 +62,12 @@ export async function POST(request: NextRequest) {
         );
       case "request_pause":
         return services.requestMembershipPause(viewer.actor, viewer.tenantContext, payload);
+      case "request_account_deletion":
+        return services.requestMemberAccountDeletion(
+          viewer.actor,
+          viewer.tenantContext,
+          payload,
+        );
     }
   });
 }
