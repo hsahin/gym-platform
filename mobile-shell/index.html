@@ -7,6 +7,10 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#111820" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111820'/%3E%3Cpath d='M18 42 42 18M22 18l24 24' stroke='%2355a7ff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
     <title>GymOS Leden</title>
     <style>
       :root {
@@ -29,126 +33,377 @@
       }
 
       body {
-        display: grid;
-        place-items: center;
-        padding: max(24px, env(safe-area-inset-top))
-          max(20px, env(safe-area-inset-right))
-          max(24px, env(safe-area-inset-bottom))
-          max(20px, env(safe-area-inset-left));
         background:
-          linear-gradient(135deg, rgba(65, 132, 255, 0.18), transparent 34%),
-          linear-gradient(315deg, rgba(135, 241, 180, 0.12), transparent 42%),
+          linear-gradient(135deg, rgba(79, 159, 255, 0.18), transparent 36%),
+          linear-gradient(315deg, rgba(135, 241, 180, 0.14), transparent 44%),
           #0b1117;
       }
 
-      main {
-        width: min(100%, 420px);
+      button {
+        font: inherit;
+      }
+
+      .app-shell {
+        width: min(100%, 520px);
+        min-height: 100dvh;
         display: grid;
-        gap: 18px;
+        gap: 16px;
+        margin: 0 auto;
+        padding: max(20px, env(safe-area-inset-top))
+          max(16px, env(safe-area-inset-right))
+          max(18px, env(safe-area-inset-bottom))
+          max(16px, env(safe-area-inset-left));
+      }
+
+      .topbar,
+      .screen,
+      .dock {
+        min-width: 0;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 2px;
+      }
+
+      .brand strong {
+        font-size: 1rem;
+      }
+
+      .brand span,
+      .muted {
+        color: #aab4c2;
+      }
+
+      .network {
+        min-height: 34px;
+        border: 1px solid rgba(170, 180, 194, 0.24);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #dce6f3;
+        padding: 0 12px;
+        font-size: 0.82rem;
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+        border: 1px solid rgba(170, 180, 194, 0.22);
+        border-radius: 8px;
+        background:
+          linear-gradient(145deg, rgba(79, 159, 255, 0.2), transparent 48%),
+          rgba(255, 255, 255, 0.08);
+        padding: 18px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
       }
 
       h1 {
-        margin: 0;
-        font-size: clamp(2rem, 12vw, 3.5rem);
-        line-height: 0.95;
+        max-width: 10ch;
+        font-size: 2.75rem;
+        line-height: 0.96;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 1.05rem;
         letter-spacing: 0;
       }
 
       p {
-        margin: 0;
         color: #aab4c2;
-        font-size: 1rem;
-        line-height: 1.6;
+        line-height: 1.55;
       }
 
-      a {
-        width: fit-content;
-        min-height: 48px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 999px;
-        padding: 0 20px;
-        background: #4f9fff;
-        color: #07111f;
-        font-weight: 700;
-        text-decoration: none;
+      .quick-actions,
+      .cards,
+      .screen {
+        display: grid;
+        gap: 12px;
+      }
+
+      .quick-actions {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .panel,
+      .action {
+        border: 1px solid rgba(170, 180, 194, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.07);
       }
 
       .panel {
         display: grid;
-        gap: 12px;
-        border: 1px solid rgba(170, 180, 194, 0.22);
-        border-radius: 22px;
-        background:
-          linear-gradient(135deg, rgba(79, 159, 255, 0.18), transparent 42%),
-          rgba(255, 255, 255, 0.06);
-        padding: 16px;
+        gap: 10px;
+        padding: 14px;
       }
 
-      .row {
-        display: grid;
-        grid-template-columns: 36px minmax(0, 1fr);
-        gap: 12px;
+      .panel-row {
+        display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 12px;
       }
 
-      .mark {
-        display: grid;
-        width: 36px;
-        height: 36px;
-        place-items: center;
-        border-radius: 12px;
-        background: rgba(79, 159, 255, 0.16);
+      .label {
+        color: #aab4c2;
+        font-size: 0.82rem;
+      }
+
+      .value {
+        color: #f4f7fb;
+        font-weight: 750;
+      }
+
+      .badge {
+        width: fit-content;
+        border-radius: 999px;
+        background: rgba(135, 241, 180, 0.14);
         color: #87f1b4;
+        padding: 5px 9px;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .action,
+      .primary {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: #f4f7fb;
+        text-decoration: none;
+      }
+
+      .action {
+        padding: 10px;
+      }
+
+      .primary {
+        width: 100%;
+        border: 0;
+        border-radius: 8px;
+        background: #55a7ff;
+        color: #07111f;
         font-weight: 800;
       }
 
-      .row strong {
-        display: block;
-        color: #f4f7fb;
-        font-size: 0.95rem;
+      .screen[hidden] {
+        display: none;
       }
 
-      .row span {
+      .dock {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        border: 1px solid rgba(170, 180, 194, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.07);
+        padding: 8px;
+      }
+
+      .dock button {
+        min-width: 0;
+        min-height: 46px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
         color: #aab4c2;
-        font-size: 0.85rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .dock button[aria-current="page"] {
+        background: rgba(79, 159, 255, 0.18);
+        color: #f4f7fb;
+      }
+
+      @media (min-width: 430px) {
+        h1 {
+          font-size: 3.25rem;
+        }
       }
     </style>
   </head>
   <body>
-    <main>
-      <h1>GymOS Leden</h1>
-      <p>
-        Open je lessen, reserveringen, betalingen en ledenservice in de
-        GymOS ledenapp.
-      </p>
-      <section class="panel" aria-label="Ledenapp onderdelen">
-        <div class="row">
-          <div class="mark">1</div>
-          <div>
-            <strong>Boek je training</strong>
-            <span>Rooster, vrije plekken en wachtlijst.</span>
-          </div>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <strong>GymOS Leden</strong>
+          <span>Klaar voor je training</span>
         </div>
-        <div class="row">
-          <div class="mark">2</div>
-          <div>
-            <strong>Beheer je planning</strong>
-            <span>Bekijk en annuleer je reserveringen.</span>
-          </div>
-        </div>
-        <div class="row">
-          <div class="mark">3</div>
-          <div>
-            <strong>Regel ledenservice</strong>
-            <span>Contracten, betalingen en pauzeverzoeken.</span>
-          </div>
+        <button class="network" type="button" data-network-status>
+          Status laden
+        </button>
+      </header>
+
+      <section class="hero">
+        <span class="badge">Lokale app-shell</span>
+        <h1>Vandaag in je club</h1>
+        <p>
+          Boek lessen, beheer je planning en regel ledenservice vanuit een
+          eigen mobiele start in plaats van een doorgeladen website.
+        </p>
+        <div class="quick-actions">
+          <button class="action" type="button" data-nav="classes">
+            Rooster
+          </button>
+          <button class="action" type="button" data-nav="service">
+            Service
+          </button>
         </div>
       </section>
-      <a href="https://gym-platform-vc9yk.ondigitalocean.app/reserve">
-        Open ledenapp
-      </a>
-    </main>
+
+      <main>
+        <section class="screen" data-screen="today">
+          <article class="panel">
+            <div class="panel-row">
+              <div>
+                <p class="label">Volgende training</p>
+                <h2>Open je clubrooster</h2>
+              </div>
+              <span class="badge">Live</span>
+            </div>
+            <p>
+              Na het inloggen haalt het ledenportaal je echte reserveringen,
+              wachtlijst en contractstatus op.
+            </p>
+            <button class="primary" type="button" data-open-portal="/reserve">
+              Open ledenportaal
+            </button>
+          </article>
+
+          <article class="panel">
+            <p class="label">Mijn planning</p>
+            <p>
+              Bekijk gereserveerde lessen, annuleer een plek en check of je op
+              de wachtlijst staat.
+            </p>
+          </article>
+        </section>
+
+        <section class="screen" data-screen="classes" hidden>
+          <article class="panel">
+            <div class="panel-row">
+              <div>
+                <p class="label">Lessen</p>
+                <h2>Rooster en vrije plekken</h2>
+              </div>
+              <span class="value">31 dagen</span>
+            </div>
+            <p>
+              De native shell blijft lokaal; het actuele rooster open je pas
+              wanneer je een live actie wilt doen.
+            </p>
+            <button class="primary" type="button" data-open-portal="/reserve">
+              Rooster openen
+            </button>
+          </article>
+        </section>
+
+        <section class="screen" data-screen="service" hidden>
+          <article class="panel">
+            <p class="label">Ledenservice</p>
+            <h2>Betaalzaken, pauze en documenten</h2>
+            <p>
+              Vraag een betaalmethode-update aan, bekijk contracten of stuur
+              een pauzeverzoek naar je club.
+            </p>
+            <button class="primary" type="button" data-open-portal="/reserve">
+              Service openen
+            </button>
+          </article>
+        </section>
+
+        <section class="screen" data-screen="account" hidden>
+          <article class="panel">
+            <p class="label">Account</p>
+            <h2>Inloggen en club wisselen</h2>
+            <p>
+              Gebruik je ledenaccount om je gekoppelde clubs, reserveringen en
+              betaalgegevens te beheren.
+            </p>
+            <button class="primary" type="button" data-open-portal="/login">
+              Inloggen
+            </button>
+          </article>
+        </section>
+      </main>
+
+      <nav class="dock" aria-label="Ledenapp menu">
+        <button type="button" data-nav="today" aria-current="page">Vandaag</button>
+        <button type="button" data-nav="classes">Lessen</button>
+        <button type="button" data-nav="service">Service</button>
+        <button type="button" data-nav="account">Account</button>
+      </nav>
+    </div>
+
+    <script>
+      const portalOrigin = "https://gym-platform-vc9yk.ondigitalocean.app";
+      const stateKey = "gymos-member-shell";
+      const savedState = JSON.parse(localStorage.getItem(stateKey) || "{}");
+      let activeScreen = savedState.screen || "today";
+
+      function saveState(nextState) {
+        localStorage.setItem(
+          stateKey,
+          JSON.stringify({
+            ...savedState,
+            ...nextState,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
+      }
+
+      function setScreen(screen) {
+        activeScreen = screen;
+        document.querySelectorAll("[data-screen]").forEach((element) => {
+          element.hidden = element.dataset.screen !== screen;
+        });
+        document.querySelectorAll("[data-nav]").forEach((button) => {
+          if (button.dataset.nav === screen) {
+            button.setAttribute("aria-current", "page");
+          } else {
+            button.removeAttribute("aria-current");
+          }
+        });
+        saveState({ screen });
+      }
+
+      function updateNetworkStatus() {
+        const label = navigator.onLine ? "Online" : "Offline";
+        document.querySelector("[data-network-status]").textContent = label;
+      }
+
+      function openPortal(path) {
+        saveState({ lastPortalOpenAt: new Date().toISOString() });
+        window.location.assign(`${portalOrigin}${path}`);
+      }
+
+      document.querySelectorAll("[data-nav]").forEach((button) => {
+        button.addEventListener("click", () => setScreen(button.dataset.nav));
+      });
+      document.querySelectorAll("[data-open-portal]").forEach((button) => {
+        button.addEventListener("click", () => openPortal(button.dataset.openPortal));
+      });
+      window.addEventListener("online", updateNetworkStatus);
+      window.addEventListener("offline", updateNetworkStatus);
+
+      setScreen(activeScreen);
+      updateNetworkStatus();
+    </script>
   </body>
 </html>
