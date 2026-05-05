@@ -6,6 +6,18 @@ const config: CapacitorConfig = {
   webDir: "mobile-shell",
   backgroundColor: "#111820",
   loggingBehavior: "production",
+  plugins: {
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
+    LocalNotifications: {
+      smallIcon: "splash_icon",
+      iconColor: "#5EEAD4",
+    },
+    App: {
+      disableBackButtonHandler: false,
+    },
+  },
   server: {
     cleartext: false,
     allowNavigation: [

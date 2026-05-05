@@ -117,8 +117,22 @@ Leden kunnen via deze app:
 - contractdocumenten en betalingsbewijzen openen
 - betaalmethode-updates aanvragen
 - pauzeverzoeken indienen
+- pushmeldingen en lokale reminders inschakelen
+- een QR-check-in pas tonen
+- een les aan de eigen agenda toevoegen
+- de sessie ontgrendelen met Face ID, Touch ID of biometrie op Android
+- offline de laatst geopende ledeninformatie zien
 - wisselen tussen gekoppelde clubs wanneer hetzelfde ledenaccount bij meerdere
   gyms actief is
+
+Voor productie moeten de native app-koppelingen nog met echte store-gegevens
+worden gevuld:
+
+- `APPLE_TEAM_ID` voor `/.well-known/apple-app-site-association`
+- `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` voor `/.well-known/assetlinks.json`
+- APNs/Firebase projectinstellingen voor pushmeldingen op afstand
+- Apple Wallet en Google Wallet issuer-gegevens voordat GymOS echte walletpassen
+  kan uitgeven
 
 ## Productie-eisen
 

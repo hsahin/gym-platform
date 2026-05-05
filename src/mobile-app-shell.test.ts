@@ -22,6 +22,7 @@ describe("native member app shell", () => {
 
     expect(source).toContain('data-screen="today"');
     expect(source).toContain('data-screen="classes"');
+    expect(source).toContain('data-screen="pass"');
     expect(source).toContain('data-screen="service"');
     expect(source).toContain('data-screen="account"');
     expect(source).toContain("Volgende training");
@@ -29,7 +30,8 @@ describe("native member app shell", () => {
     expect(source).toContain("Ledenservice");
     expect(source).toContain("Open ledenportaal");
     expect(source).toContain("navigator.onLine");
-    expect(source).toContain("localStorage");
+    expect(source).toContain("SecureStorage");
+    expect(source).toContain("Preferences");
     expect(source).not.toContain(">Open ledenapp<");
   });
 });

@@ -7,10 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#111820" />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111820'/%3E%3Cpath d='M18 42 42 18M22 18l24 24' stroke='%2355a7ff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E"
-    />
+    <link rel="icon" href="assets/checkin-qr.svg" />
     <title>GymOS Leden</title>
     <style>
       :root {
@@ -34,8 +31,8 @@
 
       body {
         background:
-          linear-gradient(135deg, rgba(79, 159, 255, 0.18), transparent 36%),
-          linear-gradient(315deg, rgba(135, 241, 180, 0.14), transparent 44%),
+          linear-gradient(135deg, rgba(94, 234, 212, 0.18), transparent 34%),
+          linear-gradient(315deg, rgba(56, 189, 248, 0.12), transparent 42%),
           #0b1117;
       }
 
@@ -44,9 +41,10 @@
       }
 
       .app-shell {
-        width: min(100%, 520px);
+        width: min(100%, 540px);
         min-height: 100dvh;
         display: grid;
+        grid-template-rows: auto auto 1fr auto;
         gap: 16px;
         margin: 0 auto;
         padding: max(20px, env(safe-area-inset-top))
@@ -57,7 +55,8 @@
 
       .topbar,
       .screen,
-      .dock {
+      .dock,
+      .capability-grid {
         min-width: 0;
       }
 
@@ -78,18 +77,22 @@
       }
 
       .brand span,
-      .muted {
+      .muted,
+      .label {
         color: #aab4c2;
       }
 
-      .network {
-        min-height: 34px;
-        border: 1px solid rgba(170, 180, 194, 0.24);
+      .network,
+      .badge,
+      .status-pill {
+        min-height: 32px;
+        border: 1px solid rgba(170, 180, 194, 0.22);
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.08);
         color: #dce6f3;
-        padding: 0 12px;
-        font-size: 0.82rem;
+        padding: 0 11px;
+        font-size: 0.78rem;
+        font-weight: 750;
       }
 
       .hero {
@@ -98,7 +101,7 @@
         border: 1px solid rgba(170, 180, 194, 0.22);
         border-radius: 8px;
         background:
-          linear-gradient(145deg, rgba(79, 159, 255, 0.2), transparent 48%),
+          linear-gradient(145deg, rgba(94, 234, 212, 0.18), transparent 48%),
           rgba(255, 255, 255, 0.08);
         padding: 18px;
       }
@@ -110,9 +113,9 @@
       }
 
       h1 {
-        max-width: 10ch;
-        font-size: 2.75rem;
-        line-height: 0.96;
+        max-width: 12ch;
+        font-size: 2.55rem;
+        line-height: 0.98;
         letter-spacing: 0;
       }
 
@@ -128,17 +131,20 @@
 
       .quick-actions,
       .cards,
-      .screen {
+      .screen,
+      .capability-grid {
         display: grid;
         gap: 12px;
       }
 
-      .quick-actions {
+      .quick-actions,
+      .capability-grid {
         grid-template-columns: 1fr 1fr;
       }
 
       .panel,
-      .action {
+      .action,
+      .capability {
         border: 1px solid rgba(170, 180, 194, 0.2);
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.07);
@@ -158,7 +164,6 @@
       }
 
       .label {
-        color: #aab4c2;
         font-size: 0.82rem;
       }
 
@@ -169,16 +174,15 @@
 
       .badge {
         width: fit-content;
-        border-radius: 999px;
-        background: rgba(135, 241, 180, 0.14);
-        color: #87f1b4;
-        padding: 5px 9px;
-        font-size: 0.78rem;
-        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        background: rgba(94, 234, 212, 0.13);
+        color: #87f1df;
       }
 
       .action,
-      .primary {
+      .primary,
+      .secondary {
         min-height: 48px;
         display: inline-flex;
         align-items: center;
@@ -192,13 +196,66 @@
         padding: 10px;
       }
 
-      .primary {
+      .primary,
+      .secondary {
         width: 100%;
-        border: 0;
         border-radius: 8px;
-        background: #55a7ff;
-        color: #07111f;
         font-weight: 800;
+      }
+
+      .primary {
+        border: 0;
+        background: #5eead4;
+        color: #07111f;
+      }
+
+      .secondary {
+        border: 1px solid rgba(170, 180, 194, 0.22);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .capability {
+        display: grid;
+        gap: 5px;
+        padding: 12px;
+      }
+
+      .capability strong {
+        color: #f4f7fb;
+        font-size: 0.94rem;
+      }
+
+      .capability span {
+        color: #aab4c2;
+        font-size: 0.78rem;
+        line-height: 1.35;
+      }
+
+      .pass-card {
+        display: grid;
+        place-items: center;
+        gap: 12px;
+        padding: 18px;
+        border: 1px solid rgba(94, 234, 212, 0.24);
+        border-radius: 8px;
+        background:
+          linear-gradient(145deg, rgba(94, 234, 212, 0.12), transparent),
+          rgba(255, 255, 255, 0.07);
+      }
+
+      .pass-card img {
+        width: min(72vw, 260px);
+        aspect-ratio: 1;
+        border-radius: 8px;
+        background: #fff;
+        padding: 12px;
+      }
+
+      .checkin-code {
+        color: #f8fafc;
+        font-size: 1.35rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
       }
 
       .screen[hidden] {
@@ -207,8 +264,8 @@
 
       .dock {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
         border: 1px solid rgba(170, 180, 194, 0.2);
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.07);
@@ -222,18 +279,18 @@
         border-radius: 8px;
         background: transparent;
         color: #aab4c2;
-        font-size: 0.78rem;
-        font-weight: 700;
+        font-size: clamp(0.68rem, 2.7vw, 0.78rem);
+        font-weight: 760;
       }
 
       .dock button[aria-current="page"] {
-        background: rgba(79, 159, 255, 0.18);
+        background: rgba(94, 234, 212, 0.16);
         color: #f4f7fb;
       }
 
       @media (min-width: 430px) {
         h1 {
-          font-size: 3.25rem;
+          font-size: 3.05rem;
         }
       }
     </style>
@@ -251,18 +308,18 @@
       </header>
 
       <section class="hero">
-        <span class="badge">Lokale app-shell</span>
+        <span class="badge">Native leden-app</span>
         <h1>Vandaag in je club</h1>
         <p>
-          Boek lessen, beheer je planning en regel ledenservice vanuit een
-          eigen mobiele start in plaats van een doorgeladen website.
+          Boek lessen, toon je check-in pas, activeer meldingen en open je
+          ledenomgeving met native app-gevoel.
         </p>
         <div class="quick-actions">
-          <button class="action" type="button" data-nav="classes">
-            Rooster
+          <button class="action" type="button" data-nav="pass">
+            Check-in pas
           </button>
-          <button class="action" type="button" data-nav="service">
-            Service
+          <button class="action" type="button" data-enable-push>
+            Pushmeldingen
           </button>
         </div>
       </section>
@@ -279,12 +336,32 @@
             </div>
             <p>
               Na het inloggen haalt het ledenportaal je echte reserveringen,
-              wachtlijst en contractstatus op.
+              wachtlijst en contractstatus op. Offline blijft je laatste
+              check-in pas zichtbaar.
             </p>
             <button class="primary" type="button" data-open-portal="/reserve">
               Open ledenportaal
             </button>
           </article>
+
+          <div class="capability-grid" aria-label="Native mogelijkheden">
+            <div class="capability">
+              <strong>Pushmeldingen</strong>
+              <span data-capability="push">Toestemming nog niet gevraagd</span>
+            </div>
+            <div class="capability">
+              <strong>Veilige opslag</strong>
+              <span data-capability="secure-storage">Native opslag controleren</span>
+            </div>
+            <div class="capability">
+              <strong>Offline klaar</strong>
+              <span data-capability="offline">Snapshot wordt voorbereid</span>
+            </div>
+            <div class="capability">
+              <strong>Deep link actief</strong>
+              <span data-capability="deeplink">gymos://member/pass</span>
+            </div>
+          </div>
 
           <article class="panel">
             <p class="label">Mijn planning</p>
@@ -292,6 +369,9 @@
               Bekijk gereserveerde lessen, annuleer een plek en check of je op
               de wachtlijst staat.
             </p>
+            <button class="secondary" type="button" data-calendar>
+              Agenda toevoegen
+            </button>
           </article>
         </section>
 
@@ -314,6 +394,35 @@
           </article>
         </section>
 
+        <section class="screen" data-screen="pass" hidden>
+          <article class="pass-card">
+            <span class="badge">QR/check-in pass</span>
+            <img
+              src="assets/checkin-qr.svg"
+              alt="GymOS check-in QR"
+              width="260"
+              height="260"
+            />
+            <p class="checkin-code">GYMOS-HOMEGYM</p>
+            <p class="muted">
+              Deze pas blijft beschikbaar wanneer je tijdelijk offline bent.
+            </p>
+          </article>
+          <article class="panel">
+            <h2>Walletpas</h2>
+            <p>
+              Gebruik de QR nu direct. Apple Wallet en Google Wallet openen via
+              de clubconfiguratie zodra de issuer-gegevens zijn gekoppeld.
+            </p>
+            <button class="primary" type="button" data-wallet>
+              Walletpas openen
+            </button>
+            <button class="secondary" type="button" data-share-pass>
+              QR delen
+            </button>
+          </article>
+        </section>
+
         <section class="screen" data-screen="service" hidden>
           <article class="panel">
             <p class="label">Ledenservice</p>
@@ -326,17 +435,40 @@
               Service openen
             </button>
           </article>
+          <article class="panel">
+            <h2>Lokale herinnering</h2>
+            <p>
+              Plan een native melding voor je volgende training zonder dat de
+              leden-app open hoeft te blijven.
+            </p>
+            <button class="secondary" type="button" data-local-reminder>
+              Herinnering testen
+            </button>
+          </article>
         </section>
 
         <section class="screen" data-screen="account" hidden>
           <article class="panel">
             <p class="label">Account</p>
+            <h2>Biometrisch inloggen</h2>
+            <p>
+              Ontgrendel je veilige sessie met Face ID, Touch ID,
+              vingerafdruk of toestelcode als je apparaat dit ondersteunt.
+            </p>
+            <button class="primary" type="button" data-enable-biometric>
+              Biometrie activeren
+            </button>
+            <span class="status-pill" data-biometric-status>
+              Biometrie nog niet gecontroleerd
+            </span>
+          </article>
+          <article class="panel">
             <h2>Inloggen en club wisselen</h2>
             <p>
               Gebruik je ledenaccount om je gekoppelde clubs, reserveringen en
               betaalgegevens te beheren.
             </p>
-            <button class="primary" type="button" data-open-portal="/login">
+            <button class="secondary" type="button" data-open-portal="/login">
               Inloggen
             </button>
           </article>
@@ -346,6 +478,7 @@
       <nav class="dock" aria-label="Ledenapp menu">
         <button type="button" data-nav="today" aria-current="page">Vandaag</button>
         <button type="button" data-nav="classes">Lessen</button>
+        <button type="button" data-nav="pass">Pas</button>
         <button type="button" data-nav="service">Service</button>
         <button type="button" data-nav="account">Account</button>
       </nav>
@@ -354,21 +487,81 @@
     <script>
       const portalOrigin = "https://gym-platform-vc9yk.ondigitalocean.app";
       const stateKey = "gymos-member-shell";
-      const savedState = JSON.parse(localStorage.getItem(stateKey) || "{}");
-      let activeScreen = savedState.screen || "today";
+      const secureSessionKey = "gymos-member-secure-session";
+      const passUrl = "gymos://member/pass";
+      const calendarFallbackUrl = "assets/next-training.ics";
+      const calendarFilename = "gymos-volgende-training.ics";
+      const nativePlugins = window.Capacitor?.Plugins || {};
+      const {
+        App,
+        Browser,
+        Filesystem,
+        PushNotifications,
+        LocalNotifications,
+        SecureStorage,
+        BiometricAuthNative,
+        Preferences,
+        Share,
+        Haptics,
+      } = nativePlugins;
+      const memoryState = {};
+      let activeScreen = "today";
 
-      function saveState(nextState) {
-        localStorage.setItem(
-          stateKey,
-          JSON.stringify({
-            ...savedState,
-            ...nextState,
-            updatedAt: new Date().toISOString(),
-          }),
-        );
+      function capability(name, value) {
+        const element = document.querySelector(`[data-capability="${name}"]`);
+        if (element) {
+          element.textContent = value;
+        }
       }
 
-      function setScreen(screen) {
+      async function getState() {
+        if (Preferences?.get) {
+          const result = await Preferences.get({ key: stateKey });
+          return result.value ? JSON.parse(result.value) : {};
+        }
+
+        return memoryState;
+      }
+
+      async function saveState(nextState) {
+        Object.assign(memoryState, nextState, {
+          updatedAt: new Date().toISOString(),
+        });
+        if (Preferences?.set) {
+          await Preferences.set({
+            key: stateKey,
+            value: JSON.stringify(memoryState),
+          });
+        }
+      }
+
+      async function saveSecureSession(value) {
+        const payload = {
+          enabled: true,
+          label: "GymOS leden-sessie",
+          updatedAt: new Date().toISOString(),
+          ...value,
+        };
+
+        if (SecureStorage?.set) {
+          await SecureStorage.set(secureSessionKey, payload);
+          capability("secure-storage", "Native secure storage actief");
+          return;
+        }
+
+        if (Preferences?.set) {
+          await Preferences.set({
+            key: `${secureSessionKey}:fallback`,
+            value: JSON.stringify(payload),
+          });
+          capability("secure-storage", "Fallback opslag actief");
+          return;
+        }
+
+        capability("secure-storage", "Alleen tijdens deze sessie");
+      }
+
+      async function setScreen(screen) {
         activeScreen = screen;
         document.querySelectorAll("[data-screen]").forEach((element) => {
           element.hidden = element.dataset.screen !== screen;
@@ -380,17 +573,255 @@
             button.removeAttribute("aria-current");
           }
         });
-        saveState({ screen });
+        await saveState({ screen });
+        await Haptics?.selectionChanged?.();
       }
 
       function updateNetworkStatus() {
         const label = navigator.onLine ? "Online" : "Offline";
         document.querySelector("[data-network-status]").textContent = label;
+        capability(
+          "offline",
+          navigator.onLine ? "Laatste pas lokaal bewaard" : "Offline pas actief",
+        );
       }
 
-      function openPortal(path) {
-        saveState({ lastPortalOpenAt: new Date().toISOString() });
-        window.location.assign(`${portalOrigin}${path}`);
+      async function openUrl(url) {
+        await saveState({ lastOpenUrl: url });
+        if (url.startsWith("https://") && Browser?.open) {
+          await Browser.open({ url });
+          return;
+        }
+        window.location.assign(url);
+      }
+
+      async function openPortal(path) {
+        await openUrl(`${portalOrigin}${path}`);
+      }
+
+      async function enablePush() {
+        try {
+          const permission = PushNotifications?.requestPermissions
+            ? await PushNotifications.requestPermissions()
+            : { receive: "prompt" };
+
+          if (permission.receive === "granted" && PushNotifications?.register) {
+            await PushNotifications.addListener?.("registration", async (token) => {
+              await saveSecureSession({ pushToken: token.value });
+              capability("push", "Push token veilig bewaard");
+            });
+            await PushNotifications.addListener?.("registrationError", () => {
+              capability("push", "Pushprovider nog niet gekoppeld");
+            });
+            await PushNotifications.register();
+          } else {
+            capability("push", "Toestemming niet gegeven");
+          }
+
+          await scheduleLocalReminder();
+        } catch {
+          capability("push", "Pushprovider nog niet gekoppeld");
+        }
+      }
+
+      async function scheduleLocalReminder() {
+        try {
+          const permission = LocalNotifications?.requestPermissions
+            ? await LocalNotifications.requestPermissions()
+            : { display: "prompt" };
+
+          if (permission.display === "granted" && LocalNotifications?.schedule) {
+            await LocalNotifications.schedule({
+              notifications: [
+                {
+                  id: 101,
+                  title: "GymOS training",
+                  body: "Je check-in pas staat klaar.",
+                  schedule: { at: new Date(Date.now() + 60 * 1000) },
+                },
+              ],
+            });
+            capability("push", "Lokale melding gepland");
+          }
+        } catch {
+          capability("push", "Lokale melding niet beschikbaar");
+        }
+      }
+
+      async function enableBiometric() {
+        const status = document.querySelector("[data-biometric-status]");
+
+        try {
+          const result = BiometricAuthNative?.checkBiometry
+            ? await BiometricAuthNative.checkBiometry()
+            : { isAvailable: false, deviceIsSecure: false };
+
+          if (!result.isAvailable && !result.deviceIsSecure) {
+            status.textContent = "Geen biometrie of toestelcode ingesteld";
+            return;
+          }
+
+          await BiometricAuthNative?.authenticate?.({
+            reason: "Ontgrendel je GymOS leden-sessie",
+            allowDeviceCredential: true,
+            androidTitle: "GymOS Leden",
+            androidSubtitle: "Ontgrendel je ledenpas",
+          });
+          await saveSecureSession({ biometricEnabled: true });
+          status.textContent = "Biometrisch inloggen actief";
+        } catch {
+          status.textContent = "Biometrie niet afgerond";
+        }
+      }
+
+      async function sharePass() {
+        const text = "Mijn GymOS check-in pas: GYMOS-HOMEGYM";
+        if (Share?.share) {
+          await Share.share({
+            title: "GymOS check-in pas",
+            text,
+            url: passUrl,
+            dialogTitle: "QR delen",
+          });
+          return;
+        }
+        await navigator.share?.({ title: "GymOS check-in pas", text, url: passUrl });
+      }
+
+      function calendarStamp(date) {
+        return date
+          .toISOString()
+          .replace(/[-:]/g, "")
+          .replace(/\.\d{3}Z$/, "Z");
+      }
+
+      function buildCalendarEvent() {
+        const start = new Date();
+        start.setDate(start.getDate() + 1);
+        start.setHours(18, 0, 0, 0);
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+        return [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-//GymOS//Member App//NL",
+          "CALSCALE:GREGORIAN",
+          "METHOD:PUBLISH",
+          "BEGIN:VEVENT",
+          "UID:gymos-member-next-training@gym-platform-vc9yk.ondigitalocean.app",
+          `DTSTAMP:${calendarStamp(new Date())}`,
+          `DTSTART:${calendarStamp(start)}`,
+          `DTEND:${calendarStamp(end)}`,
+          "SUMMARY:GymOS training",
+          "DESCRIPTION:Open de GymOS leden-app en toon je check-in pas bij aankomst.",
+          "LOCATION:Homegym",
+          "END:VEVENT",
+          "END:VCALENDAR",
+        ].join("\r\n");
+      }
+
+      function downloadCalendarFallback(calendarEvent) {
+        const blob = new Blob([calendarEvent], { type: "text/calendar" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = calendarFilename;
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+
+      async function addCalendar() {
+        const calendarEvent = buildCalendarEvent();
+
+        try {
+          if (Filesystem?.writeFile && Share?.share) {
+            const writeResult = await Filesystem.writeFile({
+              path: calendarFilename,
+              data: calendarEvent,
+              directory: "CACHE",
+              encoding: "utf8",
+            });
+            await Share.share({
+              title: "GymOS agenda",
+              text: "Voeg je volgende training toe aan je agenda.",
+              files: [writeResult.uri],
+              dialogTitle: "Agenda toevoegen",
+            });
+            return;
+          }
+
+          const calendarFile = new File([calendarEvent], calendarFilename, {
+            type: "text/calendar",
+          });
+          if (navigator.canShare?.({ files: [calendarFile] })) {
+            await navigator.share({
+              title: "GymOS agenda",
+              text: "Voeg je volgende training toe aan je agenda.",
+              files: [calendarFile],
+            });
+            return;
+          }
+
+          if (Share?.share) {
+            await Share.share({
+              title: "GymOS agenda",
+              text: "Voeg je volgende training toe aan je agenda.",
+              url: calendarFallbackUrl,
+              dialogTitle: "Agenda toevoegen",
+            });
+            return;
+          }
+
+          downloadCalendarFallback(calendarEvent);
+        } catch {
+          window.location.assign(calendarFallbackUrl);
+        }
+      }
+
+      async function openWallet() {
+        await saveState({ walletRequestedAt: new Date().toISOString() });
+        await openUrl(`${portalOrigin}/reserve#wallet-pass`);
+      }
+
+      async function handleDeepLink(url) {
+        await saveState({ lastDeepLink: url });
+        if (url.includes("/reserve") || url.includes("classes")) {
+          await setScreen("classes");
+          return;
+        }
+        if (url.includes("/login") || url.includes("account")) {
+          await setScreen("account");
+          return;
+        }
+        await setScreen("pass");
+      }
+
+      async function boot() {
+        const savedState = await getState();
+        Object.assign(memoryState, savedState);
+        activeScreen = savedState.screen || "today";
+        await saveSecureSession({ offlinePassCode: "GYMOS-HOMEGYM" });
+        await setScreen(activeScreen);
+        updateNetworkStatus();
+
+        if (SecureStorage?.get) {
+          capability("secure-storage", "Native secure storage actief");
+        }
+        if (PushNotifications?.checkPermissions) {
+          const permission = await PushNotifications.checkPermissions();
+          capability(
+            "push",
+            permission.receive === "granted"
+              ? "Pushmeldingen actief"
+              : "Toestemming nog niet gevraagd",
+          );
+        }
+
+        App?.addListener?.("appUrlOpen", (event) => handleDeepLink(event.url));
+        const launch = await App?.getLaunchUrl?.();
+        if (launch?.url) {
+          await handleDeepLink(launch.url);
+        }
       }
 
       document.querySelectorAll("[data-nav]").forEach((button) => {
@@ -399,11 +830,18 @@
       document.querySelectorAll("[data-open-portal]").forEach((button) => {
         button.addEventListener("click", () => openPortal(button.dataset.openPortal));
       });
+      document.querySelectorAll("[data-enable-push]").forEach((button) => {
+        button.addEventListener("click", enablePush);
+      });
+      document.querySelector("[data-local-reminder]")?.addEventListener("click", scheduleLocalReminder);
+      document.querySelector("[data-enable-biometric]")?.addEventListener("click", enableBiometric);
+      document.querySelector("[data-share-pass]")?.addEventListener("click", sharePass);
+      document.querySelector("[data-calendar]")?.addEventListener("click", addCalendar);
+      document.querySelector("[data-wallet]")?.addEventListener("click", openWallet);
       window.addEventListener("online", updateNetworkStatus);
       window.addEventListener("offline", updateNetworkStatus);
 
-      setScreen(activeScreen);
-      updateNetworkStatus();
+      boot();
     </script>
   </body>
 </html>
