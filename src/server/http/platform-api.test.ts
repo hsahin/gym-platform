@@ -9,6 +9,7 @@ import {
   getRequestId,
   jsonError,
   jsonOk,
+  verifyMutationCsrfToken,
   requireRateLimitedMutationSecurity,
   requireMutationSecurity,
   runApiHandler,
@@ -58,6 +59,18 @@ describe("platform api helpers", () => {
     });
   });
 
+  it("rejects malformed, future and expired csrf tokens", () => {
+    const issuedAt = 1_700_000_000_000;
+    const validToken = createMutationCsrfToken(issuedAt);
+
+    expect(verifyMutationCsrfToken("v1.too.short", issuedAt)).toBe(false);
+    expect(verifyMutationCsrfToken("v2.1700000000000.token.signature", issuedAt)).toBe(false);
+    expect(verifyMutationCsrfToken("v1.not-a-number.token.signature", issuedAt)).toBe(false);
+    expect(verifyMutationCsrfToken(validToken, issuedAt - 31_000)).toBe(false);
+    expect(verifyMutationCsrfToken(validToken, issuedAt + 8 * 60 * 60 * 1_000 + 1)).toBe(false);
+    expect(verifyMutationCsrfToken(`${validToken.slice(0, -1)}x`, issuedAt)).toBe(false);
+  });
+
   it("rejects cross-origin mutation requests when the origin does not match", async () => {
     const request = new Request("http://localhost/api/public/member-signups", {
       method: "POST",
@@ -84,12 +97,29 @@ describe("platform api helpers", () => {
       method: "POST",
       headers: {
         host: "localhost:3000",
-        "x-forwarded-host": "gym-platform-vc9yk.ondigitalocean.app",
-        origin: "https://gym-platform-vc9yk.ondigitalocean.app",
+        "x-forwarded-host": "gym.example",
+        origin: "https://gym.example",
         [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
         [IDEMPOTENCY_HEADER]: "location-123",
       },
     });
+
+    expect(() => requireMutationSecurity(request)).not.toThrow();
+  });
+
+  it("accepts trusted Capacitor native origins for member app mutations", () => {
+    const request = new Request(
+      "https://gym.example/api/member/mobile-self-service",
+      {
+        method: "POST",
+        headers: {
+          host: "gym.example",
+          origin: "capacitor://localhost",
+          [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
+          [IDEMPOTENCY_HEADER]: "push-token-123",
+        },
+      },
+    );
 
     expect(() => requireMutationSecurity(request)).not.toThrow();
   });
@@ -107,6 +137,27 @@ describe("platform api helpers", () => {
     expect(() => requireMutationSecurity(request)).toThrowError(
       MUTATION_SECURITY_ERROR_MESSAGE,
     );
+  });
+
+  it("rejects rate limit options on the non-rate-limited mutation helper", () => {
+    const request = new Request("http://localhost/api/platform/locations", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost",
+        [MUTATION_CSRF_HEADER]: createMutationCsrfToken(),
+        [IDEMPOTENCY_HEADER]: "location-rate-limit-wrong-helper",
+      },
+    });
+
+    expect(() =>
+      requireMutationSecurity(request, {
+        rateLimit: {
+          scope: "locations",
+          maxRequests: 1,
+          windowMs: 60_000,
+        },
+      }),
+    ).toThrowError("Gebruik requireRateLimitedMutationSecurity");
   });
 
   it("rate limits mutation requests when configured", async () => {

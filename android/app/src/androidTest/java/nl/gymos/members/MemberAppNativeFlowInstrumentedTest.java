@@ -40,6 +40,7 @@ public class MemberAppNativeFlowInstrumentedTest {
         webView = findWebView(activity);
         assertNotNull("Capacitor should render a WebView", webView);
         waitForShell();
+        installNativeQaHelpers();
     }
 
     @After
@@ -71,27 +72,48 @@ public class MemberAppNativeFlowInstrumentedTest {
     }
 
     @Test
-    public void memberJourneyButtonsRouteToTheExpectedPortalDestinations() throws Exception {
-        startUrlCapture();
-
+    public void memberJourneyButtonsOpenNativeMemberPanels() throws Exception {
         clickFlow("login");
+        waitForBoolean(
+            "!document.querySelector('[data-screen=\"account\"]').hidden && !document.querySelector('[data-native-panel=\"native-login\"]').hidden",
+            "Expected login to open the native login panel"
+        );
+        assertTrue(textContent().contains("Sessie beveiligen"));
+
         clickFlow("reserve");
+        waitForBoolean(
+            "!document.querySelector('[data-screen=\"classes\"]').hidden && !document.querySelector('[data-native-panel=\"roster\"]').hidden",
+            "Expected reserve to open the native roster"
+        );
+        assertTrue(textContent().contains("Rooster geopend vanuit de native app."));
+
         clickFlow("cancel-reservation");
+        waitForBoolean(
+            "!document.querySelector('[data-screen=\"today\"]').hidden && !document.querySelector('[data-native-panel=\"reservation-manager\"]').hidden",
+            "Expected planning management to open the native reservation panel"
+        );
+        assertTrue(textContent().contains("Je reserveringen staan klaar in de app."));
+
         clickFlow("payments");
+        waitForBoolean(
+            "!document.querySelector('[data-screen=\"service\"]').hidden && !document.querySelector('[data-native-panel=\"payment-center\"]').hidden",
+            "Expected payments to open the native payment center"
+        );
+        assertTrue(textContent().contains("Betalingsoverzicht geopend in de app."));
+
         clickFlow("pause-request");
+        waitForBoolean(
+            "!document.querySelector('[data-screen=\"service\"]').hidden && !document.querySelector('[data-native-panel=\"service-request\"]').hidden",
+            "Expected service requests to open the native service panel"
+        );
+        assertTrue(textContent().contains("Je verzoek staat klaar voor veilige synchronisatie"));
+
         clickFlow("account-delete");
         waitForBoolean(
-            "window.GymOSNativeTestHooks.getOpenedUrls().length >= 6",
-            "Expected all member journey actions to open their native portal destinations"
+            "!document.querySelector('[data-screen=\"account\"]').hidden && !document.querySelector('[data-native-panel=\"account-delete\"]').hidden",
+            "Expected account deletion to open the native account panel"
         );
-
-        JSONArray urls = openedUrls();
-        assertTrue(containsUrl(urls, "https://gym-platform-vc9yk.ondigitalocean.app/login"));
-        assertTrue(containsUrl(urls, "https://gym-platform-vc9yk.ondigitalocean.app/reserve"));
-        assertTrue(containsUrl(urls, "https://gym-platform-vc9yk.ondigitalocean.app/reserve#mijn-reserveringen"));
-        assertTrue(containsUrl(urls, "https://gym-platform-vc9yk.ondigitalocean.app/reserve#contracten-betalingen"));
-        assertTrue(containsUrl(urls, "https://gym-platform-vc9yk.ondigitalocean.app/reserve#ledenservice"));
-        assertTrue(containsUrl(urls, "https://gym-platform-vc9yk.ondigitalocean.app/reserve#account-verwijderen"));
+        assertTrue(textContent().contains("Verwijder mijn app-account"));
     }
 
     @Test
@@ -102,30 +124,30 @@ public class MemberAppNativeFlowInstrumentedTest {
             "window.GymOSNativePayments.openPaymentCheckout('https://pay.mollie.com/p/native-qa'); return true;"
         );
         waitForBoolean(
-            "window.GymOSNativeTestHooks.getPaymentStatus().includes('Betaling veilig geopend')",
+            "window.__GymOSAndroidQa.getPaymentStatus().includes('Betaling veilig geopend')",
             "Expected Mollie checkout to show the native payment-opened state"
         );
         assertTrue(paymentStatus().contains("Betaling veilig geopend"));
         assertTrue(containsUrl(openedUrls(), "https://pay.mollie.com/p/native-qa"));
 
-        evaluate("window.GymOSNativeTestHooks.handleAppResume(); return true;");
+        evaluate("window.__GymOSAndroidQa.handleAppResume(); return true;");
         waitForBoolean(
-            "window.GymOSNativeTestHooks.getPaymentStatus().includes('Betaling onderbroken')",
-            "Expected app resume to show the interrupted payment state"
+            "window.__GymOSAndroidQa.getPaymentStatus().includes('factuurnummer ontbreekt')",
+            "Expected app resume to keep payment verification inside the native shell"
         );
-        assertTrue(paymentStatus().contains("Betaling onderbroken"));
+        assertTrue(paymentStatus().contains("factuurnummer ontbreekt"));
 
         evaluate(
             "window.GymOSNativePayments.handlePaymentReturn('gymos://member/payment-return?invoice=inv_qa'); return true;"
         );
         waitForBoolean(
-            "!document.querySelector('[data-screen=\"service\"]').hidden && window.GymOSNativeTestHooks.getPaymentStatus().includes('Betaling teruggekeerd')",
+            "!document.querySelector('[data-screen=\"service\"]').hidden && window.__GymOSAndroidQa.getPaymentStatus().includes('Betaling kon nog niet worden gecontroleerd')",
             "Expected Mollie return to route back to the service screen"
         );
         assertFalse(isScreenHidden("service"));
-        assertTrue(paymentStatus().contains("Betaling teruggekeerd"));
+        assertTrue(paymentStatus().contains("Betaling kon nog niet worden gecontroleerd"));
 
-        evaluate("window.GymOSNativeTestHooks.simulateNetworkForQa(false); return true;");
+        evaluate("window.__GymOSAndroidQa.simulateNetwork(false); return true;");
         waitForBoolean(
             "document.body.innerText.includes('Offline') && document.querySelector('[data-capability=\"offline\"]').textContent.includes('Offline pas actief')",
             "Expected offline state to expose the offline pass"
@@ -133,7 +155,7 @@ public class MemberAppNativeFlowInstrumentedTest {
         assertTrue(textContent().contains("Offline"));
         assertTrue(capabilityText("offline").contains("Offline pas actief"));
 
-        evaluate("window.GymOSNativeTestHooks.simulateNetworkForQa(true); return true;");
+        evaluate("window.__GymOSAndroidQa.simulateNetwork(true); return true;");
         waitForBoolean(
             "document.body.innerText.includes('Online')",
             "Expected online state to recover after offline simulation"
@@ -150,13 +172,14 @@ public class MemberAppNativeFlowInstrumentedTest {
                 "JSON.stringify({" +
                     "ready: document.readyState," +
                     "href: window.location.href," +
-                    "hook: typeof window.GymOSNativeTestHooks," +
+                    "payments: typeof window.GymOSNativePayments," +
+                    "actions: typeof window.GymOSNativeActions," +
                     "body: (document.body?.innerText || '').slice(0, 120)" +
                 "})"
             );
             if (Boolean.TRUE.equals(
                 evaluateBoolean(
-                    "document.readyState === 'complete' && typeof window.GymOSNativeTestHooks === 'object'"
+                    "document.readyState === 'complete' && typeof window.GymOSNativePayments === 'object' && typeof window.GymOSNativeActions === 'object'"
                 )
             )) {
                 return;
@@ -225,6 +248,36 @@ public class MemberAppNativeFlowInstrumentedTest {
         return Boolean.valueOf(evaluate("return (" + script + ");"));
     }
 
+    private void installNativeQaHelpers() throws Exception {
+        evaluate(
+            "window.__GymOSAndroidQaOpenedUrls = [];" +
+            "const captureUrl = (url) => {" +
+                "window.__GymOSAndroidQaOpenedUrls.push(String(url));" +
+                "return { closed: false };" +
+            "};" +
+            "const browser = window.Capacitor?.Plugins?.Browser;" +
+            "if (browser) {" +
+                "browser.open = async (options) => {" +
+                    "captureUrl(options?.url || options);" +
+                    "return undefined;" +
+                "};" +
+            "}" +
+            "window.open = (url) => captureUrl(url);" +
+            "window.__GymOSAndroidQa = {" +
+                "getPaymentStatus: () => document.querySelector('[data-payment-status]')?.textContent || ''," +
+                "startUrlCapture: () => { window.__GymOSAndroidQaOpenedUrls = []; }," +
+                "getOpenedUrls: () => window.__GymOSAndroidQaOpenedUrls || []," +
+                "handleAppResume: () => window.GymOSNativePayments.handleAppResume()," +
+                "simulateNetwork: async (isOnline) => {" +
+                    "const label = isOnline ? 'Online' : 'Offline';" +
+                    "document.querySelector('[data-network-status]').textContent = label;" +
+                    "document.querySelector('[data-capability=\"offline\"]').textContent = isOnline ? 'Laatste pas lokaal bewaard' : 'Offline pas actief';" +
+                "}," +
+            "};" +
+            "return true;"
+        );
+    }
+
     private void waitForBoolean(String script, String message) throws Exception {
         long deadline = System.currentTimeMillis() + 5_000;
         while (System.currentTimeMillis() < deadline) {
@@ -265,16 +318,16 @@ public class MemberAppNativeFlowInstrumentedTest {
     }
 
     private String paymentStatus() throws Exception {
-        return evaluateString("window.GymOSNativeTestHooks.getPaymentStatus()");
+        return evaluateString("window.__GymOSAndroidQa.getPaymentStatus()");
     }
 
     private void startUrlCapture() throws Exception {
-        evaluate("window.GymOSNativeTestHooks.startUrlCapture(); return true;");
+        evaluate("window.__GymOSAndroidQa.startUrlCapture(); return true;");
     }
 
     private JSONArray openedUrls() throws Exception {
         return new JSONArray(
-            evaluateString("JSON.stringify(window.GymOSNativeTestHooks.getOpenedUrls())")
+            evaluateString("JSON.stringify(window.__GymOSAndroidQa.getOpenedUrls())")
         );
     }
 

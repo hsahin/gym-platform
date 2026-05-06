@@ -108,6 +108,85 @@ describe("direct WAHA messaging", () => {
     });
   });
 
+  it("requires concrete WAHA connection settings before constructing the provider", () => {
+    expect(() =>
+      createDirectWahaWhatsAppProvider({
+        baseUrl: " ",
+        apiKey: "secret-key",
+      }),
+    ).toThrow("WAHA configuratie mist WAHA_BASE_URL of WAHA_API_KEY.");
+    expect(() =>
+      createDirectWahaWhatsAppProvider({
+        baseUrl: "https://waha.example/",
+        apiKey: " ",
+      }),
+    ).toThrow("WAHA configuratie mist WAHA_BASE_URL of WAHA_API_KEY.");
+  });
+
+  it("reads provider ids from WAHA key payloads and tolerates non-json send responses", async () => {
+    const provider = createDirectWahaWhatsAppProvider({
+      baseUrl: "https://waha.example/",
+      apiKey: "secret-key",
+      session: " custom ",
+      fetchImpl: vi.fn(async (url: string | URL | Request) => {
+        const target = String(url);
+
+        if (target === "https://waha.example/api/sessions/custom") {
+          return jsonResponse({ engine: { state: "CONNECTED" } });
+        }
+
+        if (
+          target ===
+          "https://waha.example/api/contacts/check-exists?phone=31612345678&session=custom"
+        ) {
+          return jsonResponse({ exists: true });
+        }
+
+        return new Response("accepted", { status: 200 });
+      }),
+    });
+
+    await expect(
+      provider.send({
+        channel: "whatsapp",
+        recipient: "0612345678",
+        body: "Hallo",
+      }),
+    ).resolves.toMatchObject({
+      accepted: true,
+      providerMessageId: undefined,
+      raw: null,
+    });
+
+    const providerWithKeyId = createDirectWahaWhatsAppProvider({
+      baseUrl: "https://waha.example",
+      apiKey: "secret-key",
+      fetchImpl: vi.fn(async (url: string | URL | Request) => {
+        const target = String(url);
+
+        if (target.includes("/sessions/")) {
+          return jsonResponse({ status: "WORKING" });
+        }
+
+        if (target.includes("/contacts/check-exists")) {
+          return jsonResponse({ result: true });
+        }
+
+        return jsonResponse({ key: { id: "msg_key_1" } });
+      }),
+    });
+
+    await expect(
+      providerWithKeyId.send({
+        channel: "whatsapp",
+        recipient: "0612345678",
+        body: "Welkom",
+      }),
+    ).resolves.toMatchObject({
+      providerMessageId: "msg_key_1",
+    });
+  });
+
   it("parses recipient existence through exists and result flags", async () => {
     const responses = [{ exists: true }, { result: true }];
 
@@ -188,5 +267,79 @@ describe("direct WAHA messaging", () => {
     ).rejects.toMatchObject({
       code: "INVALID_INPUT",
     });
+  });
+
+  it("rejects unhealthy sessions, session check failures and unreachable recipients", async () => {
+    const unhealthyProvider = createDirectWahaWhatsAppProvider({
+      baseUrl: "https://waha.example",
+      apiKey: "secret-key",
+      fetchImpl: vi.fn(async () => jsonResponse({ status: "STOPPED" })),
+    });
+
+    await expect(
+      unhealthyProvider.send({
+        channel: "whatsapp",
+        recipient: "0612345678",
+        body: "Hallo",
+      }),
+    ).rejects.toThrow("WAHA sessie is niet verbonden.");
+
+    const sessionFailureProvider = createDirectWahaWhatsAppProvider({
+      baseUrl: "https://waha.example",
+      apiKey: "secret-key",
+      fetchImpl: vi.fn(async () => jsonResponse({ message: "offline" }, { status: 503 })),
+    });
+
+    await expect(
+      sessionFailureProvider.send({
+        channel: "whatsapp",
+        recipient: "0612345678",
+        body: "Hallo",
+      }),
+    ).rejects.toThrow("WAHA sessie kon niet worden gecontroleerd.");
+
+    const missingRecipientProvider = createDirectWahaWhatsAppProvider({
+      baseUrl: "https://waha.example",
+      apiKey: "secret-key",
+      fetchImpl: vi.fn(async (url: string | URL | Request) => {
+        const target = String(url);
+
+        if (target.includes("/sessions/")) {
+          return jsonResponse({ status: "WORKING" });
+        }
+
+        return jsonResponse({ numberExists: false });
+      }),
+    });
+
+    await expect(
+      missingRecipientProvider.send({
+        channel: "whatsapp",
+        recipient: "0612345678",
+        body: "Hallo",
+      }),
+    ).rejects.toThrow("WhatsApp ontvanger bestaat niet of is niet bereikbaar.");
+
+    const recipientFailureProvider = createDirectWahaWhatsAppProvider({
+      baseUrl: "https://waha.example",
+      apiKey: "secret-key",
+      fetchImpl: vi.fn(async (url: string | URL | Request) => {
+        const target = String(url);
+
+        if (target.includes("/sessions/")) {
+          return jsonResponse({ status: "WORKING" });
+        }
+
+        return jsonResponse({ message: "recipient check failed" }, { status: 502 });
+      }),
+    });
+
+    await expect(
+      recipientFailureProvider.send({
+        channel: "whatsapp",
+        recipient: "0612345678",
+        body: "Hallo",
+      }),
+    ).rejects.toThrow("WAHA ontvanger kon niet worden gecontroleerd.");
   });
 });

@@ -21,6 +21,7 @@ import {
   createLocalTenantPaymentMethodRequest,
   createLocalTenantPauseRequest,
   createLocalTenantContractRecord,
+  createOrUpdateLocalTenantPushSubscription,
   createLocalPlatformAccount,
   getLocalTenantProfile,
   getLocalTenantProfileBySlug,
@@ -876,6 +877,18 @@ describe("platform state", () => {
       status: "active",
       signedAt: "2026-04-25T09:00:00.000Z",
     });
+    const pushSubscription = await createOrUpdateLocalTenantPushSubscription(
+      tenant.tenant.id,
+      {
+        memberId: "member_jade",
+        memberName: "Jade Vermeer",
+        tokenHash: "hashed-push-token",
+        tokenPreview: "Expo[jade...test]",
+        platform: "android",
+        deviceId: "android-device-1",
+        permission: "granted",
+      },
+    );
 
     const updatedTenant = await getLocalTenantProfile(tenant.tenant.id);
 
@@ -925,6 +938,16 @@ describe("platform state", () => {
         expect.objectContaining({
           memberId: "member_jade",
           contractName: "Unlimited",
+        }),
+      ]),
+    );
+    expect(updatedTenant?.moduleData.mobileSelfService.pushSubscriptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: pushSubscription.id,
+          memberId: "member_jade",
+          platform: "android",
+          status: "active",
         }),
       ]),
     );
@@ -1073,9 +1096,10 @@ describe("platform state", () => {
     const migrated = await readLocalPlatformState();
 
     expect(migrated).toMatchObject({
-      version: 8,
+      version: 9,
       tenants: [expect.objectContaining({ id: "single-gym" })],
       accounts: [expect.objectContaining({ tenantId: "single-gym" })],
+      pendingMemberSignupCheckouts: [],
     });
   });
 

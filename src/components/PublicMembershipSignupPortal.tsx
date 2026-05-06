@@ -7,7 +7,7 @@ import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { toast } from "sonner";
 import { buildMutationHeaders } from "@/lib/mutation-security-client";
-import type { PublicMembershipSignupSnapshot } from "@/server/types";
+import type { PublicMembershipSignupPortalSnapshot } from "@/lib/public-membership-signup-view";
 
 declare global {
   interface Window {
@@ -21,22 +21,10 @@ declare global {
   }
 }
 
-function formatMissingFields(fields: ReadonlyArray<string>) {
-  if (fields.length === 0) {
-    return "";
-  }
-
-  if (fields.length === 1) {
-    return fields[0]!;
-  }
-
-  return `${fields.slice(0, -1).join(", ")} en ${fields.at(-1)}`;
-}
-
 export function PublicMembershipSignupPortal({
   snapshot,
 }: {
-  readonly snapshot: PublicMembershipSignupSnapshot;
+  readonly snapshot: PublicMembershipSignupPortalSnapshot;
 }) {
   const phoneCountryOptions = ["NL", "BE", "DE", "GB", "US", "AE"] as const;
   const [isPending, startTransition] = useTransition();
@@ -57,34 +45,25 @@ export function PublicMembershipSignupPortal({
   const [notes, setNotes] = useState("");
   const termsUrl = snapshot.legal.termsUrl?.trim() ?? "";
   const privacyUrl = snapshot.legal.privacyUrl?.trim() ?? "";
-  const missingCheckoutFields = [
-    snapshot.tenantSlug ? null : "club",
-    snapshot.billingReady
-      ? null
-      : snapshot.billingMissingFields.length > 0
-        ? formatMissingFields(snapshot.billingMissingFields)
-        : "betaalprofiel, betaalroute en webhook-url",
-    snapshot.legalReady || snapshot.testMode
-      ? null
-      : snapshot.legalMissingFields.length > 0
-        ? formatMissingFields(snapshot.legalMissingFields)
-        : "voorwaardenlink, privacylink en contracttemplate",
+  const clubSignupAvailable = snapshot.checkoutAvailable;
+  const memberMissingFields = [
     fullName.trim() ? null : "naam",
     email.trim() ? null : "e-mail",
     phone.trim() ? null : "telefoon",
-    membershipPlanId ? null : "contract",
-    preferredLocationId ? null : "vestiging",
+    snapshot.membershipPlans.length > 0 && !membershipPlanId ? "lidmaatschap" : null,
+    snapshot.locations.length > 0 && !preferredLocationId ? "vestiging" : null,
     portalPassword.trim().length >= 8 ? null : "portal wachtwoord",
     contractAccepted ? null : "contractakkoord",
     waiverAccepted ? null : "waiverakkoord",
   ].filter((field): field is string => Boolean(field));
-  const signupReady = Boolean(
-    missingCheckoutFields.length === 0,
-  );
+  const memberFormReady = memberMissingFields.length === 0;
+  const signupReady = Boolean(clubSignupAvailable && memberFormReady);
   const checkoutDisabledReason = isPending
     ? "Even wachten: je aanmelding wordt verwerkt."
-    : !signupReady
-      ? `Checkout starten kan nog niet: vul ${formatMissingFields(missingCheckoutFields)} in.`
+    : !clubSignupAvailable
+      ? "Online inschrijven is nog niet beschikbaar bij deze club. Probeer later opnieuw of neem contact op met de club."
+      : !memberFormReady
+        ? "Vul je gegevens in en accepteer de voorwaarden voordat je doorgaat."
       : null;
 
   async function openSignupCheckout(checkoutUrl: string) {
@@ -337,46 +316,36 @@ export function PublicMembershipSignupPortal({
                 <Checkbox isSelected={waiverAccepted} onChange={setWaiverAccepted}>
                   Ik bevestig de intake/waiver voor veilige deelname.
                 </Checkbox>
-                <p className="text-muted text-sm">
-                  {termsUrl || privacyUrl ? (
-                    <>
-                      Voorwaarden:{" "}
-                      {termsUrl ? (
-                        <a
-                          href={termsUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-4"
-                        >
-                          bekijken
-                        </a>
-                      ) : (
-                        "volgen via de club"
-                      )}{" "}
-                      · Privacy:{" "}
-                      {privacyUrl ? (
-                        <a
-                          href={privacyUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-4"
-                        >
-                          bekijken
-                        </a>
-                      ) : (
-                        "volgt via de club"
-                      )}
-                    </>
-                  ) : (
-                    "De club deelt de voorwaarden en privacyinformatie voordat je aanmelding definitief wordt."
-                  )}
-                </p>
-                <p className="text-muted text-sm">
-                  {snapshot.billingMessage}
-                </p>
-                <p className="text-muted text-sm">
-                  {snapshot.legalMessage}
-                </p>
+                {termsUrl || privacyUrl ? (
+                  <p className="text-muted text-sm">
+                    Voorwaarden:{" "}
+                    {termsUrl ? (
+                      <a
+                        href={termsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        bekijken
+                      </a>
+                    ) : (
+                      "via de club"
+                    )}{" "}
+                    · Privacy:{" "}
+                    {privacyUrl ? (
+                      <a
+                        href={privacyUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        bekijken
+                      </a>
+                    ) : (
+                      "via de club"
+                    )}
+                  </p>
+                ) : null}
                 {checkoutDisabledReason ? (
                   <p className="text-muted text-sm">
                     {checkoutDisabledReason}

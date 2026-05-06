@@ -2557,16 +2557,53 @@ describe("gym platform services", () => {
       notes: "Start het liefst volgende week.",
     });
     checkoutInvoiceId = checkout.invoice.id;
+    const prePaymentSnapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const prePaymentAuthenticated = await authenticateLocalAccount(
+      "jade@northside.test",
+      "jade-member-123",
+    );
+
+    expect(checkout.signup.status).toBe("pending_review");
+    expect(checkout.signup.approvedMemberId).toBeUndefined();
+    expect(checkout.member).toBeNull();
+    expect(checkout.contract).toBeNull();
+    expect(checkout.invoice).toMatchObject({
+      memberId: undefined,
+      memberName: "Jade Vermeer",
+      amountCents: 11900,
+      status: "open",
+      source: "signup_checkout",
+      externalReference: "tr_signup_checkout_1",
+    });
+    expect(prePaymentSnapshot.members.some((member) => member.email === "jade@northside.test")).toBe(false);
+    expect(prePaymentSnapshot.memberSignups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: checkout.signup.id,
+          status: "pending_review",
+          approvedMemberId: undefined,
+        }),
+      ]),
+    );
+    expect(prePaymentSnapshot.mobileSelfService.contracts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          memberName: "Jade Vermeer",
+        }),
+      ]),
+    );
+    expect(prePaymentAuthenticated).toBeNull();
+
     await services.syncMollieBillingWebhook({
       tenantId: tenantContext.tenantId,
       paymentId: checkout.providerPaymentId!,
     });
     const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
+    const approvedMember = snapshot.members.find((member) => member.email === "jade@northside.test");
     const authenticated = await authenticateLocalAccount(
       "jade@northside.test",
       "jade-member-123",
     );
-    const approvedMember = checkout.member;
 
     expect(publicSnapshot.membershipPlans.map((item) => item.id)).toContain(plan.id);
     expect(publicSnapshot.billingReady).toBe(true);
@@ -2576,37 +2613,40 @@ describe("gym platform services", () => {
     expect(`${publicSnapshot.billingMessage} ${publicSnapshot.legalMessage}`).not.toMatch(
       /Mollie-account|publieke betaal-url|Mollie-toegang|SEPA creditor ID|contract-PDF template|waiver-opslag|self-signup/i,
     );
-    expect(checkout.signup.status).toBe("approved");
+    if (!approvedMember) {
+      throw new Error("Expected paid signup webhook to activate Jade Vermeer as a member.");
+    }
+    expect(snapshot.memberSignups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: checkout.signup.id,
+          status: "approved",
+          approvedMemberId: approvedMember.id,
+        }),
+      ]),
+    );
     expect(checkout.signup.waiverAcceptedAt).toBeTruthy();
     expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-checkout");
     expect(checkout.providerPaymentId).toBe("tr_signup_checkout_1");
-    expect(checkout.invoice).toMatchObject({
-      memberId: approvedMember.id,
-      memberName: "Jade Vermeer",
-      amountCents: 11900,
-      status: "open",
-      source: "signup_checkout",
-      externalReference: "tr_signup_checkout_1",
-    });
     expect(approvedMember.email).toBe("jade@northside.test");
     expect(customerRequests[0]).toMatchObject({
       name: "Jade Vermeer",
       email: "jade@northside.test",
     });
-    expect(paymentRequests[0]).toMatchObject({
-      sequenceType: "first",
-      redirectUrl: expect.stringContaining("/join?"),
-      webhookUrl: expect.stringContaining("/api/platform/billing/mollie/webhook"),
-      metadata: {
-        tenantId: tenantContext.tenantId,
-        invoiceId: checkout.invoice.id,
-        memberId: approvedMember.id,
-        source: "signup_checkout",
-      },
+    const signupPaymentRequest = paymentRequests[0]!;
+    expect(signupPaymentRequest.sequenceType).toBe("first");
+    expect(signupPaymentRequest.redirectUrl).toContain("/join?");
+    expect(signupPaymentRequest.redirectUrl).toContain("payment=return");
+    expect(signupPaymentRequest.redirectUrl).toContain(`invoice=${checkout.invoice.id}`);
+    expect(signupPaymentRequest.webhookUrl).toContain("/api/platform/billing/mollie/webhook");
+    expect(signupPaymentRequest.metadata).toMatchObject({
+      tenantId: tenantContext.tenantId,
+      invoiceId: checkout.invoice.id,
+      signupRequestId: checkout.signup.id,
+      source: "signup_checkout",
     });
-    expect(paymentRequests[0]?.redirectUrl).toContain("payment=return");
-    expect(paymentRequests[0]?.redirectUrl).toContain(`invoice=${checkout.invoice.id}`);
-    expect(paymentRequests[0]?.method).toBeUndefined();
+    expect(signupPaymentRequest.metadata).not.toHaveProperty("memberId");
+    expect(signupPaymentRequest.method).toBeUndefined();
     expect(subscriptionRequests[0]).toMatchObject({
       amount: { value: "119.00" },
       interval: "1 month",
@@ -2618,18 +2658,10 @@ describe("gym platform services", () => {
         source: "signup_checkout",
       },
     });
-    expect(snapshot.memberSignups).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: checkout.signup.id,
-          status: "approved",
-          approvedMemberId: approvedMember.id,
-        }),
-      ]),
-    );
     expect(snapshot.billingBackoffice.invoices).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          memberId: approvedMember.id,
           memberName: "Jade Vermeer",
           amountCents: 11900,
           status: "paid",
@@ -2744,16 +2776,18 @@ describe("gym platform services", () => {
       portalPassword: "jade-member-123",
     });
 
-    expect(checkout.signup.status).toBe("approved");
+    expect(checkout.signup.status).toBe("pending_review");
+    expect(checkout.member).toBeNull();
     expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-test-checkout");
     expect(paymentRequests[0]).toMatchObject({
       metadata: {
         tenantId: tenantContext.tenantId,
         invoiceId: checkout.invoice.id,
-        memberId: checkout.member.id,
+        signupRequestId: checkout.signup.id,
         source: "signup_checkout",
       },
     });
+    expect(paymentRequests[0]?.metadata).not.toHaveProperty("memberId");
     expect(paymentRequests[0]?.profileId).toBeUndefined();
     expect(paymentRequests[0]?.method).toBeUndefined();
   });

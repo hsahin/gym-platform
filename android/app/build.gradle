@@ -3,13 +3,32 @@ apply plugin: 'com.android.application'
 android {
     namespace = "nl.gymos.members"
     compileSdk = rootProject.ext.compileSdkVersion
+    def gymosConfiguredOrigin = System.getenv("GYMOS_MOBILE_APP_ORIGIN") ?: System.getenv("NEXT_PUBLIC_APP_URL") ?: System.getenv("APP_BASE_URL") ?: "https://gymos.example"
+    def gymosMobileOrigin = gymosConfiguredOrigin.contains("://") ? gymosConfiguredOrigin : "https://${gymosConfiguredOrigin}"
+    def gymosMobileUri = new URI(gymosMobileOrigin)
+    def gymosMobileScheme = gymosMobileUri.scheme ?: "https"
+    def gymosMobileHost = gymosMobileUri.host ?: "gymos.example"
+    def gymosAndroidVersionCode = (
+        findProperty("GYMOS_ANDROID_VERSION_CODE")
+            ?: System.getenv("GYMOS_ANDROID_VERSION_CODE")
+            ?: "100"
+    ).toString().toInteger()
+    def gymosAndroidVersionName = (
+        findProperty("GYMOS_ANDROID_VERSION_NAME")
+            ?: System.getenv("GYMOS_ANDROID_VERSION_NAME")
+            ?: "0.1.0"
+    ).toString()
     defaultConfig {
         applicationId "nl.gymos.members"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode gymosAndroidVersionCode
+        versionName gymosAndroidVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders = [
+            gymosWebScheme: gymosMobileScheme,
+            gymosWebHost: gymosMobileHost
+        ]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -18,7 +37,8 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

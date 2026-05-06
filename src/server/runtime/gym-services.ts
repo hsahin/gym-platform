@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   createAuthActor,
   getTenantMembership,
@@ -144,11 +144,14 @@ import {
   createLocalTenantPaymentMethodRequest,
   createLocalTenantQuestionnaire,
   createLocalTenantQuestionnaireResponse,
+  createOrUpdateLocalTenantPushSubscription,
   createLocalPlatformAccount,
+  deleteLocalPendingMemberSignupCheckout,
   deleteLocalMemberPortalAccountByMemberId,
   deleteLocalPlatformAccount,
   disconnectLocalTenantMollieConnect,
   completeLocalTenantMollieConnect,
+  getLocalPendingMemberSignupCheckout,
   findLocalTenantByMollieConnectState,
   getLocalTenantProfileBySlug,
   getLocalTenantProfile,
@@ -183,6 +186,7 @@ import {
   reviewLocalTenantPaymentMethodRequest,
   updateLocalTenantAppointmentPack,
   updateLocalTenantBillingInvoice,
+  upsertLocalPendingMemberSignupCheckout,
   type LocalTenantProfile,
 } from "@/server/persistence/platform-state";
 import { toClientPlain } from "@/server/lib/to-client-plain";
@@ -206,6 +210,7 @@ import type {
   FeatureState,
   GymDashboardSnapshot,
   GymMember,
+  MemberPaymentReturnVerification,
   MemberReservationSnapshot,
   PublicMembershipSignupResult,
   PublicMembershipSignupSnapshot,
@@ -2026,6 +2031,7 @@ async function attachMolliePaymentToInvoice(
     };
     readonly provider?: MolliePaymentProvider;
     readonly redirectUrl?: string;
+    readonly metadata?: Record<string, string | number | boolean | null | undefined>;
   },
 ) {
   const provider =
@@ -2054,6 +2060,7 @@ async function attachMolliePaymentToInvoice(
       invoiceId: invoice.id,
       memberId: invoice.memberId,
       source: invoice.source,
+      ...options?.metadata,
     },
   });
   const updatedInvoice = await updateLocalTenantBillingInvoice(tenantContext.tenantId, {
@@ -2480,6 +2487,7 @@ async function buildMobileSelfServiceSummary(
       pauseRequests: [],
       accountDeletionRequests: [],
       contracts: [],
+      pushSubscriptions: [],
     }
   );
 }
@@ -2520,6 +2528,58 @@ async function featureStates(
 
 function normalizeEmailValue(email: string) {
   return email.trim().toLowerCase();
+}
+
+function hashMobilePushToken(token: string) {
+  return createHash("sha256").update(token.trim()).digest("hex");
+}
+
+function previewMobilePushToken(token: string) {
+  const trimmed = token.trim();
+  const bracketStart = trimmed.indexOf("[");
+  const bracketEnd = trimmed.lastIndexOf("]");
+
+  if (bracketStart >= 0 && bracketEnd > bracketStart + 1) {
+    const prefix = trimmed.slice(0, bracketStart + 1);
+    const inner = trimmed.slice(bracketStart + 1, bracketEnd);
+    const visibleInner =
+      inner.length <= 10 ? inner : `${inner.slice(0, 4)}...${inner.slice(-4)}`;
+
+    return `${prefix}${visibleInner}]`;
+  }
+
+  if (trimmed.length <= 18) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, 8)}...${trimmed.slice(-6)}`;
+}
+
+function formatMemberPaymentReturnAmount(amountCents: number, currency: string) {
+  return `${currency.toUpperCase()} ${(amountCents / 100)
+    .toFixed(2)
+    .replace(".", ",")}`;
+}
+
+function buildMemberPaymentReturnMessage(input: {
+  readonly status: MemberPaymentReturnVerification["status"];
+  readonly tenantName: string;
+  readonly amountLabel?: string;
+}) {
+  const amountSuffix = input.amountLabel ? ` (${input.amountLabel})` : "";
+
+  switch (input.status) {
+    case "paid":
+      return `Betaling bevestigd voor ${input.tenantName}${amountSuffix}.`;
+    case "open":
+      return `Betaling is nog in behandeling bij ${input.tenantName}${amountSuffix}.`;
+    case "failed":
+      return `Betaling is niet gelukt bij ${input.tenantName}. Probeer opnieuw of neem contact op met je club.`;
+    case "refunded":
+      return `Betaling is terugbetaald door ${input.tenantName}${amountSuffix}.`;
+    default:
+      return `We konden deze betaling nog niet bevestigen bij ${input.tenantName}.`;
+  }
 }
 
 function createPublicTenantContext(tenantId: string) {
@@ -2655,6 +2715,7 @@ function slimDashboardSnapshotForPage(
             pauseRequests: [],
             accountDeletionRequests: [],
             contracts: [],
+            pushSubscriptions: [],
           },
     staff: page === "settings" ? snapshot.staff : [],
     superadmin:
@@ -2709,6 +2770,14 @@ export interface GymPlatformServices {
       readonly tenantSlug?: string;
     },
   ): Promise<MemberReservationSnapshot>;
+  verifyMemberPaymentReturn(
+    actor: AuthActor,
+    input: {
+      readonly tenantSlug?: string;
+      readonly invoiceId?: string;
+      readonly providerPaymentId?: string;
+    },
+  ): Promise<MemberPaymentReturnVerification>;
   listMembers(actor: AuthActor, tenantContext: TenantContext): Promise<GymDashboardSnapshot["members"]>;
   listLocations(
     actor: AuthActor,
@@ -2798,7 +2867,7 @@ export interface GymPlatformServices {
     },
   ): Promise<{
     readonly signup: GymDashboardSnapshot["memberSignups"][number];
-    readonly member?: GymDashboardSnapshot["members"][number];
+    readonly member?: GymDashboardSnapshot["members"][number] | null;
   }>;
   createBillingInvoice(
     actor: AuthActor,
@@ -2973,6 +3042,17 @@ export interface GymPlatformServices {
     readonly request: GymDashboardSnapshot["mobileSelfService"]["accountDeletionRequests"][number];
     readonly deletedPortalAccounts: number;
   }>;
+  registerMemberPushToken(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    input: {
+      readonly token: string;
+      readonly platform: "ios" | "android" | "web" | "unknown";
+      readonly deviceId?: string;
+      readonly permission: "granted" | "denied" | "prompt";
+      readonly memberId?: string;
+    },
+  ): Promise<GymDashboardSnapshot["mobileSelfService"]["pushSubscriptions"][number]>;
   reviewMembershipPause(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -3783,6 +3863,39 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     return member;
   }
 
+  async function resolveCurrentSelfServiceMemberAccess(
+    actor: AuthActor,
+    tenantContext: TenantContext,
+    memberId?: string,
+  ) {
+    if (memberId) {
+      return resolveSelfServiceMemberAccess(actor, tenantContext, memberId);
+    }
+
+    if (runtime.permissionRegistry.hasPermissions(actor, ["operations.manage"], tenantContext)) {
+      throw new AppError("Kies een lid voordat je deze self-service actie uitvoert.", {
+        code: "INVALID_INPUT",
+      });
+    }
+
+    if (!actor.email) {
+      throw new AppError("Ledenaccount kon niet worden bepaald.", {
+        code: "AUTH_REQUIRED",
+      });
+    }
+
+    const accounts = await listLocalMemberPortalAccountsByEmail(actor.email);
+    const account = accounts.find((entry) => entry.tenantId === tenantContext.tenantId);
+
+    if (!account?.linkedMemberId) {
+      throw new AppError("Ledenaccount voor self-service kon niet gevonden worden.", {
+        code: "RESOURCE_NOT_FOUND",
+      });
+    }
+
+    return resolveSelfServiceMemberAccess(actor, tenantContext, account.linkedMemberId);
+  }
+
   async function resolveAccountDeletionMemberAccess(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -3868,6 +3981,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           pauseRequests: [],
           accountDeletionRequests: [],
           contracts: [],
+          pushSubscriptions: [],
         },
       } satisfies MemberReservationSnapshot);
     }
@@ -3992,8 +4106,108 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         contracts: mobileSelfService.contracts.filter(
           (contract) => contract.memberId === selectedMembership.member.id,
         ),
+        pushSubscriptions: mobileSelfService.pushSubscriptions.filter(
+          (subscription) => subscription.memberId === selectedMembership.member.id,
+        ),
       },
     } satisfies MemberReservationSnapshot);
+  }
+
+  async function buildMemberPaymentReturnVerification(
+    actor: AuthActor,
+    input: {
+      readonly tenantSlug?: string;
+      readonly invoiceId?: string;
+      readonly providerPaymentId?: string;
+    },
+  ): Promise<MemberPaymentReturnVerification> {
+    const { memberships, selectedMembership } = await resolveReservableTenantSelection(
+      actor,
+      input.tenantSlug,
+    );
+    const fallbackTenant = selectedMembership?.tenant ?? memberships[0]?.tenant;
+    const checkedAt = new Date().toISOString();
+
+    if (!selectedMembership || !fallbackTenant) {
+      return toClientPlain({
+        verified: false,
+        tenantName: "Ledenomgeving",
+        tenantSlug: null,
+        invoiceId: input.invoiceId ?? null,
+        status: "unknown",
+        checkedAt,
+        message: "Log in bij de juiste club om deze betaling te controleren.",
+      } satisfies MemberPaymentReturnVerification);
+    }
+
+    if (!input.invoiceId && !input.providerPaymentId) {
+      return toClientPlain({
+        verified: false,
+        tenantName: selectedMembership.tenant.name,
+        tenantSlug: selectedMembership.tenant.id,
+        invoiceId: null,
+        status: "unknown",
+        checkedAt,
+        message:
+          "We missen het factuurnummer om deze betaling veilig te controleren.",
+      } satisfies MemberPaymentReturnVerification);
+    }
+
+    const tenantProfile = await getLocalTenantProfile(selectedMembership.tenant.id);
+    const invoice = tenantProfile?.moduleData.billingBackoffice.invoices.find(
+      (entry) =>
+        (input.invoiceId && entry.id === input.invoiceId) ||
+        (input.providerPaymentId && entry.externalReference === input.providerPaymentId),
+    );
+
+    if (!invoice) {
+      return toClientPlain({
+        verified: false,
+        tenantName: selectedMembership.tenant.name,
+        tenantSlug: selectedMembership.tenant.id,
+        invoiceId: input.invoiceId ?? null,
+        status: "unknown",
+        checkedAt,
+        message:
+          "We konden deze betaling niet vinden bij je club. Controleer je ledenomgeving of probeer opnieuw.",
+      } satisfies MemberPaymentReturnVerification);
+    }
+
+    if (invoice.memberId && invoice.memberId !== selectedMembership.member.id) {
+      return toClientPlain({
+        verified: false,
+        tenantName: selectedMembership.tenant.name,
+        tenantSlug: selectedMembership.tenant.id,
+        invoiceId: invoice.id,
+        status: "unknown",
+        checkedAt,
+        message:
+          "Deze betaling hoort niet bij je huidige ledenaccount. Log in met het juiste account.",
+      } satisfies MemberPaymentReturnVerification);
+    }
+
+    const amountLabel = formatMemberPaymentReturnAmount(
+      invoice.amountCents,
+      invoice.currency,
+    );
+    const status = invoice.status;
+
+    return toClientPlain({
+      verified: true,
+      tenantName: selectedMembership.tenant.name,
+      tenantSlug: selectedMembership.tenant.id,
+      invoiceId: invoice.id,
+      status,
+      amountLabel,
+      description: invoice.description,
+      paidAt: invoice.paidAt,
+      checkedAt,
+      message: buildMemberPaymentReturnMessage({
+        status,
+        tenantName: selectedMembership.tenant.name,
+        amountLabel,
+      }),
+    } satisfies MemberPaymentReturnVerification);
   }
 
   async function ensureMemberContractRecord(
@@ -4070,6 +4284,199 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     return { billing, legal, provider };
   }
 
+  async function activatePaidMemberSignupCheckout(
+    tenantContext: TenantContext,
+    invoice: GymDashboardSnapshot["billingBackoffice"]["invoices"][number],
+    payment: MolliePaymentStatus,
+  ) {
+    if (invoice.source !== "signup_checkout" || payment.status !== "paid") {
+      return invoice;
+    }
+
+    const pendingCheckout = await getLocalPendingMemberSignupCheckout(tenantContext.tenantId, {
+      signupRequestId: payment.signupRequestId,
+      invoiceId: invoice.id,
+    });
+    const signupRequestId = payment.signupRequestId ?? pendingCheckout?.signupRequestId;
+
+    if (!signupRequestId) {
+      if (invoice.memberId) {
+        return invoice;
+      }
+
+      throw new AppError("Betaalde aanmelding kon niet aan een inschrijving gekoppeld worden.", {
+        code: "INVALID_INPUT",
+        details: { invoiceId: invoice.id, paymentId: payment.providerPaymentId },
+      });
+    }
+
+    const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+    const signup = tenantProfile?.moduleData.memberSignups.find(
+      (entry) => entry.id === signupRequestId,
+    );
+
+    if (!signup) {
+      throw new AppError("Aanmelding niet gevonden voor betaalde checkout.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: { signupRequestId, invoiceId: invoice.id },
+      });
+    }
+
+    if (signup.status === "approved" && signup.approvedMemberId) {
+      await deleteLocalPendingMemberSignupCheckout(tenantContext.tenantId, {
+        signupRequestId,
+        invoiceId: invoice.id,
+      });
+
+      if (invoice.memberId === signup.approvedMemberId) {
+        return invoice;
+      }
+
+      return updateLocalTenantBillingInvoice(tenantContext.tenantId, {
+        id: invoice.id,
+        status: invoice.status,
+        memberId: signup.approvedMemberId,
+        memberName: signup.fullName,
+      });
+    }
+
+    const [membershipPlans, locations, legal] = await Promise.all([
+      runtime.store.listMembershipPlans(tenantContext),
+      runtime.store.listLocations(tenantContext),
+      buildLegalComplianceSummary(tenantContext),
+    ]);
+    const membershipPlan = membershipPlans.find((entry) => entry.id === signup.membershipPlanId);
+    const location = locations.find((entry) => entry.id === signup.preferredLocationId);
+
+    if (!membershipPlan || !location) {
+      throw new AppError("Contract of vestiging voor betaalde aanmelding bestaat niet meer.", {
+        code: "RESOURCE_NOT_FOUND",
+        details: {
+          signupRequestId,
+          membershipPlanId: signup.membershipPlanId,
+          preferredLocationId: signup.preferredLocationId,
+        },
+      });
+    }
+
+    let member: GymDashboardSnapshot["members"][number] | undefined;
+
+    try {
+      member = await runtime.store.createMember(tenantContext, {
+        fullName: signup.fullName,
+        email: signup.email,
+        phone: signup.phone,
+        phoneCountry: signup.phoneCountry,
+        membershipPlanId: membershipPlan.id,
+        homeLocationId: location.id,
+        status: pendingCheckout?.memberStatus ?? "trial",
+        tags: ["self-signup"],
+        waiverStatus: "complete",
+        waiverStorageKey: legal.waiverStorageKey,
+      });
+
+      if (pendingCheckout?.portalPasswordHash) {
+        await upsertLocalMemberPortalAccount(tenantContext.tenantId, {
+          memberId: member.id,
+          displayName: member.fullName,
+          email: member.email,
+          passwordHash: pendingCheckout.portalPasswordHash,
+        });
+      }
+
+      await reviewLocalTenantMemberSignup(tenantContext.tenantId, {
+        id: signup.id,
+        status: "approved",
+        ownerNotes: pendingCheckout?.ownerNotes,
+        approvedMemberId: member.id,
+      });
+      await ensureMemberContractRecord(tenantContext, member);
+      const linkedInvoice = await updateLocalTenantBillingInvoice(tenantContext.tenantId, {
+        id: invoice.id,
+        status: invoice.status,
+        memberId: member.id,
+        memberName: member.fullName,
+      });
+      await deleteLocalPendingMemberSignupCheckout(tenantContext.tenantId, {
+        signupRequestId,
+        invoiceId: invoice.id,
+      });
+      await runtime.auditLogger.write({
+        action: "member_signup.checkout_activated",
+        category: "members",
+        actorId: "mollie:webhook",
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          signupRequestId,
+          memberId: member.id,
+          invoiceId: invoice.id,
+          providerPaymentId: payment.providerPaymentId,
+        },
+      });
+
+      return linkedInvoice;
+    } catch (error) {
+      if (member) {
+        await deleteLocalMemberPortalAccountByMemberId(tenantContext.tenantId, member.id).catch(
+          () => undefined,
+        );
+        await runtime.store
+          .deleteMember(tenantContext, {
+            id: member.id,
+            expectedVersion: member.version,
+          })
+          .catch(() => undefined);
+      }
+
+      throw error;
+    }
+  }
+
+  async function invalidateTenantDashboardCaches(tenantContext: TenantContext) {
+    const accounts = await listLocalPlatformAccounts(tenantContext.tenantId);
+    const cache = createTenantAwareCache(runtime, tenantContext);
+
+    await Promise.all(accounts.map((account) => cache.delete("dashboard", account.userId)));
+  }
+
+  async function rejectUnpaidMemberSignupCheckout(
+    tenantContext: TenantContext,
+    invoice: GymDashboardSnapshot["billingBackoffice"]["invoices"][number],
+    payment: MolliePaymentStatus,
+  ) {
+    if (invoice.source !== "signup_checkout" || payment.status === "paid") {
+      return;
+    }
+
+    const pendingCheckout = await getLocalPendingMemberSignupCheckout(tenantContext.tenantId, {
+      signupRequestId: payment.signupRequestId,
+      invoiceId: invoice.id,
+    });
+    const signupRequestId = payment.signupRequestId ?? pendingCheckout?.signupRequestId;
+
+    if (!signupRequestId) {
+      return;
+    }
+
+    const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+    const signup = tenantProfile?.moduleData.memberSignups.find(
+      (entry) => entry.id === signupRequestId,
+    );
+
+    if (signup?.status === "pending_review") {
+      await reviewLocalTenantMemberSignup(tenantContext.tenantId, {
+        id: signup.id,
+        status: "rejected",
+        ownerNotes: "Betaling is niet afgerond.",
+      });
+    }
+
+    await deleteLocalPendingMemberSignupCheckout(tenantContext.tenantId, {
+      signupRequestId,
+      invoiceId: invoice.id,
+    });
+  }
+
   async function completeMemberSignupCheckout(input: {
     readonly tenantContext: TenantContext;
     readonly signup: GymDashboardSnapshot["memberSignups"][number];
@@ -4087,25 +4494,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         input.tenantContext,
         input.signup.paymentMethod,
       ));
-    let member: GymMember | undefined;
     let invoice: Awaited<ReturnType<typeof createLocalTenantBillingInvoice>> | undefined;
+    let pendingCheckoutStored = false;
 
     try {
-      member = await runtime.store.createMember(input.tenantContext, {
-        fullName: input.signup.fullName,
-        email: input.signup.email,
-        phone: input.signup.phone,
-        phoneCountry: input.signup.phoneCountry,
-        membershipPlanId: input.membershipPlan.id,
-        homeLocationId: input.location.id,
-        status: input.memberStatus,
-        tags: ["self-signup"],
-        waiverStatus: "complete",
-        waiverStorageKey: prerequisites.legal.waiverStorageKey,
-      });
       invoice = await createLocalTenantBillingInvoice(input.tenantContext.tenantId, {
-        memberId: member.id,
-        memberName: member.fullName,
+        memberName: input.signup.fullName,
         description: `Membership checkout · ${input.membershipPlan.name}`,
         amountCents: getMembershipCheckoutAmountCents(input.membershipPlan),
         dueAt: new Date().toISOString(),
@@ -4125,8 +4519,8 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           customer:
             input.signup.paymentMethod === "direct_debit"
               ? {
-                  name: member.fullName,
-                  email: member.email,
+                  name: input.signup.fullName,
+                  email: input.signup.email,
                 }
               : undefined,
           provider: prerequisites.provider ?? undefined,
@@ -4134,6 +4528,9 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             input.tenantContext.tenantId,
             invoice.id,
           ),
+          metadata: {
+            signupRequestId: input.signup.id,
+          },
         },
       );
 
@@ -4143,22 +4540,15 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         });
       }
 
-      if (input.portalPassword?.trim()) {
-        await upsertLocalMemberPortalAccount(input.tenantContext.tenantId, {
-          memberId: member.id,
-          displayName: member.fullName,
-          email: member.email,
-          password: input.portalPassword.trim(),
-        });
-      }
-
-      const approvedSignup = await reviewLocalTenantMemberSignup(input.tenantContext.tenantId, {
-        id: input.signup.id,
-        status: "approved",
+      await upsertLocalPendingMemberSignupCheckout(input.tenantContext.tenantId, {
+        signupRequestId: input.signup.id,
+        invoiceId: processedInvoice.id,
+        email: input.signup.email,
+        memberStatus: input.memberStatus,
         ownerNotes: input.ownerNotes,
-        approvedMemberId: member.id,
+        portalPassword: input.portalPassword,
       });
-      const contract = await ensureMemberContractRecord(input.tenantContext, member);
+      pendingCheckoutStored = true;
       await runtime.auditLogger.write({
         action: "member_signup.checkout_created",
         category: "members",
@@ -4166,17 +4556,16 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         tenantId: input.tenantContext.tenantId,
         metadata: {
           signupRequestId: input.signup.id,
-          memberId: member.id,
           invoiceId: processedInvoice.id,
           providerPaymentId: intent.providerPaymentId,
         },
       });
 
       return toClientPlain({
-        signup: approvedSignup,
-        member,
+        signup: input.signup,
+        member: null,
         invoice: processedInvoice,
-        contract,
+        contract: null,
         checkoutUrl: intent.checkoutUrl,
         providerPaymentId: intent.providerPaymentId,
         providerStatus: intent.status,
@@ -4190,13 +4579,11 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         }).catch(() => undefined);
       }
 
-      if (member) {
-        await runtime.store
-          .deleteMember(input.tenantContext, {
-            id: member.id,
-            expectedVersion: member.version,
-          })
-          .catch(() => undefined);
+      if (pendingCheckoutStored) {
+        await deleteLocalPendingMemberSignupCheckout(input.tenantContext.tenantId, {
+          signupRequestId: input.signup.id,
+          invoiceId: invoice?.id,
+        }).catch(() => undefined);
       }
 
       throw error;
@@ -4750,6 +5137,9 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async getMemberReservationSnapshot(actor, input) {
       return buildMemberReservationSnapshot(actor, input);
     },
+    async verifyMemberPaymentReturn(actor, input) {
+      return buildMemberPaymentReturnVerification(actor, input);
+    },
     async listMembers(actor, tenantContext) {
       assertAccess(runtime, actor, tenantContext, ["members.read"]);
       return runtime.store.listMembers(tenantContext);
@@ -4938,6 +5328,9 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           id: signup.id,
           status: "rejected",
           ownerNotes: input.ownerNotes,
+        });
+        await deleteLocalPendingMemberSignupCheckout(tenantContext.tenantId, {
+          signupRequestId: signup.id,
         });
         await runtime.auditLogger.write({
           action: "member_signup.rejected",
@@ -5191,10 +5584,20 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         payloadSummary: `Mollie status ${payment.status}`,
       });
       const nextInvoiceStatus = mapMollieStatusToInvoiceStatus(payment.status);
+      const tenantContext = createPublicTenantContext(tenant.id);
+      const invoiceForStatusUpdate =
+        payment.status === "paid"
+          ? await activatePaidMemberSignupCheckout(tenantContext, invoice, payment)
+          : invoice;
+
+      if (nextInvoiceStatus === "failed") {
+        await rejectUnpaidMemberSignupCheckout(tenantContext, invoice, payment);
+      }
+      let syncedInvoice = invoiceForStatusUpdate;
 
       if (nextInvoiceStatus) {
-        await updateLocalTenantBillingInvoice(tenant.id, {
-          id: invoice.id,
+        syncedInvoice = await updateLocalTenantBillingInvoice(tenant.id, {
+          id: invoiceForStatusUpdate.id,
           status: nextInvoiceStatus,
           paidAt: nextInvoiceStatus === "paid" ? new Date().toISOString() : undefined,
           refundedAt:
@@ -5205,10 +5608,10 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       }
 
       const subscription = await ensureDirectDebitSubscriptionForPaidSignup(
-        createPublicTenantContext(tenant.id),
+        tenantContext,
         provider,
         payment,
-        invoice,
+        syncedInvoice,
       );
 
       await runtime.auditLogger.write({
@@ -5223,6 +5626,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           providerSubscriptionId: subscription?.providerSubscriptionId,
         },
       });
+      await invalidateTenantDashboardCaches(tenantContext);
       return webhook;
     },
     async reconcileBillingLedger(actor, tenantContext, input) {
@@ -5593,6 +5997,40 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         request,
         deletedPortalAccounts,
       };
+    },
+    async registerMemberPushToken(actor, tenantContext, input) {
+      await assertFeatureEnabled(actor, tenantContext, "mobile.white_label");
+      const member = await resolveCurrentSelfServiceMemberAccess(
+        actor,
+        tenantContext,
+        input.memberId,
+      );
+      const subscription = await createOrUpdateLocalTenantPushSubscription(
+        tenantContext.tenantId,
+        {
+          memberId: member.id,
+          memberName: member.fullName,
+          tokenHash: hashMobilePushToken(input.token),
+          tokenPreview: previewMobilePushToken(input.token),
+          platform: input.platform,
+          deviceId: input.deviceId,
+          permission: input.permission,
+        },
+      );
+
+      await runtime.auditLogger.write({
+        action: "mobile.push_token_registered",
+        category: "mobile",
+        actorId: actor.subjectId,
+        tenantId: tenantContext.tenantId,
+        metadata: {
+          memberId: member.id,
+          platform: subscription.platform,
+          permission: subscription.permission,
+        },
+      });
+      await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
+      return subscription;
     },
     async reviewMembershipPause(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);

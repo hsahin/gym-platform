@@ -92,11 +92,11 @@ function createMutationRequest(
 beforeEach(async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "gym-platform-mollie-connect-"));
   process.env.LOCAL_PLATFORM_STATE_FILE = path.join(tempDir, "platform-state.json");
-  process.env.APP_BASE_URL = "https://gym-platform-vc9yk.ondigitalocean.app";
+  process.env.APP_BASE_URL = "https://gym.example";
   process.env.MOLLIE_CLIENT_ID = "app_123";
   process.env.MOLLIE_CLIENT_SECRET = "secret";
   process.env.MOLLIE_CONNECT_REDIRECT_URL =
-    "https://gym-platform-vc9yk.ondigitalocean.app/api/mollie/redirect";
+    "https://gym.example/api/mollie/redirect";
   process.env.MOLLIE_ORGANIZATION_ACCESS_TOKEN = "org_token";
   process.env.MOLLIE_TEST_MODE = "true";
   globalThis.__gymPlatformServices = undefined;
@@ -111,6 +111,48 @@ afterEach(async () => {
 });
 
 describe("mollie connect routes", () => {
+  it("redirects Mollie callback errors back to the public app origin", async () => {
+    delete process.env.APP_BASE_URL;
+
+    const response = await redirectRoute(
+      new NextRequest(
+        "http://internal:3000/api/mollie/redirect?error=access_denied&error_description=Cancelled",
+        {
+          headers: {
+            "x-forwarded-host": "gym-platform.example",
+            "x-forwarded-proto": "https",
+          },
+        },
+      ),
+    );
+    const location = new URL(response.headers.get("location")!);
+
+    expect(response.status).toBe(307);
+    expect(location.origin).toBe("https://gym-platform.example");
+    expect(location.pathname).toBe("/dashboard/payments");
+    expect(location.searchParams.get("mollie")).toBe("error");
+    expect(location.searchParams.get("message")).toBe("Cancelled");
+  });
+
+  it("redirects incomplete Mollie callbacks to the configured app base url", async () => {
+    process.env.APP_BASE_URL = "https://configured-gym.example/";
+
+    const response = await redirectRoute(
+      new NextRequest("http://localhost/api/mollie/redirect?state=missing-code", {
+        headers: {
+          host: "localhost",
+        },
+      }),
+    );
+    const location = new URL(response.headers.get("location")!);
+
+    expect(response.status).toBe(307);
+    expect(location.origin).toBe("https://configured-gym.example");
+    expect(location.pathname).toBe("/dashboard/payments");
+    expect(location.searchParams.get("mollie")).toBe("error");
+    expect(location.searchParams.get("message")).toContain("mist code of state");
+  });
+
   it("connects an existing Mollie account through OAuth and stores the test profile", async () => {
     const state = await bootstrapLocalPlatform({
       tenantName: "Northside Athletics",
@@ -133,7 +175,7 @@ describe("mollie connect routes", () => {
     );
     expect(authorizeUrl.searchParams.get("client_id")).toBe("app_123");
     expect(authorizeUrl.searchParams.get("redirect_uri")).toBe(
-      "https://gym-platform-vc9yk.ondigitalocean.app/api/mollie/redirect",
+      "https://gym.example/api/mollie/redirect",
     );
     expect(authorizeUrl.searchParams.get("testmode")).toBe("true");
     expect(authorizeUrl.searchParams.get("scope")).toBe(MOLLIE_CONNECT_SCOPES.join(" "));
@@ -194,7 +236,7 @@ describe("mollie connect routes", () => {
     );
     expect(redirectResponse.status).toBe(307);
     expect(redirectResponse.headers.get("location")).toBe(
-      "https://gym-platform-vc9yk.ondigitalocean.app/dashboard/payments?mollie=connected",
+      "https://gym.example/dashboard/payments?mollie=connected",
     );
 
     const services = await getGymPlatformServices();

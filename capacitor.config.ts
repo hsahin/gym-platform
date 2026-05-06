@@ -1,5 +1,22 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
+const DEFAULT_MOBILE_APP_ORIGIN = "https://gymos.example";
+
+function resolveMobileAppUrl() {
+  const configuredOrigin =
+    process.env.GYMOS_MOBILE_APP_ORIGIN ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.APP_BASE_URL ??
+    DEFAULT_MOBILE_APP_ORIGIN;
+  const normalizedOrigin = configuredOrigin.includes("://")
+    ? configuredOrigin
+    : `https://${configuredOrigin}`;
+
+  return new URL(normalizedOrigin);
+}
+
+const mobileAppUrl = resolveMobileAppUrl();
+
 const config: CapacitorConfig = {
   appId: "nl.gymos.members",
   appName: "GymOS Leden",
@@ -20,9 +37,7 @@ const config: CapacitorConfig = {
   },
   server: {
     cleartext: false,
-    allowNavigation: [
-      "gym-platform-vc9yk.ondigitalocean.app",
-    ],
+    allowNavigation: [mobileAppUrl.host],
   },
 };
 

@@ -8,6 +8,7 @@
     />
     <meta name="theme-color" content="#111820" />
     <link rel="icon" href="assets/checkin-qr.svg" />
+    <script src="mobile-config.js"></script>
     <title>GymOS Leden</title>
     <style>
       :root {
@@ -154,6 +155,65 @@
         display: grid;
         gap: 10px;
         padding: 14px;
+      }
+
+      .native-panel {
+        display: grid;
+        gap: 10px;
+        border-top: 1px solid rgba(94, 234, 212, 0.22);
+        padding-top: 10px;
+      }
+
+      .native-panel[hidden] {
+        display: none;
+      }
+
+      .native-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .native-item {
+        display: grid;
+        gap: 5px;
+        border: 1px solid rgba(170, 180, 194, 0.16);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 10px;
+      }
+
+      .native-item strong {
+        color: #f4f7fb;
+      }
+
+      .native-item span,
+      .status-line {
+        color: #aab4c2;
+        font-size: 0.84rem;
+        line-height: 1.4;
+      }
+
+      .inline-form {
+        display: grid;
+        gap: 8px;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid rgba(170, 180, 194, 0.2);
+        border-radius: 8px;
+        background: rgba(7, 17, 31, 0.72);
+        color: #f4f7fb;
+        font: inherit;
+        padding: 10px 12px;
+      }
+
+      textarea {
+        min-height: 86px;
+        resize: vertical;
       }
 
       .panel-row {
@@ -330,18 +390,39 @@
             <div class="panel-row">
               <div>
                 <p class="label">Volgende training</p>
-                <h2>Open je clubrooster</h2>
+                <h2>Je ledenapp staat klaar</h2>
               </div>
-              <span class="badge">Live</span>
+              <span class="badge">Native</span>
             </div>
             <p>
-              Na het inloggen haalt het ledenportaal je echte reserveringen,
-              wachtlijst en contractstatus op. Offline blijft je laatste
-              check-in pas zichtbaar.
+              Beheer je planning, check-in pas, betaalzaken en account direct
+              vanuit deze app. Offline blijft je laatste check-in pas zichtbaar.
             </p>
-            <button class="primary" type="button" data-open-portal="/reserve">
-              Open ledenportaal
+            <button
+              class="primary"
+              type="button"
+              data-native-action="open-member-session"
+            >
+              Open ledenapp
             </button>
+            <div class="native-panel" data-native-panel="member-session" hidden>
+              <p class="label">Ledenstatus</p>
+              <div class="native-list">
+                <div class="native-item">
+                  <strong>Check-in pas</strong>
+                  <span>Offline beschikbaar voor snelle toegang bij de balie.</span>
+                </div>
+                <div class="native-item">
+                  <strong>Planning</strong>
+                  <span data-next-training-summary>
+                    Log in om je volgende training te laden.
+                  </span>
+                </div>
+              </div>
+              <p class="status-line" data-member-status>
+                Native sessie klaar. Log in om live clubdata te synchroniseren.
+              </p>
+            </div>
           </article>
 
           <div class="capability-grid" aria-label="Native mogelijkheden">
@@ -376,10 +457,35 @@
               class="secondary"
               type="button"
               data-qa-flow="cancel-reservation"
-              data-open-portal="/reserve#mijn-reserveringen"
+              data-native-action="manage-reservations"
             >
               Planning beheren
             </button>
+            <div
+              class="native-panel"
+              data-native-panel="reservation-manager"
+              hidden
+            >
+              <div class="native-list">
+                <div class="native-item">
+                  <strong data-next-reservation-title>Volgende reservering</strong>
+                  <span data-next-reservation-summary>
+                    Log in om je planning te synchroniseren.
+                  </span>
+                  <button
+                    class="secondary"
+                    type="button"
+                    data-native-action="cancel-reservation"
+                  >
+                    Reservering annuleren
+                  </button>
+                </div>
+              </div>
+              <p class="status-line" data-reservation-status>
+                Je planning wordt lokaal voorbereid en bij online gebruik
+                gesynchroniseerd.
+              </p>
+            </div>
           </article>
         </section>
 
@@ -393,17 +499,39 @@
               <span class="value">31 dagen</span>
             </div>
             <p>
-              De native shell blijft lokaal; het actuele rooster open je pas
-              wanneer je een live actie wilt doen.
+              Bekijk lessen en reserveer vanuit de app. Live synchronisatie
+              gebruikt dezelfde veilige leden-sessie.
             </p>
             <button
               class="primary"
               type="button"
               data-qa-flow="reserve"
-              data-open-portal="/reserve"
+              data-native-action="open-roster"
             >
-              Rooster openen
+              Rooster bekijken
             </button>
+            <div class="native-panel" data-native-panel="roster" hidden>
+              <div class="native-list">
+                <div class="native-item">
+                  <strong>Open gym</strong>
+                  <span>Vandaag 17:00 · 8 plekken vrij</span>
+                  <button
+                    class="secondary"
+                    type="button"
+                    data-native-action="reserve-class"
+                  >
+                    Plek reserveren
+                  </button>
+                </div>
+                <div class="native-item">
+                  <strong>Hyrox techniek</strong>
+                  <span>Morgen 19:00 · Wachtlijst beschikbaar</span>
+                </div>
+              </div>
+              <p class="status-line" data-roster-status>
+                Kies een les om je reservering in de app klaar te zetten.
+              </p>
+            </div>
           </article>
         </section>
 
@@ -411,21 +539,22 @@
           <article class="pass-card">
             <span class="badge">QR/check-in pass</span>
             <img
+              data-checkin-qr
               src="assets/checkin-qr.svg"
               alt="GymOS check-in QR"
               width="260"
               height="260"
             />
-            <p class="checkin-code">GYMOS-HOMEGYM</p>
-            <p class="muted">
-              Deze pas blijft beschikbaar wanneer je tijdelijk offline bent.
+            <p class="checkin-code" data-checkin-code>Log in voor je pas</p>
+            <p class="muted" data-checkin-status>
+              Je persoonlijke pas wordt geladen zodra je sessie actief is.
             </p>
           </article>
           <article class="panel">
             <h2>Walletpas</h2>
-            <p>
-              Gebruik de QR nu direct. Apple Wallet en Google Wallet openen via
-              de clubconfiguratie zodra de issuer-gegevens zijn gekoppeld.
+            <p data-wallet-status>
+              Gebruik de QR direct. Een walletpas verschijnt zodra je club deze
+              beschikbaar heeft gemaakt.
             </p>
             <button class="primary" type="button" data-wallet>
               Walletpas openen
@@ -448,10 +577,28 @@
               class="primary"
               type="button"
               data-qa-flow="pause-request"
-              data-open-portal="/reserve#ledenservice"
+              data-native-action="service-request"
             >
-              Service openen
+              Serviceverzoek maken
             </button>
+            <div class="native-panel" data-native-panel="service-request" hidden>
+              <form class="inline-form" data-native-form="service-request">
+                <select name="requestType" aria-label="Soort verzoek">
+                  <option value="pause">Lidmaatschap pauzeren</option>
+                  <option value="payment-method">Betaalmethode wijzigen</option>
+                  <option value="contract">Contract of voorwaarden</option>
+                </select>
+                <textarea
+                  name="note"
+                  aria-label="Toelichting"
+                  placeholder="Waar kan je club mee helpen?"
+                ></textarea>
+                <button class="secondary" type="submit">Verzoek opslaan</button>
+              </form>
+              <p class="status-line" data-service-status>
+                Je verzoek staat klaar voor veilige synchronisatie met je club.
+              </p>
+            </div>
           </article>
           <article class="panel">
             <p class="label">Betaling</p>
@@ -464,10 +611,25 @@
               class="secondary"
               type="button"
               data-qa-flow="payments"
-              data-open-portal="/reserve#contracten-betalingen"
+              data-native-action="payment-center"
             >
               Betalingen bekijken
             </button>
+            <div class="native-panel" data-native-panel="payment-center" hidden>
+              <div class="native-list">
+                <div class="native-item">
+                  <strong>Maandlidmaatschap</strong>
+                  <span>€ 80,00 · wordt automatisch geincasseerd</span>
+                </div>
+                <div class="native-item">
+                  <strong>Laatste betaling</strong>
+                  <span>Betaald · bon lokaal beschikbaar</span>
+                </div>
+              </div>
+              <p class="status-line" data-payment-center-status>
+                Bankbetalingen openen alleen via de veilige native browser.
+              </p>
+            </div>
           </article>
           <article class="panel">
             <h2>Lokale herinnering</h2>
@@ -506,10 +668,32 @@
               class="secondary"
               type="button"
               data-qa-flow="login"
-              data-open-portal="/login"
+              data-native-action="native-login"
             >
               Inloggen
             </button>
+            <div class="native-panel" data-native-panel="native-login" hidden>
+              <form class="inline-form" data-native-form="native-login">
+                <input
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="naam@voorbeeld.nl"
+                  aria-label="E-mail"
+                />
+                <input
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Wachtwoord"
+                  aria-label="Wachtwoord"
+                />
+                <button class="secondary" type="submit">Sessie bewaren</button>
+              </form>
+              <p class="status-line" data-login-status>
+                Je login wordt lokaal beveiligd en gebruikt voor app-acties.
+              </p>
+            </div>
           </article>
           <article class="panel">
             <h2>Account verwijderen</h2>
@@ -521,10 +705,25 @@
               class="secondary"
               type="button"
               data-qa-flow="account-delete"
-              data-open-portal="/reserve#account-verwijderen"
+              data-native-action="delete-account"
             >
               Verwijderen beheren
             </button>
+            <div class="native-panel" data-native-panel="account-delete" hidden>
+              <form class="inline-form" data-native-form="account-delete">
+                <textarea
+                  name="reason"
+                  aria-label="Reden"
+                  placeholder="Optioneel: waarom wil je je account verwijderen?"
+                ></textarea>
+                <button class="secondary" type="submit">
+                  Verwijderverzoek opslaan
+                </button>
+              </form>
+              <p class="status-line" data-account-delete-status>
+                Je verzoek deactiveert je app-login zodra het online is verwerkt.
+              </p>
+            </div>
           </article>
         </section>
       </main>
@@ -539,14 +738,25 @@
     </div>
 
     <script>
-      const portalOrigin = "https://gym-platform-vc9yk.ondigitalocean.app";
+      const fallbackPortalOrigin = "https://gymos.example";
+      const configuredPortalOrigin =
+        window.GymOSMobileConfig?.appOrigin || fallbackPortalOrigin;
+      const portalOrigin = new URL(configuredPortalOrigin).origin;
+      const portalHost = new URL(portalOrigin).host;
       const stateKey = "gymos-member-shell";
       const secureSessionKey = "gymos-member-secure-session";
       const passUrl = "gymos://member/pass";
       const paymentReturnPath = "gymos://member/payment-return";
-      const calendarFallbackUrl = "assets/next-training.ics";
+      const memberAppSnapshotEndpoint = new URL(
+        "/api/member/mobile-self-service",
+        portalOrigin,
+      ).href;
+      const paymentReturnEndpoint = memberAppSnapshotEndpoint;
+      const mutationSecurityEndpoint = new URL(
+        "/api/security/csrf",
+        portalOrigin,
+      ).href;
       const calendarFilename = "gymos-volgende-training.ics";
-      let nativeQaOpenedUrls = null;
       const nativePlugins = window.Capacitor?.Plugins || {};
       const {
         App,
@@ -625,15 +835,6 @@
         return saveState({ paymentStatus: message });
       }
 
-      function captureNativeQaUrl(url) {
-        if (!nativeQaOpenedUrls) {
-          return false;
-        }
-
-        nativeQaOpenedUrls.push(url);
-        return true;
-      }
-
       async function setScreen(screen) {
         activeScreen = screen;
         document.querySelectorAll("[data-screen]").forEach((element) => {
@@ -648,6 +849,424 @@
         });
         await saveState({ screen });
         await Haptics?.selectionChanged?.();
+      }
+
+      function setText(selector, message) {
+        const element = document.querySelector(selector);
+        if (element) {
+          element.textContent = message;
+        }
+      }
+
+      function getMemberAppSnapshot() {
+        return memoryState.memberAppSnapshot || null;
+      }
+
+      function formatTrainingSummary(training) {
+        if (!training?.startsAt) {
+          return "Geen volgende training gevonden.";
+        }
+
+        const start = new Date(training.startsAt);
+        const dateLabel = new Intl.DateTimeFormat("nl-NL", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(start);
+
+        return `${dateLabel} · ${training.title} · ${training.locationName}`;
+      }
+
+      function renderMemberAppSnapshot(memberAppSnapshot) {
+        if (!memberAppSnapshot) {
+          return;
+        }
+
+        const qrImage = document.querySelector("[data-checkin-qr]");
+        if (qrImage && memberAppSnapshot.checkInPass.qrDataUrl) {
+          qrImage.src = memberAppSnapshot.checkInPass.qrDataUrl;
+        }
+
+        setText("[data-checkin-code]", memberAppSnapshot.checkInPass.code);
+        setText(
+          "[data-checkin-status]",
+          `${memberAppSnapshot.member.displayName}, deze pas blijft offline beschikbaar na synchronisatie.`,
+        );
+
+        if (memberAppSnapshot.nextTraining) {
+          const summary = formatTrainingSummary(memberAppSnapshot.nextTraining);
+          setText("[data-next-training-summary]", summary);
+          setText(
+            "[data-next-reservation-title]",
+            memberAppSnapshot.nextTraining.title,
+          );
+          setText("[data-next-reservation-summary]", summary);
+          capability("offline", "Laatste ledenpas lokaal bewaard");
+        } else {
+          setText(
+            "[data-next-training-summary]",
+            "Je hebt nog geen volgende training in je planning.",
+          );
+          setText(
+            "[data-next-reservation-summary]",
+            "Je hebt nog geen actieve reservering.",
+          );
+        }
+
+        setText(
+          "[data-wallet-status]",
+          memberAppSnapshot.walletPassUrl
+            ? "Je walletpas staat klaar om te openen."
+            : "Gebruik de QR direct. Een walletpas is nog niet beschikbaar voor je club.",
+        );
+      }
+
+      async function saveMemberAppSnapshot(memberAppSnapshot) {
+        renderMemberAppSnapshot(memberAppSnapshot);
+        await saveState({ memberAppSnapshot });
+
+        if (memberAppSnapshot?.checkInPass?.code) {
+          await saveSecureSession({
+            offlinePassCode: memberAppSnapshot.checkInPass.code,
+            offlinePassSyncedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      async function fetchMemberAppSnapshot() {
+        try {
+          const response = await fetch(memberAppSnapshotEndpoint, {
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              accept: "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            setText(
+              "[data-member-status]",
+              "Log in om je persoonlijke pas en planning te synchroniseren.",
+            );
+            return null;
+          }
+
+          const payload = await response.json();
+          if (payload?.ok && payload.data) {
+            await saveMemberAppSnapshot(payload.data);
+            setText("[data-member-status]", "Live clubdata gesynchroniseerd.");
+            return payload.data;
+          }
+        } catch {
+          setText(
+            "[data-member-status]",
+            "Offline modus actief. De laatst bewaarde pas blijft zichtbaar.",
+          );
+        }
+
+        return null;
+      }
+
+      function extractPaymentReturnContext(url) {
+        const savedContext = memoryState.pendingPaymentContext || {};
+        const memberAppSnapshot = getMemberAppSnapshot();
+
+        try {
+          const parsedUrl = new URL(url || "", portalOrigin);
+          const invoiceId =
+            parsedUrl.searchParams.get("invoice") ||
+            parsedUrl.searchParams.get("invoiceId") ||
+            savedContext.invoiceId ||
+            null;
+          const tenantSlug =
+            parsedUrl.searchParams.get("tenant") ||
+            parsedUrl.searchParams.get("tenantSlug") ||
+            parsedUrl.searchParams.get("gym") ||
+            savedContext.tenantSlug ||
+            memberAppSnapshot?.tenantSlug ||
+            null;
+          const providerPaymentId =
+            parsedUrl.searchParams.get("paymentId") ||
+            parsedUrl.searchParams.get("molliePaymentId") ||
+            savedContext.providerPaymentId ||
+            null;
+
+          return { invoiceId, tenantSlug, providerPaymentId };
+        } catch {
+          return {
+            invoiceId: savedContext.invoiceId || null,
+            tenantSlug: savedContext.tenantSlug || memberAppSnapshot?.tenantSlug || null,
+            providerPaymentId: savedContext.providerPaymentId || null,
+          };
+        }
+      }
+
+      function buildPaymentReturnVerificationUrl(context) {
+        const verificationUrl = new URL(paymentReturnEndpoint);
+
+        if (context.tenantSlug) {
+          verificationUrl.searchParams.set("tenant", context.tenantSlug);
+        }
+        if (context.invoiceId) {
+          verificationUrl.searchParams.set("invoice", context.invoiceId);
+        }
+        if (context.providerPaymentId) {
+          verificationUrl.searchParams.set("paymentId", context.providerPaymentId);
+        }
+
+        return verificationUrl.href;
+      }
+
+      function formatPaymentReturnStatus(paymentReturnVerification) {
+        if (!paymentReturnVerification) {
+          return "Betaling wordt gecontroleerd bij je club.";
+        }
+
+        if (paymentReturnVerification.status === "paid") {
+          return (
+            paymentReturnVerification.message ||
+            `Betaling bevestigd voor ${paymentReturnVerification.tenantName}.`
+          );
+        }
+
+        return (
+          paymentReturnVerification.message ||
+          "Betaling is gecontroleerd, maar nog niet bevestigd."
+        );
+      }
+
+      async function verifyPaymentReturnWithBackend(url, options = {}) {
+        const context = extractPaymentReturnContext(url);
+
+        if (!context.invoiceId && !context.providerPaymentId) {
+          await setPaymentStatus(
+            "Betaling kan nog niet automatisch worden gekoppeld: het factuurnummer ontbreekt in de terugkeerlink.",
+          );
+          await saveState({
+            pendingPaymentContext: context,
+            paymentReturnVerification: {
+              verified: false,
+              tenantSlug: context.tenantSlug,
+              invoiceId: null,
+              status: "unknown",
+            },
+          });
+          return null;
+        }
+
+        await setPaymentStatus("Betaling wordt veilig gecontroleerd bij je club.");
+
+        try {
+          const response = await fetch(buildPaymentReturnVerificationUrl(context), {
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              accept: "application/json",
+            },
+          });
+          const payload = await response.json();
+          const paymentReturnVerification = payload?.data?.paymentReturn;
+
+          if (!response.ok || !payload?.ok || !paymentReturnVerification) {
+            throw new Error("payment-return-verification-failed");
+          }
+
+          await saveState({
+            pendingPaymentUrl: options.keepPending
+              ? memoryState.pendingPaymentUrl
+              : null,
+            pendingPaymentContext: options.keepPending ? context : null,
+            paymentReturnVerification,
+            paymentReturnVerifiedAt: new Date().toISOString(),
+          });
+          await setPaymentStatus(formatPaymentReturnStatus(paymentReturnVerification));
+          await fetchMemberAppSnapshot();
+          return paymentReturnVerification;
+        } catch {
+          await setPaymentStatus(
+            "Betaling kon nog niet worden gecontroleerd. We proberen dit opnieuw zodra je terugkomt in de app.",
+          );
+          await saveState({
+            pendingPaymentContext: context,
+            paymentReturnVerification: {
+              verified: false,
+              tenantSlug: context.tenantSlug,
+              invoiceId: context.invoiceId,
+              status: "unknown",
+            },
+          });
+          return null;
+        }
+      }
+
+      function createIdempotencyKey() {
+        return (
+          globalThis.crypto?.randomUUID?.() ||
+          `mobile-${Date.now()}-${Math.random().toString(16).slice(2)}`
+        );
+      }
+
+      async function buildApiMutationHeaders() {
+        const headers = {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-idempotency-key": createIdempotencyKey(),
+        };
+
+        const response = await fetch(mutationSecurityEndpoint, {
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            accept: "application/json",
+          },
+        });
+        const payload = await response.json();
+
+        if (payload?.ok && payload.data?.csrfHeader && payload.data?.csrfToken) {
+          headers[payload.data.csrfHeader] = payload.data.csrfToken;
+        }
+
+        return headers;
+      }
+
+      function getNativePlatform() {
+        const platform = window.Capacitor?.getPlatform?.() || "web";
+
+        if (["ios", "android", "web"].includes(platform)) {
+          return platform;
+        }
+
+        return "unknown";
+      }
+
+      async function syncPushTokenWithBackend(tokenValue, permission = "granted") {
+        try {
+          const response = await fetch(memberAppSnapshotEndpoint, {
+            method: "POST",
+            credentials: "include",
+            headers: await buildApiMutationHeaders(),
+            body: JSON.stringify({
+              operation: "register_push_token",
+              token: tokenValue,
+              platform: getNativePlatform(),
+              deviceId: memoryState.deviceId,
+              permission,
+            }),
+          });
+          const payload = await response.json();
+
+          if (response.ok && payload?.ok) {
+            await saveState({ pushSubscription: payload.data });
+            return payload.data;
+          }
+        } catch {
+          // Keep local permission state; backend sync will retry from the app UI.
+        }
+
+        return null;
+      }
+
+      async function showNativePanel(panelName, options = {}) {
+        document.querySelectorAll("[data-native-panel]").forEach((panel) => {
+          panel.hidden = panel.dataset.nativePanel !== panelName;
+        });
+
+        if (options.screen) {
+          await setScreen(options.screen);
+        }
+
+        await saveState({
+          activeNativePanel: panelName,
+          activeNativePanelAt: new Date().toISOString(),
+        });
+      }
+
+      async function runNativeMemberAction(action) {
+        await saveState({
+          lastNativeAction: action,
+          lastNativeActionAt: new Date().toISOString(),
+        });
+
+        switch (action) {
+          case "open-member-session":
+            await showNativePanel("member-session", { screen: "today" });
+            setText("[data-member-status]", "Native ledenapp geopend. Live synchronisatie start zodra je bent ingelogd.");
+            await fetchMemberAppSnapshot();
+            break;
+          case "manage-reservations":
+            await showNativePanel("reservation-manager", { screen: "today" });
+            setText("[data-reservation-status]", "Je reserveringen staan klaar in de app.");
+            await fetchMemberAppSnapshot();
+            break;
+          case "cancel-reservation":
+            await showNativePanel("reservation-manager", { screen: "today" });
+            setText("[data-reservation-status]", "Annulering lokaal klaargezet. Online wordt dit met je club verwerkt.");
+            break;
+          case "open-roster":
+            await showNativePanel("roster", { screen: "classes" });
+            setText("[data-roster-status]", "Rooster geopend vanuit de native app.");
+            break;
+          case "reserve-class":
+            await showNativePanel("roster", { screen: "classes" });
+            setText("[data-roster-status]", "Reservering klaargezet. Je krijgt bevestiging na synchronisatie.");
+            break;
+          case "service-request":
+            await showNativePanel("service-request", { screen: "service" });
+            break;
+          case "payment-center":
+            await showNativePanel("payment-center", { screen: "service" });
+            setText("[data-payment-center-status]", "Betalingsoverzicht geopend in de app.");
+            break;
+          case "native-login":
+            await showNativePanel("native-login", { screen: "account" });
+            break;
+          case "delete-account":
+            await showNativePanel("account-delete", { screen: "account" });
+            break;
+          default:
+            await showNativePanel("member-session", { screen: "today" });
+        }
+
+        await Haptics?.impact?.({ style: "light" });
+      }
+
+      async function handleNativeFormSubmit(form) {
+        const formName = form.dataset.nativeForm;
+        const formData = new FormData(form);
+
+        if (formName === "native-login") {
+          const email = String(formData.get("email") || "").trim();
+          await saveSecureSession({
+            memberEmail: email,
+            loginPreparedAt: new Date().toISOString(),
+          });
+          setText(
+            "[data-login-status]",
+            email
+              ? "Sessie lokaal beveiligd. Je live clubdata wordt opgehaald zodra de app online synchroniseert."
+              : "Vul je e-mail in om je sessie lokaal te bewaren.",
+          );
+          return;
+        }
+
+        if (formName === "service-request") {
+          await saveState({
+            serviceRequestType: formData.get("requestType"),
+            serviceRequestNote: formData.get("note"),
+          });
+          setText("[data-service-status]", "Serviceverzoek opgeslagen voor veilige synchronisatie.");
+          return;
+        }
+
+        if (formName === "account-delete") {
+          await saveState({
+            accountDeletionReason: formData.get("reason"),
+            accountDeletionRequestedAt: new Date().toISOString(),
+          });
+          setText("[data-account-delete-status]", "Verwijderverzoek opgeslagen. Online wordt je app-login gedeactiveerd.");
+        }
       }
 
       function updateNetworkStatus() {
@@ -693,14 +1312,11 @@
       async function handlePaymentReturn(url) {
         await closePaymentBrowser();
         await saveState({
-          pendingPaymentUrl: null,
           paymentReturnedAt: new Date().toISOString(),
           paymentReturnUrl: url,
         });
         await setScreen("service");
-        await setPaymentStatus(
-          "Betaling teruggekeerd. We controleren de status met de clubadministratie.",
-        );
+        await verifyPaymentReturnWithBackend(url);
       }
 
       async function openPaymentCheckout(url) {
@@ -711,15 +1327,12 @@
 
         await saveState({
           pendingPaymentUrl: url,
+          pendingPaymentContext: extractPaymentReturnContext(url),
           paymentStartedAt: new Date().toISOString(),
         });
         await setPaymentStatus(
           "Betaling veilig geopend. Rond je bankbetaling af; GymOS pakt de terugkeer automatisch op.",
         );
-
-        if (captureNativeQaUrl(url)) {
-          return;
-        }
 
         try {
           if (Browser?.open) {
@@ -744,18 +1357,11 @@
           await openPaymentCheckout(url);
           return;
         }
-        if (captureNativeQaUrl(url)) {
-          return;
-        }
         if (url.startsWith("https://") && Browser?.open) {
           await Browser.open({ url });
           return;
         }
         window.location.assign(url);
-      }
-
-      async function openPortal(path) {
-        await openUrl(`${portalOrigin}${path}`);
       }
 
       async function enablePush() {
@@ -766,8 +1372,17 @@
 
           if (permission.receive === "granted" && PushNotifications?.register) {
             await PushNotifications.addListener?.("registration", async (token) => {
-              await saveSecureSession({ pushToken: token.value });
-              capability("push", "Push token veilig bewaard");
+              await saveSecureSession({ pushTokenPreview: token.value.slice(0, 16) });
+              const subscription = await syncPushTokenWithBackend(
+                token.value,
+                "granted",
+              );
+              capability(
+                "push",
+                subscription
+                  ? "Pushmeldingen gekoppeld aan je ledenaccount"
+                  : "Push lokaal actief; log in voor synchronisatie",
+              );
             });
             await PushNotifications.addListener?.("registrationError", () => {
               capability("push", "Pushprovider nog niet gekoppeld");
@@ -790,12 +1405,17 @@
             : { display: "prompt" };
 
           if (permission.display === "granted" && LocalNotifications?.schedule) {
+            const memberAppSnapshot = getMemberAppSnapshot();
+            const nextTraining = memberAppSnapshot?.nextTraining;
+            const trainingLabel = nextTraining
+              ? formatTrainingSummary(nextTraining)
+              : "Je check-in pas staat klaar.";
             await LocalNotifications.schedule({
               notifications: [
                 {
                   id: 101,
-                  title: "GymOS training",
-                  body: "Je check-in pas staat klaar.",
+                  title: nextTraining?.title || "GymOS training",
+                  body: trainingLabel,
                   schedule: { at: new Date(Date.now() + 60 * 1000) },
                 },
               ],
@@ -834,17 +1454,28 @@
       }
 
       async function sharePass() {
-        const text = "Mijn GymOS check-in pas: GYMOS-HOMEGYM";
+        const memberAppSnapshot = getMemberAppSnapshot();
+
+        if (!memberAppSnapshot?.checkInPass?.code) {
+          setText("[data-checkin-status]", "Log in om je persoonlijke QR te delen.");
+          return;
+        }
+
+        const text = `Mijn GymOS check-in pas: ${memberAppSnapshot.checkInPass.code}`;
         if (Share?.share) {
           await Share.share({
             title: "GymOS check-in pas",
             text,
-            url: passUrl,
+            url: memberAppSnapshot.checkInPass.payload || passUrl,
             dialogTitle: "QR delen",
           });
           return;
         }
-        await navigator.share?.({ title: "GymOS check-in pas", text, url: passUrl });
+        await navigator.share?.({
+          title: "GymOS check-in pas",
+          text,
+          url: memberAppSnapshot.checkInPass.payload || passUrl,
+        });
       }
 
       function calendarStamp(date) {
@@ -854,11 +1485,32 @@
           .replace(/\.\d{3}Z$/, "Z");
       }
 
+      function calendarText(value) {
+        return String(value || "")
+          .replace(/\\/g, "\\\\")
+          .replace(/,/g, "\\,")
+          .replace(/;/g, "\\;")
+          .replace(/\n/g, "\\n");
+      }
+
       function buildCalendarEvent() {
-        const start = new Date();
-        start.setDate(start.getDate() + 1);
-        start.setHours(18, 0, 0, 0);
-        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        const memberAppSnapshot = getMemberAppSnapshot();
+
+        if (!memberAppSnapshot?.nextTraining) {
+          return null;
+        }
+
+        const start = new Date(memberAppSnapshot.nextTraining.startsAt);
+        const end = new Date(
+          memberAppSnapshot.nextTraining.endsAt ||
+            start.getTime() +
+              (memberAppSnapshot.nextTraining.durationMinutes || 60) * 60 * 1000,
+        );
+        const uidSeed = [
+          memberAppSnapshot.tenantSlug || portalHost,
+          memberAppSnapshot.nextTraining.id,
+          memberAppSnapshot.nextTraining.startsAt,
+        ].join("-");
 
         return [
           "BEGIN:VCALENDAR",
@@ -867,13 +1519,13 @@
           "CALSCALE:GREGORIAN",
           "METHOD:PUBLISH",
           "BEGIN:VEVENT",
-          "UID:gymos-member-next-training@gym-platform-vc9yk.ondigitalocean.app",
+          `UID:${calendarText(uidSeed)}@${portalHost}`,
           `DTSTAMP:${calendarStamp(new Date())}`,
           `DTSTART:${calendarStamp(start)}`,
           `DTEND:${calendarStamp(end)}`,
-          "SUMMARY:GymOS training",
+          `SUMMARY:${calendarText(memberAppSnapshot.nextTraining.title)}`,
           "DESCRIPTION:Open de GymOS leden-app en toon je check-in pas bij aankomst.",
-          "LOCATION:Homegym",
+          `LOCATION:${calendarText(memberAppSnapshot.nextTraining.locationName)}`,
           "END:VEVENT",
           "END:VCALENDAR",
         ].join("\r\n");
@@ -891,6 +1543,15 @@
 
       async function addCalendar() {
         const calendarEvent = buildCalendarEvent();
+
+        if (!calendarEvent) {
+          setText(
+            "[data-reservation-status]",
+            "Er is nog geen volgende training om aan je agenda toe te voegen.",
+          );
+          await fetchMemberAppSnapshot();
+          return;
+        }
 
         try {
           if (Filesystem?.writeFile && Share?.share) {
@@ -921,25 +1582,30 @@
             return;
           }
 
-          if (Share?.share) {
-            await Share.share({
-              title: "GymOS agenda",
-              text: "Voeg je volgende training toe aan je agenda.",
-              url: calendarFallbackUrl,
-              dialogTitle: "Agenda toevoegen",
-            });
-            return;
-          }
-
           downloadCalendarFallback(calendarEvent);
         } catch {
-          window.location.assign(calendarFallbackUrl);
+          setText(
+            "[data-reservation-status]",
+            "Agenda kon niet worden geopend. Probeer opnieuw vanuit je planning.",
+          );
         }
       }
 
       async function openWallet() {
         await saveState({ walletRequestedAt: new Date().toISOString() });
-        await openUrl(`${portalOrigin}/reserve#wallet-pass`);
+        await setScreen("pass");
+
+        const memberAppSnapshot = getMemberAppSnapshot();
+        if (memberAppSnapshot?.walletPassUrl) {
+          await openUrl(memberAppSnapshot.walletPassUrl);
+          return;
+        }
+
+        setText(
+          "[data-wallet-status]",
+          "Je club heeft nog geen walletpas beschikbaar gemaakt. Je QR werkt wel direct in de app.",
+        );
+        await Haptics?.notification?.({ type: "success" });
       }
 
       async function handleDeepLink(url) {
@@ -948,42 +1614,46 @@
           return;
         }
         await saveState({ lastDeepLink: url });
-        if (url.includes("/reserve") || url.includes("classes")) {
-          await setScreen("classes");
+        const normalizedUrl = url.toLowerCase();
+        if (normalizedUrl.includes("contracten-betalingen")) {
+          await runNativeMemberAction("payment-center");
           return;
         }
-        if (url.includes("/login") || url.includes("account")) {
-          await setScreen("account");
+        if (normalizedUrl.includes("ledenservice")) {
+          await runNativeMemberAction("service-request");
           return;
         }
-        await setScreen("pass");
+        if (normalizedUrl.includes("account-verwijderen")) {
+          await runNativeMemberAction("delete-account");
+          return;
+        }
+        if (normalizedUrl.includes("/login") || normalizedUrl.includes("account")) {
+          await runNativeMemberAction("native-login");
+          return;
+        }
+        if (normalizedUrl.includes("/reserve") || normalizedUrl.includes("classes")) {
+          await runNativeMemberAction("open-roster");
+          return;
+        }
+        await runNativeMemberAction("open-member-session");
       }
 
       async function handleAppResume() {
         if (memoryState.pendingPaymentUrl) {
-          await setPaymentStatus(
-            "Betaling onderbroken of bankapp gesloten. Open de ledenomgeving om de status te controleren.",
-          );
+          await verifyPaymentReturnWithBackend(memoryState.pendingPaymentUrl, {
+            keepPending: true,
+          });
         }
-      }
-
-      async function simulateNetworkForQa(isOnline) {
-        const label = isOnline ? "Online" : "Offline";
-        document.querySelector("[data-network-status]").textContent = label;
-        capability(
-          "offline",
-          isOnline ? "Laatste pas lokaal bewaard" : "Offline pas actief",
-        );
-        await saveState({ qaNetworkStatus: label.toLowerCase() });
       }
 
       async function boot() {
         const savedState = await getState();
         Object.assign(memoryState, savedState);
         activeScreen = savedState.screen || "today";
-        await saveSecureSession({ offlinePassCode: "GYMOS-HOMEGYM" });
+        renderMemberAppSnapshot(savedState.memberAppSnapshot);
         await setScreen(activeScreen);
         updateNetworkStatus();
+        await fetchMemberAppSnapshot();
 
         if (SecureStorage?.get) {
           capability("secure-storage", "Native secure storage actief");
@@ -1006,9 +1676,9 @@
         });
         Browser?.addListener?.("browserFinished", async () => {
           if (memoryState.pendingPaymentUrl) {
-            await setPaymentStatus(
-              "Betaalvenster gesloten. Controleer in je ledenomgeving of de betaling is gelukt.",
-            );
+            await verifyPaymentReturnWithBackend(memoryState.pendingPaymentUrl, {
+              keepPending: true,
+            });
           }
         });
         const launch = await App?.getLaunchUrl?.();
@@ -1021,26 +1691,28 @@
         isMolliePaymentUrl,
         openPaymentCheckout,
         handlePaymentReturn,
+        handleAppResume,
+        verifyPaymentReturnWithBackend,
         paymentReturnPath,
       };
 
-      window.GymOSNativeTestHooks = {
-        getActiveScreen: () => activeScreen,
-        getPaymentStatus: () =>
-          document.querySelector("[data-payment-status]")?.textContent ?? "",
-        startUrlCapture: () => {
-          nativeQaOpenedUrls = [];
-        },
-        getOpenedUrls: () => nativeQaOpenedUrls ?? [],
-        handleAppResume,
-        simulateNetworkForQa,
+      window.GymOSNativeActions = {
+        runNativeMemberAction,
+        showNativePanel,
+        handleNativeFormSubmit,
       };
 
       document.querySelectorAll("[data-nav]").forEach((button) => {
         button.addEventListener("click", () => setScreen(button.dataset.nav));
       });
-      document.querySelectorAll("[data-open-portal]").forEach((button) => {
-        button.addEventListener("click", () => openPortal(button.dataset.openPortal));
+      document.querySelectorAll("[data-native-action]").forEach((button) => {
+        button.addEventListener("click", () => runNativeMemberAction(button.dataset.nativeAction));
+      });
+      document.querySelectorAll("[data-native-form]").forEach((form) => {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          await handleNativeFormSubmit(form);
+        });
       });
       document.querySelectorAll("[data-enable-push]").forEach((button) => {
         button.addEventListener("click", enablePush);

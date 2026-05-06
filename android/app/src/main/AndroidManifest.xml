@@ -47,17 +47,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="gym-platform-vc9yk.ondigitalocean.app"
+                    android:host="${gymosWebHost}"
                     android:pathPrefix="/reserve"
-                    android:scheme="https" />
+                    android:scheme="${gymosWebScheme}" />
                 <data
-                    android:host="gym-platform-vc9yk.ondigitalocean.app"
+                    android:host="${gymosWebHost}"
                     android:pathPrefix="/join"
-                    android:scheme="https" />
+                    android:scheme="${gymosWebScheme}" />
                 <data
-                    android:host="gym-platform-vc9yk.ondigitalocean.app"
+                    android:host="${gymosWebHost}"
                     android:pathPrefix="/login"
-                    android:scheme="https" />
+                    android:scheme="${gymosWebScheme}" />
             </intent-filter>
 
         </activity>

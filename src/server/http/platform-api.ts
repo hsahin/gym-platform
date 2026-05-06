@@ -23,6 +23,10 @@ const DEFAULT_RATE_LIMIT_TTL_SAFETY_SECONDS = 5;
 const DEFAULT_RATE_LIMIT_TIMEOUT_MS = 1_000;
 const LOCAL_DEVELOPMENT_CSRF_SECRET =
   "claimtech-gym-platform-local-development-csrf-secret";
+const DEFAULT_NATIVE_MUTATION_ORIGINS = [
+  "capacitor://localhost",
+  "ionic://localhost",
+] as const;
 
 interface MutationRateLimitCacheClient {
   incrBy(key: string, amount: number): Promise<number>;
@@ -273,6 +277,28 @@ function readExpectedMutationHosts(request: Request) {
   );
 }
 
+function normalizeOriginValue(value: string) {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function readTrustedNativeMutationOrigins() {
+  const configuredOrigins =
+    process.env.GYMOS_MOBILE_NATIVE_ORIGINS?.split(",").map((origin) =>
+      origin.trim(),
+    ) ?? [];
+
+  return new Set(
+    [...DEFAULT_NATIVE_MUTATION_ORIGINS, ...configuredOrigins]
+      .map((origin) => normalizeOriginValue(origin))
+      .filter((origin): origin is string => Boolean(origin)),
+  );
+}
+
 function assertSameOriginMutation(request: Request) {
   const origin = readRequestOrigin(request);
 
@@ -297,6 +323,15 @@ function assertSameOriginMutation(request: Request) {
   const expectedHosts = readExpectedMutationHosts(request);
 
   if (!expectedHosts.has(originHost)) {
+    const normalizedOrigin = normalizeOriginValue(origin);
+
+    if (
+      normalizedOrigin &&
+      readTrustedNativeMutationOrigins().has(normalizedOrigin)
+    ) {
+      return;
+    }
+
     throw new AppError(
       MUTATION_SECURITY_ERROR_MESSAGE,
       {

@@ -5,7 +5,10 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { PATCH as memberReservationCancelRoute } from "@/app/api/member/reservations/[bookingId]/cancel/route";
-import { POST as memberMobileSelfServiceRoute } from "@/app/api/member/mobile-self-service/route";
+import {
+  GET as memberMobileSelfServiceGetRoute,
+  POST as memberMobileSelfServiceRoute,
+} from "@/app/api/member/mobile-self-service/route";
 import { POST as publicMemberSignupRoute } from "@/app/api/public/member-signups/route";
 import { POST as publicReservationsRoute } from "@/app/api/public/reservations/route";
 import { GET as csrfRoute } from "@/app/api/security/csrf/route";
@@ -312,8 +315,9 @@ describe("api route integrations", () => {
         member: {
           id: string;
           email: string;
-        };
+        } | null;
         invoice: {
+          memberId?: string;
           externalReference?: string;
         };
         checkoutUrl: string;
@@ -323,9 +327,10 @@ describe("api route integrations", () => {
 
     expect(signupResponse.status).toBe(201);
     expect(signupPayload.ok).toBe(true);
-    expect(signupPayload.data.signup.status).toBe("approved");
-    expect(signupPayload.data.signup.approvedMemberId).toBe(signupPayload.data.member.id);
-    expect(signupPayload.data.member.email).toBe("lena@northside.test");
+    expect(signupPayload.data.signup.status).toBe("pending_review");
+    expect(signupPayload.data.signup.approvedMemberId).toBeUndefined();
+    expect(signupPayload.data.member).toBeNull();
+    expect(signupPayload.data.invoice.memberId).toBeUndefined();
     expect(signupPayload.data.invoice.externalReference).toBe("tr_route_signup_1");
     expect(signupPayload.data.checkoutUrl).toBe("https://pay.mollie.com/p/route-signup");
     expect(signupPayload.data.providerPaymentId).toBe("tr_route_signup_1");
@@ -340,13 +345,13 @@ describe("api route integrations", () => {
       refreshedTenantContext,
     );
     expect(dashboard.memberSignups).toHaveLength(1);
-    expect(dashboard.memberSignups[0]?.status).toBe("approved");
-    expect(dashboard.members.some((member) => member.email === "lena@northside.test")).toBe(true);
+    expect(dashboard.memberSignups[0]?.status).toBe("pending_review");
+    expect(dashboard.members.some((member) => member.email === "lena@northside.test")).toBe(false);
     expect(dashboard.billingBackoffice.invoices).toHaveLength(1);
     expect(dashboard.billingBackoffice.invoices[0]?.amountCents).toBe(11_900);
     expect(dashboard.billingBackoffice.invoices[0]?.source).toBe("signup_checkout");
     expect(dashboard.billingBackoffice.invoices[0]?.externalReference).toBe("tr_route_signup_1");
-    expect(dashboard.waivers[0]?.storageKey).toBe("waivers/northside/signed/lena-bakker-waiver.pdf");
+    expect(dashboard.waivers).toHaveLength(0);
   });
 
   it("creates reservations for authenticated members through the public route", async () => {
@@ -692,6 +697,10 @@ describe("api route integrations", () => {
       key: "mobile.white_label",
       enabled: true,
     });
+    await services.updateFeatureFlag(ownerActor, tenantContext, {
+      key: "billing.processing",
+      enabled: true,
+    });
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
       city: "Amsterdam",
@@ -718,11 +727,149 @@ describe("api route integrations", () => {
       waiverStatus: "complete",
       portalPassword: "member-pass-123",
     });
+    const trainer = await services.createTrainer(ownerActor, tenantContext, {
+      fullName: "Romy de Wit",
+      homeLocationId: location.id,
+      specialties: ["Hyrox"],
+      certifications: ["NASM-CPT"],
+    });
+    const session = await services.createClassSession(ownerActor, tenantContext, {
+      title: "Forge HIIT",
+      locationId: location.id,
+      trainerId: trainer.id,
+      startsAt: "2026-06-04T18:30:00.000Z",
+      durationMinutes: 60,
+      capacity: 16,
+      level: "mixed",
+      focus: "engine",
+    });
+    await services.createBooking(ownerActor, tenantContext, {
+      classSessionId: session.id,
+      memberId: member.id,
+      idempotencyKey: "member-native-profile-booking",
+      source: "member_app",
+    });
+    const invoice = await services.createBillingInvoice(ownerActor, tenantContext, {
+      memberId: member.id,
+      memberName: member.fullName,
+      description: "Juni lidmaatschap",
+      amountCents: 11900,
+      dueAt: "2026-06-01T08:00:00.000Z",
+      source: "membership",
+    });
+    await services.recordBillingWebhook(ownerActor, tenantContext, {
+      invoiceId: invoice.id,
+      eventType: "payment.paid",
+      status: "processed",
+      providerReference: "tr_member_paid",
+      payloadSummary: "Payment successful",
+    });
 
     const { token: memberToken } = await loginAndExtractSession(
       "nina@northside.test",
       "member-pass-123",
     );
+    const profileResponse = await memberMobileSelfServiceGetRoute(
+      new NextRequest("http://localhost/api/member/mobile-self-service", {
+        headers: {
+          cookie: `${SESSION_COOKIE_NAME}=${memberToken}`,
+        },
+      }),
+    );
+    const profilePayload = (await profileResponse.json()) as {
+      ok: boolean;
+      data: {
+        member: {
+          displayName: string;
+        };
+        checkInPass: {
+          code: string;
+          payload: string;
+          qrDataUrl: string;
+        };
+        nextTraining: {
+          title: string;
+          locationName: string;
+          startsAt: string;
+        } | null;
+        paymentReturn?: {
+          verified: boolean;
+          tenantSlug: string | null;
+          tenantName: string;
+          invoiceId: string | null;
+          status: string;
+          amountLabel?: string;
+          message: string;
+        };
+      };
+    };
+
+    expect(profileResponse.status).toBe(200);
+    expect(profilePayload.ok).toBe(true);
+    expect(profilePayload.data.member.displayName).toBe("Nina de Boer");
+    expect(profilePayload.data.checkInPass.code).not.toBe("GYMOS-HOMEGYM");
+    expect(profilePayload.data.checkInPass.payload).toContain("gymos://member/check-in");
+    expect(profilePayload.data.checkInPass.qrDataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(profilePayload.data.nextTraining).toMatchObject({
+      title: "Forge HIIT",
+      locationName: "Northside East",
+      startsAt: "2026-06-04T18:30:00.000Z",
+    });
+
+    const paymentReturnResponse = await memberMobileSelfServiceGetRoute(
+      new NextRequest(
+        `http://localhost/api/member/mobile-self-service?tenant=${tenantContext.tenantId}&invoice=${invoice.id}`,
+        {
+          headers: {
+            cookie: `${SESSION_COOKIE_NAME}=${memberToken}`,
+          },
+        },
+      ),
+    );
+    const paymentReturnPayload = (await paymentReturnResponse.json()) as typeof profilePayload;
+
+    expect(paymentReturnResponse.status).toBe(200);
+    expect(paymentReturnPayload.ok).toBe(true);
+    expect(paymentReturnPayload.data.paymentReturn).toMatchObject({
+      verified: true,
+      tenantSlug: tenantContext.tenantId,
+      tenantName: "Northside Athletics",
+      invoiceId: invoice.id,
+      status: "paid",
+      amountLabel: "EUR 119,00",
+      message: expect.stringContaining("Betaling bevestigd"),
+    });
+
+    const pushResponse = await memberMobileSelfServiceRoute(
+      createMutationRequest(
+        "http://localhost/api/member/mobile-self-service",
+        {
+          operation: "register_push_token",
+          token: "ExponentPushToken[nina-device-token]",
+          platform: "ios",
+          deviceId: "ios-device-1",
+          permission: "granted",
+        },
+        { token: memberToken },
+      ),
+    );
+    const pushPayload = (await pushResponse.json()) as {
+      ok: boolean;
+      data: {
+        memberId: string;
+        platform: string;
+        tokenPreview: string;
+        tokenHash: string;
+      };
+    };
+
+    expect(pushResponse.status).toBe(200);
+    expect(pushPayload.ok).toBe(true);
+    expect(pushPayload.data.memberId).toBe(member.id);
+    expect(pushPayload.data.platform).toBe("ios");
+    expect(pushPayload.data.tokenPreview).toContain("nina");
+    expect(pushPayload.data.tokenHash).not.toContain("nina-device-token");
+
     const memberResponse = await memberMobileSelfServiceRoute(
       createMutationRequest(
         "http://localhost/api/member/mobile-self-service",
@@ -819,6 +966,15 @@ describe("api route integrations", () => {
     });
     expect(dashboard.mobileSelfService.pauseRequests).toHaveLength(1);
     expect(dashboard.mobileSelfService.pauseRequests[0]?.memberId).toBe(member.id);
+    expect(dashboard.mobileSelfService.pushSubscriptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          memberId: member.id,
+          platform: "ios",
+          status: "active",
+        }),
+      ]),
+    );
     expect(dashboard.mobileSelfService.accountDeletionRequests).toHaveLength(1);
     expect(dashboard.mobileSelfService.accountDeletionRequests[0]?.email).toBe(
       "nina@northside.test",

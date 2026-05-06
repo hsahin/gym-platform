@@ -64,6 +64,7 @@ export interface MolliePaymentStatus {
   readonly status: string;
   readonly invoiceId?: string;
   readonly tenantId?: string;
+  readonly signupRequestId?: string;
   readonly providerCustomerId?: string;
   readonly sequenceType?: string;
 }
@@ -383,6 +384,7 @@ export function createMolliePaymentProvider(options?: {
         status: response.status ?? "unknown",
         invoiceId: readMetadataString(response.metadata, "invoiceId"),
         tenantId: readMetadataString(response.metadata, "tenantId"),
+        signupRequestId: readMetadataString(response.metadata, "signupRequestId"),
         providerCustomerId: response.customerId?.trim(),
         sequenceType: response.sequenceType?.trim(),
       };

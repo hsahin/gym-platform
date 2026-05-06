@@ -199,7 +199,7 @@ export interface MemberSignupRequest {
 
 export interface PublicMembershipSignupResult {
   readonly signup: MemberSignupRequest;
-  readonly member: GymMember;
+  readonly member: GymMember | null;
   readonly invoice: BillingInvoice;
   readonly contract: MemberContractRecord | null;
   readonly checkoutUrl: string;
@@ -466,12 +466,32 @@ export interface MemberContractRecord {
   readonly updatedAt: string;
 }
 
+export type MobilePushPlatform = "ios" | "android" | "web" | "unknown";
+
+export type MobilePushPermission = "granted" | "denied" | "prompt";
+
+export interface MobilePushSubscription {
+  readonly id: string;
+  readonly tenantId: TenantId;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly tokenPreview: string;
+  readonly tokenHash: string;
+  readonly platform: MobilePushPlatform;
+  readonly deviceId?: string;
+  readonly permission: MobilePushPermission;
+  readonly status: "active" | "revoked";
+  readonly registeredAt: string;
+  readonly updatedAt: string;
+}
+
 export interface MobileSelfServiceSummary {
   readonly receipts: ReadonlyArray<MobileReceipt>;
   readonly paymentMethodRequests: ReadonlyArray<MobilePaymentMethodRequest>;
   readonly pauseRequests: ReadonlyArray<MembershipPauseRequest>;
   readonly accountDeletionRequests: ReadonlyArray<MemberAccountDeletionRequest>;
   readonly contracts: ReadonlyArray<MemberContractRecord>;
+  readonly pushSubscriptions: ReadonlyArray<MobilePushSubscription>;
 }
 
 export interface BookingPolicySummary {
@@ -806,6 +826,19 @@ export interface MemberReservationSnapshot {
   readonly myReservations: ReadonlyArray<MemberReservationSummary>;
   readonly selfServiceEnabled: boolean;
   readonly selfService: MobileSelfServiceSummary;
+}
+
+export interface MemberPaymentReturnVerification {
+  readonly verified: boolean;
+  readonly tenantName: string;
+  readonly tenantSlug: string | null;
+  readonly invoiceId: string | null;
+  readonly status: BillingInvoiceStatus | "unknown";
+  readonly amountLabel?: string;
+  readonly description?: string;
+  readonly paidAt?: string;
+  readonly checkedAt: string;
+  readonly message: string;
 }
 
 export interface GymDashboardSnapshot {

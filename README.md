@@ -90,25 +90,27 @@ Deze app is gericht op leden en start met de lokale packaged shell in
 een eigen mobiele start en opent de live ledenportal pas wanneer een lid een
 live actie uitvoert, zoals rooster openen, inloggen of ledenservice regelen.
 
-De live ledenportal waar de shell naartoe navigeert voor echte acties staat in
-`mobile-shell/index.html`:
+De live ledenportal waar de shell mee synchroniseert komt uit
+`GYMOS_MOBILE_APP_ORIGIN` en wordt tijdens `npm run mobile:sync` naar
+`mobile-shell/mobile-config.js`, Capacitor en de native projecten geschreven:
 
 ```bash
-https://gym-platform-vc9yk.ondigitalocean.app/reserve
+GYMOS_MOBILE_APP_ORIGIN=https://jouw-gymos-domein.example
 ```
 
 Handige commands:
 
 ```bash
 npm run mobile:assets
+npm run mobile:config
 npm run mobile:sync
 npm run mobile:ios
 npm run mobile:android
 ```
 
 `npm run mobile:assets` genereert de GymOS app-iconen en splashscreens voor
-iOS en Android opnieuw. `npm run mobile:sync` draait deze stap automatisch
-voordat Capacitor de native projecten bijwerkt.
+iOS en Android opnieuw. `npm run mobile:sync` draait eerst `mobile:config` en
+`mobile:assets` voordat Capacitor de native projecten bijwerkt.
 
 Leden kunnen via deze app:
 
@@ -125,8 +127,9 @@ Leden kunnen via deze app:
 - wisselen tussen gekoppelde clubs wanneer hetzelfde ledenaccount bij meerdere
   gyms actief is
 
-Voor productie moeten de native app-koppelingen nog met echte store-gegevens
-worden gevuld:
+Voor productie moeten de native app-koppelingen met echte store-gegevens worden
+gevuld. De `/.well-known` routes geven bewust `503` terug zolang deze waarden
+ontbreken, zodat deep links niet stil met placeholder-data online komen:
 
 - `APPLE_TEAM_ID` voor `/.well-known/apple-app-site-association`
 - `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` voor `/.well-known/assetlinks.json`
@@ -154,13 +157,13 @@ echte backends. In productie zijn deze variabelen verplicht:
 Aanbevolen live-instellingen:
 
 - `REDIS_URL` voor tenant cache over meerdere instances
-- `APP_BASE_URL=https://gym-platform-vc9yk.ondigitalocean.app` voor publieke
+- `APP_BASE_URL=https://jouw-gymos-domein.example` voor publieke
   Mollie webhooks en redirects
 - `MOLLIE_WEBHOOK_SECRET` zodra Mollie is gekoppeld; betaalwebhooks zonder
   gedeelde secret worden in productie geweigerd
 - `MOLLIE_TEST_MODE=true` zolang de Mollie OAuth-app in testfase draait
 - `MOLLIE_CLIENT_ID`, `MOLLIE_CLIENT_SECRET` en
-  `MOLLIE_CONNECT_REDIRECT_URL=https://gym-platform-vc9yk.ondigitalocean.app/api/mollie/redirect`
+  `MOLLIE_CONNECT_REDIRECT_URL=https://jouw-gymos-domein.example/api/mollie/redirect`
   voor Mollie Connect OAuth
 - `MOLLIE_ORGANIZATION_ACCESS_TOKEN` met `clients.write` voor Client Link
   onboarding van gyms die nog geen Mollie-account hebben

@@ -4,7 +4,7 @@ const MOLLIE_API_BASE_URL = "https://api.mollie.com/v2";
 const MOLLIE_OAUTH_BASE_URL = "https://api.mollie.com/oauth2";
 const MOLLIE_AUTHORIZE_URL = "https://my.mollie.com/oauth2/authorize";
 export const DEFAULT_MOLLIE_CONNECT_REDIRECT_URL =
-  "https://gym-platform-vc9yk.ondigitalocean.app/api/mollie/redirect";
+  "https://gymos.example/api/mollie/redirect";
 
 type FetchLike = typeof fetch;
 

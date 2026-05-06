@@ -10,6 +10,8 @@ function rootJson<T>(filePath: string): T {
   return JSON.parse(rootFile(filePath)) as T;
 }
 
+const legacyLiveDomain = "gym-platform-vc9yk.ondigitalocean.app";
+
 describe("native member app capabilities", () => {
   it("declares native Capacitor plugins for member app features", () => {
     const packageJson = rootJson<{
@@ -65,7 +67,7 @@ describe("native member app capabilities", () => {
     }
 
     expect(shell).toContain("checkin-qr.svg");
-    expect(shell).toContain("next-training.ics");
+    expect(shell).not.toContain("next-training.ics");
     expect(shell).not.toContain("localStorage.setItem");
   });
 
@@ -80,6 +82,26 @@ describe("native member app capabilities", () => {
     expect(shell).toContain("files: [writeResult.uri]");
   });
 
+  it("drives pass, agenda, wallet and push features from member backend data", () => {
+    const shell = rootFile("mobile-shell/index.html");
+
+    expect(shell).not.toContain("GYMOS-HOMEGYM");
+    expect(shell).not.toContain("Vandaag 18:00 · Strength & Conditioning · Homegym");
+    expect(shell).not.toContain('"LOCATION:Homegym"');
+    expect(shell).not.toContain("assets/next-training.ics");
+    expect(shell).toContain("async function fetchMemberAppSnapshot");
+    expect(shell).toContain("memberAppSnapshotEndpoint");
+    expect(shell).toContain("/api/member/mobile-self-service");
+    expect(shell).toContain("checkInPass.qrDataUrl");
+    expect(shell).toContain("data-checkin-qr");
+    expect(shell).toContain("data-checkin-code");
+    expect(shell).toContain("memberAppSnapshot.nextTraining");
+    expect(shell).toContain("walletPassUrl");
+    expect(shell).toContain("async function syncPushTokenWithBackend");
+    expect(shell).toContain('operation: "register_push_token"');
+    expect(shell).toContain("buildApiMutationHeaders");
+  });
+
   it("keeps Mollie payments out of the WebView and handles native payment returns", () => {
     const config = rootFile("capacitor.config.ts");
     const shell = rootFile("mobile-shell/index.html");
@@ -91,8 +113,23 @@ describe("native member app capabilities", () => {
     expect(shell).toContain("browserFinished");
     expect(shell).toContain("payment-return");
     expect(shell).toContain("Betaling veilig geopend");
-    expect(shell).toContain("Betaling teruggekeerd");
+    expect(shell).toContain("async function verifyPaymentReturnWithBackend");
+    expect(shell).toContain("function extractPaymentReturnContext");
+    expect(shell).toContain("paymentReturnEndpoint");
+    expect(shell).toContain("paymentReturnVerification");
+    expect(shell).toContain("paymentReturn");
+    expect(shell).toContain("invoiceId");
+    expect(shell).toContain("tenantSlug");
+    expect(shell).toContain("await verifyPaymentReturnWithBackend(url");
+    expect(shell).toContain("await verifyPaymentReturnWithBackend(memoryState.pendingPaymentUrl");
+    expect(shell).toContain("Betaling bevestigd");
     expect(shell).toContain("Betaling kon niet worden geopend");
+    expect(shell).not.toContain(
+      "Betaling onderbroken of bankapp gesloten. Open de ledenomgeving om de status te controleren.",
+    );
+    expect(shell).not.toContain(
+      "Betaalvenster gesloten. Controleer in je ledenomgeving of de betaling is gelukt.",
+    );
   });
 
   it("hardens native privacy and backup defaults for member data", () => {
@@ -119,9 +156,10 @@ describe("native member app capabilities", () => {
     expect(dataExtractionRules).toContain("<cloud-backup");
     expect(dataExtractionRules).toContain("<device-transfer>");
     expect(cordovaHardeningScript).not.toContain('<access origin="*"');
-    expect(cordovaHardeningScript).toContain(
-      '<access origin="https://gym-platform-vc9yk.ondigitalocean.app" />',
-    );
+    expect(cordovaHardeningScript).toContain("GYMOS_MOBILE_APP_ORIGIN");
+    expect(cordovaHardeningScript).toContain("NEXT_PUBLIC_APP_URL");
+    expect(cordovaHardeningScript).toContain("APP_BASE_URL");
+    expect(cordovaHardeningScript).not.toContain(legacyLiveDomain);
     expect(cordovaHardeningScript).toContain("android/app/src/main/res/xml/config.xml");
     expect(cordovaHardeningScript).toContain("ios/App/App/config.xml");
     expect(iosPrivacyManifest).toContain("NSPrivacyTracking");
@@ -133,15 +171,20 @@ describe("native member app capabilities", () => {
 
   it("configures Android permissions and app links for member actions", () => {
     const manifest = rootFile("android/app/src/main/AndroidManifest.xml");
+    const buildGradle = rootFile("android/app/build.gradle");
 
     expect(manifest).toContain("android.permission.POST_NOTIFICATIONS");
     expect(manifest).toContain('android:scheme="gymos"');
     expect(manifest).toContain('android:host="member"');
     expect(manifest).toContain('android:autoVerify="true"');
-    expect(manifest).toContain('android:host="gym-platform-vc9yk.ondigitalocean.app"');
+    expect(manifest).toContain('android:host="${gymosWebHost}"');
+    expect(manifest).toContain('android:scheme="${gymosWebScheme}"');
     expect(manifest).toContain('android:pathPrefix="/reserve"');
     expect(manifest).toContain('android:pathPrefix="/join"');
     expect(manifest).toContain('android:pathPrefix="/login"');
+    expect(buildGradle).toContain("manifestPlaceholders");
+    expect(buildGradle).toContain("gymosWebHost");
+    expect(buildGradle).toContain("GYMOS_MOBILE_APP_ORIGIN");
   });
 
   it("configures iOS URL schemes, universal links, biometrics and push entitlements", () => {
@@ -152,9 +195,64 @@ describe("native member app capabilities", () => {
     expect(plist).toContain("NSFaceIDUsageDescription");
     expect(plist).toContain("CFBundleURLSchemes");
     expect(plist).toContain("<string>gymos</string>");
-    expect(entitlements).toContain("applinks:gym-platform-vc9yk.ondigitalocean.app");
+    expect(entitlements).toContain("applinks:$(GYMOS_ASSOCIATED_DOMAIN)");
     expect(entitlements).toContain("aps-environment");
     expect(project).toContain("CODE_SIGN_ENTITLEMENTS = App/App.entitlements");
+    expect(project).toContain("GYMOS_ASSOCIATED_DOMAIN = gymos.example;");
+  });
+
+  it("uses release-ready native build settings", () => {
+    const entitlements = rootFile("ios/App/App/App.entitlements");
+    const iosProject = rootFile("ios/App/App.xcodeproj/project.pbxproj");
+    const buildGradle = rootFile("android/app/build.gradle");
+
+    expect(entitlements).toContain("<string>production</string>");
+    expect(entitlements).not.toContain("<string>development</string>");
+    expect(iosProject).toContain("GYMOS_IOS_BUILD_NUMBER");
+    expect(iosProject).toContain("GYMOS_IOS_VERSION");
+    expect(iosProject).toContain('CURRENT_PROJECT_VERSION = "$(GYMOS_IOS_BUILD_NUMBER)";');
+    expect(iosProject).toContain('MARKETING_VERSION = "$(GYMOS_IOS_VERSION)";');
+    expect(iosProject).not.toContain("CURRENT_PROJECT_VERSION = 1;");
+    expect(iosProject).not.toContain("MARKETING_VERSION = 1.0;");
+    expect(buildGradle).toContain("GYMOS_ANDROID_VERSION_CODE");
+    expect(buildGradle).toContain("GYMOS_ANDROID_VERSION_NAME");
+    expect(buildGradle).not.toContain("versionCode 1");
+    expect(buildGradle).not.toContain('versionName "1.0"');
+    expect(buildGradle).toContain("minifyEnabled true");
+    expect(buildGradle).toContain("shrinkResources true");
+  });
+
+  it("keeps mobile web domains environment-driven instead of hardcoded to one live host", () => {
+    const domainSensitiveFiles = [
+      "capacitor.config.ts",
+      "android/app/src/main/AndroidManifest.xml",
+      "android/app/build.gradle",
+      "ios/App/App/App.entitlements",
+      "ios/App/App.xcodeproj/project.pbxproj",
+      "scripts/harden-mobile-privacy.mjs",
+      "mobile-shell/index.html",
+      "mobile-shell/mobile-config.js",
+      "android/app/src/androidTest/java/nl/gymos/members/MemberAppNativeFlowInstrumentedTest.java",
+    ];
+
+    for (const filePath of domainSensitiveFiles) {
+      expect(rootFile(filePath), filePath).not.toContain(legacyLiveDomain);
+    }
+
+    const capacitorConfig = rootFile("capacitor.config.ts");
+    const mobileShell = rootFile("mobile-shell/index.html");
+    const packageJson = rootJson<{
+      scripts: Record<string, string>;
+    }>("package.json");
+
+    expect(capacitorConfig).toContain("GYMOS_MOBILE_APP_ORIGIN");
+    expect(capacitorConfig).toContain("NEXT_PUBLIC_APP_URL");
+    expect(capacitorConfig).toContain("APP_BASE_URL");
+    expect(capacitorConfig).toContain("mobileAppUrl.host");
+    expect(mobileShell).toContain("mobile-config.js");
+    expect(mobileShell).toContain("window.GymOSMobileConfig");
+    expect(mobileShell).toContain("new URL(configuredPortalOrigin).origin");
+    expect(packageJson.scripts["mobile:sync"]).toContain("mobile:config");
   });
 
   it("serves association files needed by universal links and Android app links", () => {
@@ -163,8 +261,13 @@ describe("native member app capabilities", () => {
 
     expect(apple).toContain("applinks");
     expect(apple).toContain("nl.gymos.members");
+    expect(apple).toContain("APPLE_TEAM_ID");
+    expect(apple).toContain("status: 503");
+    expect(apple).not.toContain("TEAMID");
     expect(android).toContain("delegate_permission/common.handle_all_urls");
     expect(android).toContain("nl.gymos.members");
     expect(android).toContain("ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS");
+    expect(android).toContain("status: 503");
+    expect(android).not.toContain("REPLACE_WITH");
   });
 });

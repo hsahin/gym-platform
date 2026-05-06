@@ -1,5 +1,6 @@
 import { PublicMembershipSignupPortal } from "@/components/PublicMembershipSignupPortal";
 import { RuntimeConfigurationState } from "@/components/RuntimeConfigurationState";
+import { toPublicMembershipSignupPortalSnapshot } from "@/lib/public-membership-signup-view";
 import { getGymPlatformServices } from "@/server/runtime/gym-services";
 
 export default async function JoinPage({
@@ -24,7 +25,9 @@ export default async function JoinPage({
     return (
       <main className="min-h-screen bg-transparent">
         <div className="app-page">
-          <PublicMembershipSignupPortal snapshot={snapshot} />
+          <PublicMembershipSignupPortal
+            snapshot={toPublicMembershipSignupPortalSnapshot(snapshot)}
+          />
         </div>
       </main>
     );

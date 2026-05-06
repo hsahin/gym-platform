@@ -62,17 +62,24 @@ describe("public surface copy", () => {
     expect(source).toContain("Ledenportaalwachtwoord");
     expect(source).toContain("Checkout starten");
     expect(source).toContain("checkoutDisabledReason");
-    expect(source).toContain("missingCheckoutFields");
-    expect(source).toContain("snapshot.billingMissingFields");
-    expect(source).toContain("snapshot.legalMissingFields");
-    expect(source).toContain("betaalprofiel");
-    expect(source).toContain("voorwaardenlink");
-    expect(source).toContain("privacylink");
-    expect(source).toContain("contracttemplate");
-    expect(source).toContain("webhook-url");
-    expect(source).toContain("snapshot.billingMessage");
-    expect(source).toContain("snapshot.legalMessage");
-    expect(source).toContain("De club deelt de voorwaarden en privacyinformatie");
+    expect(source).toContain("memberMissingFields");
+    expect(source).toContain("Online inschrijven is nog niet beschikbaar bij deze club.");
+    expect(source).not.toContain("missingCheckoutFields");
+    expect(source).not.toContain("snapshot.billingMissingFields");
+    expect(source).not.toContain("snapshot.legalMissingFields");
+    expect(source).not.toContain("betaalprofiel");
+    expect(source).not.toContain("voorwaardenlink");
+    expect(source).not.toContain("privacylink");
+    expect(source).not.toContain("contracttemplate");
+    expect(source).not.toContain("webhook-url");
+    expect(source).not.toContain("snapshot.billingMessage");
+    expect(source).not.toContain("snapshot.legalMessage");
+    expect(source).not.toContain("snapshot.billingReady");
+    expect(source).not.toContain("snapshot.legalReady");
+    expect(source).not.toContain("snapshot.testMode");
+    expect(source).not.toContain("De club deelt de voorwaarden en privacyinformatie");
+    expect(source).not.toContain("ontbreekt");
+    expect(source).not.toContain("ontbreken");
     expect(source).toContain("openSignupCheckout");
     expect(source).toContain("window.Capacitor?.Plugins?.Browser");
     expect(source).toContain('presentationStyle: "fullscreen"');
@@ -145,7 +152,7 @@ describe("public surface copy", () => {
     const reservationSource = readComponentSource("PublicReservationPortal.tsx");
 
     expect(signupSource).toContain("const signupReady =");
-    expect(signupSource).toContain("Checkout starten kan nog niet");
+    expect(signupSource).toContain("Vul je gegevens in en accepteer de voorwaarden voordat je doorgaat.");
     expect(signupSource).toContain("isDisabled={isPending || !signupReady}");
 
     expect(reservationSource).toContain("const paymentMethodRequestReady =");

@@ -61,8 +61,11 @@ import type {
   LeadSource,
   LeadStage,
   MarketingWorkspaceSummary,
+  MemberStatus,
   MemberSignupRequest,
   MemberSignupStatus,
+  MobilePushPermission,
+  MobilePushPlatform,
   MobileSelfServiceSummary,
   MobileExperienceSummary,
   QuestionnaireStatus,
@@ -77,7 +80,7 @@ import {
   type MemoryGymStoreState,
 } from "@/server/persistence/memory-gym-store";
 
-const stateVersion = 8;
+const stateVersion = 9;
 const accountIdGenerator = createPrefixedIdGenerator({ prefix: "staff" });
 const memberAccountIdGenerator = createPrefixedIdGenerator({ prefix: "member" });
 const leadIdGenerator = createPrefixedIdGenerator({ prefix: "lead" });
@@ -100,6 +103,7 @@ const paymentMethodRequestIdGenerator = createPrefixedIdGenerator({ prefix: "pmr
 const pauseRequestIdGenerator = createPrefixedIdGenerator({ prefix: "pause" });
 const accountDeletionRequestIdGenerator = createPrefixedIdGenerator({ prefix: "acctdel" });
 const contractRecordIdGenerator = createPrefixedIdGenerator({ prefix: "contractrec" });
+const pushSubscriptionIdGenerator = createPrefixedIdGenerator({ prefix: "pushsub" });
 const mongoPlatformStateCollection = "platform_state";
 const mongoPlatformStateDocumentId = "gym-platform-state";
 const productName = "gym-platform";
@@ -143,6 +147,7 @@ export interface LocalPlatformState {
   readonly version: number;
   readonly tenants: ReadonlyArray<LocalTenantProfile>;
   readonly accounts: ReadonlyArray<LocalPlatformAccount>;
+  readonly pendingMemberSignupCheckouts: ReadonlyArray<PendingMemberSignupCheckout>;
   readonly data: MemoryGymStoreState;
 }
 
@@ -193,7 +198,29 @@ export interface UpsertMemberPortalAccountInput {
   readonly memberId: string;
   readonly displayName: string;
   readonly email: string;
-  readonly password: string;
+  readonly password?: string;
+  readonly passwordHash?: string;
+}
+
+export interface PendingMemberSignupCheckout {
+  readonly tenantId: TenantId;
+  readonly signupRequestId: string;
+  readonly invoiceId: string;
+  readonly email: string;
+  readonly memberStatus: MemberStatus;
+  readonly ownerNotes?: string;
+  readonly portalPasswordHash?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface UpsertPendingMemberSignupCheckoutInput {
+  readonly signupRequestId: string;
+  readonly invoiceId: string;
+  readonly email: string;
+  readonly memberStatus: MemberStatus;
+  readonly ownerNotes?: string;
+  readonly portalPassword?: string;
 }
 
 export interface UpdateLocalTenantRemoteAccessInput {
@@ -310,6 +337,8 @@ export interface CreateLocalTenantBillingInvoiceInput {
 export interface UpdateLocalTenantBillingInvoiceInput {
   readonly id: string;
   readonly status: BillingInvoiceStatus;
+  readonly memberId?: string;
+  readonly memberName?: string;
   readonly retryCount?: number;
   readonly paidAt?: string;
   readonly refundedAt?: string;
@@ -473,6 +502,16 @@ export interface CreateLocalTenantContractRecordInput {
   readonly signedAt: string;
 }
 
+export interface CreateLocalTenantPushSubscriptionInput {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly tokenHash: string;
+  readonly tokenPreview: string;
+  readonly platform: MobilePushPlatform;
+  readonly deviceId?: string;
+  readonly permission: MobilePushPermission;
+}
+
 export type StoredLegalComplianceSettings = Pick<
   LegalComplianceSummary,
   | "termsUrl"
@@ -620,8 +659,12 @@ type PersistedLocalTenantProfile = Omit<
   readonly remoteAccess?: Partial<StoredRemoteAccessSettings>;
 };
 
-type PersistedLocalPlatformState = Omit<LocalPlatformState, "tenants"> & {
+type PersistedLocalPlatformState = Omit<
+  LocalPlatformState,
+  "tenants" | "pendingMemberSignupCheckouts"
+> & {
   readonly tenants: ReadonlyArray<PersistedLocalTenantProfile>;
+  readonly pendingMemberSignupCheckouts?: ReadonlyArray<PendingMemberSignupCheckout>;
 };
 
 type MongoLocalPlatformStateDocument = PersistedLocalPlatformState & {
@@ -785,6 +828,7 @@ function createEmptyState(): LocalPlatformState {
     version: stateVersion,
     tenants: [],
     accounts: [],
+    pendingMemberSignupCheckouts: [],
     data: createEmptyGymStoreState(),
   };
 }
@@ -944,6 +988,7 @@ function createDefaultMobileSelfServiceData(): StoredMobileSelfServiceData {
     pauseRequests: [],
     accountDeletionRequests: [],
     contracts: [],
+    pushSubscriptions: [],
   };
 }
 
@@ -1120,6 +1165,27 @@ function normalizeReviewStatus(value?: string): ReviewRequestStatus {
   }
 }
 
+function normalizeMobilePushPlatform(value?: string): MobilePushPlatform {
+  switch (value) {
+    case "ios":
+    case "android":
+    case "web":
+      return value;
+    default:
+      return "unknown";
+  }
+}
+
+function normalizeMobilePushPermission(value?: string): MobilePushPermission {
+  switch (value) {
+    case "granted":
+    case "denied":
+      return value;
+    default:
+      return "prompt";
+  }
+}
+
 function normalizeMemberSignupStatus(value?: string): MemberSignupStatus {
   switch (value) {
     case "approved":
@@ -1128,6 +1194,37 @@ function normalizeMemberSignupStatus(value?: string): MemberSignupStatus {
     default:
       return "pending_review";
   }
+}
+
+function normalizePendingSignupMemberStatus(value?: string): MemberStatus {
+  switch (value) {
+    case "active":
+    case "paused":
+    case "archived":
+    case "trial":
+      return value;
+    default:
+      return "trial";
+  }
+}
+
+function normalizePendingMemberSignupCheckouts(
+  input?: ReadonlyArray<PendingMemberSignupCheckout>,
+): ReadonlyArray<PendingMemberSignupCheckout> {
+  return (input ?? [])
+    .map((checkout) => ({
+      tenantId: checkout.tenantId,
+      signupRequestId: checkout.signupRequestId.trim(),
+      invoiceId: checkout.invoiceId.trim(),
+      email: normalizeEmail(checkout.email),
+      memberStatus: normalizePendingSignupMemberStatus(checkout.memberStatus),
+      ownerNotes: checkout.ownerNotes?.trim() || undefined,
+      portalPasswordHash: checkout.portalPasswordHash?.trim() || undefined,
+      createdAt: new Date(checkout.createdAt).toISOString(),
+      updatedAt: new Date(checkout.updatedAt).toISOString(),
+    }))
+    .filter((checkout) => checkout.signupRequestId && checkout.invoiceId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 function normalizeBillingInvoiceStatus(value?: string): BillingInvoiceStatus {
@@ -1573,6 +1670,22 @@ function normalizeMobileSelfServiceData(
         signedAt: new Date(contract.signedAt).toISOString(),
       }))
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    pushSubscriptions: (input?.pushSubscriptions ?? base.pushSubscriptions)
+      .map((subscription) => ({
+        ...subscription,
+        tenantId,
+        memberId: subscription.memberId.trim(),
+        memberName: subscription.memberName.trim(),
+        tokenPreview: subscription.tokenPreview.trim(),
+        tokenHash: subscription.tokenHash.trim(),
+        platform: normalizeMobilePushPlatform(subscription.platform),
+        deviceId: subscription.deviceId?.trim() || undefined,
+        permission: normalizeMobilePushPermission(subscription.permission),
+        status: subscription.status === "revoked" ? ("revoked" as const) : ("active" as const),
+        registeredAt: new Date(subscription.registeredAt).toISOString(),
+        updatedAt: new Date(subscription.updatedAt).toISOString(),
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
   };
 }
 
@@ -1883,12 +1996,20 @@ function normalizeState(
 
     return normalized;
   });
+  const pendingMemberSignupCheckouts = normalizePendingMemberSignupCheckouts(
+    state.pendingMemberSignupCheckouts,
+  );
+
+  if (!Array.isArray(state.pendingMemberSignupCheckouts)) {
+    changed = true;
+  }
 
   return {
     state: {
       ...state,
       tenants,
       accounts,
+      pendingMemberSignupCheckouts,
     },
     changed,
   };
@@ -1916,6 +2037,7 @@ function migrateLegacyState(parsed: LegacyLocalPlatformState): LocalPlatformStat
       tenantId: parsed.tenant.id,
       linkedMemberId: undefined,
     })),
+    pendingMemberSignupCheckouts: [],
     data: parsed.data,
   };
 }
@@ -2470,7 +2592,14 @@ export async function upsertLocalMemberPortalAccount(
         account.linkedMemberId === input.memberId,
     );
     const normalizedEmail = normalizeEmail(input.email);
-    const passwordHash = hashPassword(input.password);
+    const passwordHash = input.passwordHash?.trim() || (input.password ? hashPassword(input.password) : "");
+
+    if (!passwordHash) {
+      throw new AppError("Wachtwoord ontbreekt voor dit ledenaccount.", {
+        code: "INVALID_INPUT",
+      });
+    }
+
     assertUniqueTenantEmail(
       current.accounts,
       tenant.id,
@@ -3541,6 +3670,131 @@ export async function reviewLocalTenantMemberSignup(
   });
 }
 
+export async function upsertLocalPendingMemberSignupCheckout(
+  tenantId: string,
+  input: UpsertPendingMemberSignupCheckoutInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je pending member signups beheert.",
+      "Gym niet gevonden voor pending member signup.",
+    );
+    const now = new Date().toISOString();
+    const normalizedEmail = normalizeEmail(input.email);
+    const existing = current?.pendingMemberSignupCheckouts.find(
+      (checkout) =>
+        checkout.tenantId === tenant.id &&
+        checkout.signupRequestId === input.signupRequestId.trim(),
+    );
+    const checkout: PendingMemberSignupCheckout = {
+      tenantId: tenant.id,
+      signupRequestId: input.signupRequestId.trim(),
+      invoiceId: input.invoiceId.trim(),
+      email: normalizedEmail,
+      memberStatus: normalizePendingSignupMemberStatus(input.memberStatus),
+      ownerNotes: input.ownerNotes?.trim() || undefined,
+      portalPasswordHash: input.portalPassword?.trim()
+        ? hashPassword(input.portalPassword.trim())
+        : existing?.portalPasswordHash,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenant.id ? { ...entry, updatedAt: now } : entry,
+      ),
+      pendingMemberSignupCheckouts: normalizePendingMemberSignupCheckouts([
+        ...state.pendingMemberSignupCheckouts.filter(
+          (entry) =>
+            !(
+              entry.tenantId === tenant.id &&
+              entry.signupRequestId === checkout.signupRequestId
+            ),
+        ),
+        checkout,
+      ]),
+    };
+
+    await persistState(nextState);
+    return checkout;
+  });
+}
+
+export async function getLocalPendingMemberSignupCheckout(
+  tenantId: string,
+  input: {
+    readonly signupRequestId?: string;
+    readonly invoiceId?: string;
+  },
+) {
+  const state = await readLocalPlatformState();
+
+  if (!state) {
+    return null;
+  }
+
+  const signupRequestId = input.signupRequestId?.trim();
+  const invoiceId = input.invoiceId?.trim();
+
+  return (
+    state.pendingMemberSignupCheckouts.find(
+      (checkout) =>
+        checkout.tenantId === tenantId &&
+        ((signupRequestId && checkout.signupRequestId === signupRequestId) ||
+          (invoiceId && checkout.invoiceId === invoiceId)),
+    ) ?? null
+  );
+}
+
+export async function deleteLocalPendingMemberSignupCheckout(
+  tenantId: string,
+  input: {
+    readonly signupRequestId?: string;
+    readonly invoiceId?: string;
+  },
+) {
+  return withStateMutation(async (current) => {
+    if (!current) {
+      return null;
+    }
+
+    const signupRequestId = input.signupRequestId?.trim();
+    const invoiceId = input.invoiceId?.trim();
+    const existing = current.pendingMemberSignupCheckouts.find(
+      (checkout) =>
+        checkout.tenantId === tenantId &&
+        ((signupRequestId && checkout.signupRequestId === signupRequestId) ||
+          (invoiceId && checkout.invoiceId === invoiceId)),
+    );
+
+    if (!existing) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const nextState: LocalPlatformState = {
+      ...current,
+      tenants: current.tenants.map((entry) =>
+        entry.id === tenantId ? { ...entry, updatedAt: now } : entry,
+      ),
+      pendingMemberSignupCheckouts: current.pendingMemberSignupCheckouts.filter(
+        (checkout) =>
+          !(
+            checkout.tenantId === tenantId &&
+            checkout.signupRequestId === existing.signupRequestId
+          ),
+      ),
+    };
+
+    await persistState(nextState);
+    return existing;
+  });
+}
+
 export async function createLocalTenantBillingInvoice(
   tenantId: string,
   input: CreateLocalTenantBillingInvoiceInput,
@@ -3624,6 +3878,8 @@ export async function updateLocalTenantBillingInvoice(
         {
           ...existing,
           status: input.status,
+          memberId: input.memberId ?? existing.memberId,
+          memberName: input.memberName ?? existing.memberName,
           retryCount: input.retryCount ?? existing.retryCount,
           paidAt: input.paidAt ?? existing.paidAt,
           refundedAt: input.refundedAt ?? existing.refundedAt,
@@ -4780,6 +5036,76 @@ export async function createLocalTenantContractRecord(
 
     await persistState(nextState);
     return contract;
+  });
+}
+
+export async function createOrUpdateLocalTenantPushSubscription(
+  tenantId: string,
+  input: CreateLocalTenantPushSubscriptionInput,
+) {
+  return withStateMutation(async (current) => {
+    const tenant = requireTenantForMutation(
+      current,
+      tenantId,
+      "Richt eerst het platform in voordat je pushmeldingen koppelt.",
+      "Gym niet gevonden voor mobile self-service.",
+    );
+    const now = new Date().toISOString();
+    const existing = tenant.moduleData.mobileSelfService.pushSubscriptions.find(
+      (subscription) =>
+        subscription.memberId === input.memberId &&
+        (subscription.tokenHash === input.tokenHash ||
+          (Boolean(input.deviceId) && subscription.deviceId === input.deviceId)),
+    );
+    const subscription = normalizeMobileSelfServiceData(tenant.id, {
+      pushSubscriptions: [
+        {
+          id: existing?.id ?? pushSubscriptionIdGenerator.next(),
+          tenantId: tenant.id,
+          memberId: input.memberId,
+          memberName: input.memberName,
+          tokenPreview: input.tokenPreview,
+          tokenHash: input.tokenHash,
+          platform: input.platform,
+          deviceId: input.deviceId,
+          permission: input.permission,
+          status: "active",
+          registeredAt: existing?.registeredAt ?? now,
+          updatedAt: now,
+        },
+      ],
+    }).pushSubscriptions[0]!;
+    const nextSubscriptions = normalizeMobileSelfServiceData(tenant.id, {
+      ...tenant.moduleData.mobileSelfService,
+      pushSubscriptions: [
+        ...tenant.moduleData.mobileSelfService.pushSubscriptions.filter(
+          (entry) => entry.id !== subscription.id,
+        ),
+        subscription,
+      ],
+    }).pushSubscriptions;
+    const state = current ?? createEmptyState();
+    const nextState: LocalPlatformState = {
+      ...state,
+      tenants: state.tenants.map((entry) =>
+        entry.id === tenantId
+          ? {
+              ...entry,
+              updatedAt: now,
+              moduleData: {
+                ...entry.moduleData,
+                mobileSelfService: normalizeMobileSelfServiceData(entry.id, {
+                  ...entry.moduleData.mobileSelfService,
+                  pushSubscriptions: nextSubscriptions,
+                }),
+              },
+            }
+          : entry,
+      ),
+    };
+
+    await persistState(nextState);
+    return subscription;
   });
 }
 

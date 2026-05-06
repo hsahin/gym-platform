@@ -322,7 +322,14 @@ describe("app page flow integrations", () => {
       components.PublicMembershipSignupPortal,
     );
 
-    expect(joinProps.snapshot.options).toEqual({ tenantSlug: "atlas-forge-club" });
+    expect(joinProps.snapshot).not.toHaveProperty("options");
+    expect(joinProps.snapshot).not.toHaveProperty("billingMessage");
+    expect(joinProps.snapshot).not.toHaveProperty("legalMessage");
+    expect(joinProps.snapshot).not.toHaveProperty("billingMissingFields");
+    expect(joinProps.snapshot).not.toHaveProperty("legalMissingFields");
+    expect(joinProps.snapshot).not.toHaveProperty("billingReady");
+    expect(joinProps.snapshot).not.toHaveProperty("legalReady");
+    expect(joinProps.snapshot).not.toHaveProperty("testMode");
     expect(runtime.getPublicMembershipSignupSnapshot).toHaveBeenCalledWith({
       tenantSlug: "atlas-forge-club",
     });
