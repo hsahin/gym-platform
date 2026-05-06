@@ -87,6 +87,11 @@ describe("platform state", () => {
     expect(source).toContain('import { readFileSync } from "node:fs";');
     expect(source).not.toContain("import { mkdir, readFile, rename, writeFile }");
     expect(source).not.toContain("await readFile(getStateFilePath()");
+    expect(source).toContain("isMigratableMultiTenantState(document)");
+    expect(source).toContain("isMigratableMultiTenantState(parsed)");
+    expect(source).toContain(
+      "pendingMemberSignupCheckouts: document.pendingMemberSignupCheckouts",
+    );
   });
 
   it("starts empty and derives stable tenant slugs", async () => {
@@ -1101,6 +1106,62 @@ describe("platform state", () => {
       accounts: [expect.objectContaining({ tenantId: "single-gym" })],
       pendingMemberSignupCheckouts: [],
     });
+  });
+
+  it("migrates recent multi-tenant state versions before normalizing them", async () => {
+    const stateFile = process.env.LOCAL_PLATFORM_STATE_FILE!;
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        version: 8,
+        tenants: [
+          {
+            id: "recent-gym",
+            name: "Recent Gym",
+            createdAt: "2026-04-21T00:00:00.000Z",
+            updatedAt: "2026-04-21T00:00:00.000Z",
+          },
+        ],
+        accounts: [
+          {
+            userId: "staff_recent",
+            email: "OWNER@RECENT.TEST",
+            displayName: "Recent Owner",
+            roleKey: "owner",
+            passwordHash: "invalid",
+            status: "active",
+            tenantId: "recent-gym",
+            createdAt: "2026-04-21T00:00:00.000Z",
+            updatedAt: "2026-04-21T00:00:00.000Z",
+          },
+        ],
+        data: createEmptyGymStoreState(),
+      }),
+      "utf8",
+    );
+
+    const migrated = await readLocalPlatformState();
+    const migratedRaw = await readFile(stateFile, "utf8");
+
+    expect(migrated).toMatchObject({
+      version: 9,
+      tenants: [
+        expect.objectContaining({
+          id: "recent-gym",
+          billing: expect.objectContaining({ provider: "mollie" }),
+          moduleData: expect.objectContaining({
+            mobileSelfService: expect.objectContaining({
+              accountDeletionRequests: [],
+              pushSubscriptions: [],
+            }),
+          }),
+        }),
+      ],
+      accounts: [expect.objectContaining({ email: "owner@recent.test" })],
+      pendingMemberSignupCheckouts: [],
+    });
+    expect(migratedRaw).toContain('"version": 9');
+    expect(migratedRaw).toContain("pendingMemberSignupCheckouts");
   });
 
   it("rejects persisted state with an unexpected version", async () => {

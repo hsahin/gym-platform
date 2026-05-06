@@ -2071,6 +2071,34 @@ function migrateVersion2State(
   };
 }
 
+function getPersistedStateVersion(input: unknown) {
+  if (typeof input !== "object" || input === null || !("version" in input)) {
+    return undefined;
+  }
+
+  const version = (input as { readonly version?: unknown }).version;
+
+  return typeof version === "number" ? version : undefined;
+}
+
+function hasTenantCollection(input: unknown): input is { readonly tenants: unknown } {
+  if (typeof input !== "object" || input === null || !("tenants" in input)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isMigratableMultiTenantState(input: unknown): input is LegacyVersion2LocalPlatformState {
+  const version = getPersistedStateVersion(input);
+
+  return hasTenantCollection(input) && version !== undefined && version >= 2 && version < stateVersion;
+}
+
+function isCurrentMultiTenantState(input: unknown): input is PersistedLocalPlatformState {
+  return hasTenantCollection(input) && getPersistedStateVersion(input) === stateVersion;
+}
+
 async function persistState(state: LocalPlatformState) {
   const collection = await resolveMongoStateCollection();
 
@@ -2093,6 +2121,7 @@ async function persistState(state: LocalPlatformState) {
           version: document.version,
           tenants: document.tenants,
           accounts: document.accounts,
+          pendingMemberSignupCheckouts: document.pendingMemberSignupCheckouts,
           data: document.data,
         },
       },
@@ -2142,22 +2171,16 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
       return null;
     }
 
-    if (
-      (document.version === 2 ||
-        document.version === 3 ||
-        document.version === 4 ||
-        document.version === 5) &&
-      "tenants" in document
-    ) {
+    if (isMigratableMultiTenantState(document)) {
       const migrated = migrateVersion2State(document);
       await persistState(migrated);
       return migrated;
     }
 
-    if (document.version !== stateVersion || !("tenants" in document)) {
+    if (!isCurrentMultiTenantState(document)) {
       throw new AppError("De platformstate in de database heeft een onverwachte versie.", {
         code: "INVALID_INPUT",
-        details: { expectedVersion: stateVersion, actualVersion: document.version },
+        details: { expectedVersion: stateVersion, actualVersion: getPersistedStateVersion(document) },
       });
     }
 
@@ -2197,22 +2220,16 @@ export async function readLocalPlatformState(): Promise<LocalPlatformState | nul
       return migrated;
     }
 
-    if (
-      (parsed.version === 2 ||
-        parsed.version === 3 ||
-        parsed.version === 4 ||
-        parsed.version === 5) &&
-      "tenants" in parsed
-    ) {
+    if (isMigratableMultiTenantState(parsed)) {
       const migrated = migrateVersion2State(parsed);
       await persistState(migrated);
       return migrated;
     }
 
-    if (parsed.version !== stateVersion || !("tenants" in parsed)) {
+    if (!isCurrentMultiTenantState(parsed)) {
       throw new AppError("De platformstate heeft een onverwachte versie.", {
         code: "INVALID_INPUT",
-        details: { expectedVersion: stateVersion, actualVersion: parsed.version },
+        details: { expectedVersion: stateVersion, actualVersion: getPersistedStateVersion(parsed) },
       });
     }
 
