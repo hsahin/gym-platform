@@ -332,6 +332,7 @@ export interface CreateLocalTenantBillingInvoiceInput {
   readonly dueAt: string;
   readonly source: BillingInvoiceSource;
   readonly externalReference?: string;
+  readonly checkoutUrl?: string;
 }
 
 export interface UpdateLocalTenantBillingInvoiceInput {
@@ -344,6 +345,7 @@ export interface UpdateLocalTenantBillingInvoiceInput {
   readonly refundedAt?: string;
   readonly lastWebhookEventType?: string;
   readonly externalReference?: string;
+  readonly checkoutUrl?: string;
 }
 
 export interface CreateLocalTenantBillingRefundInput {
@@ -682,6 +684,11 @@ function shouldUseFileFallback() {
   return allowsRuntimeFallbacks() && !process.env.MONGODB_URI;
 }
 
+function getPositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 async function resolveMongoStateCollection() {
   if (shouldUseFileFallback()) {
     return null;
@@ -703,6 +710,10 @@ async function resolveMongoStateCollection() {
       const client = createMongoClient({
         uri: process.env.MONGODB_URI,
         appName: productName,
+        serverSelectionTimeoutMs: getPositiveIntegerEnv(
+          "CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS",
+          30_000,
+        ),
       });
       await client.connect();
 
@@ -712,7 +723,10 @@ async function resolveMongoStateCollection() {
       return databaseClient
         .global()
         .collection<MongoLocalPlatformStateDocument>(mongoPlatformStateCollection);
-    })();
+    })().catch((error) => {
+      mongoStateCollectionPromise = null;
+      throw error;
+    });
   }
 
   return mongoStateCollectionPromise;
@@ -1393,6 +1407,7 @@ function normalizeBillingBackofficeData(
         refundedAt: invoice.refundedAt ? new Date(invoice.refundedAt).toISOString() : undefined,
         lastWebhookEventType: invoice.lastWebhookEventType?.trim() || undefined,
         externalReference: invoice.externalReference?.trim() || undefined,
+        checkoutUrl: invoice.checkoutUrl?.trim() || undefined,
       }))
       .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt)),
     refunds: (input?.refunds ?? base.refunds)
@@ -3823,6 +3838,7 @@ export async function createLocalTenantBillingInvoice(
           source: input.source,
           retryCount: 0,
           externalReference: input.externalReference,
+          checkoutUrl: input.checkoutUrl,
         },
       ],
     }).invoices[0]!;
@@ -3885,6 +3901,7 @@ export async function updateLocalTenantBillingInvoice(
           refundedAt: input.refundedAt ?? existing.refundedAt,
           lastWebhookEventType: input.lastWebhookEventType ?? existing.lastWebhookEventType,
           externalReference: input.externalReference ?? existing.externalReference,
+          checkoutUrl: input.checkoutUrl ?? existing.checkoutUrl,
         },
       ],
     }).invoices[0]!;

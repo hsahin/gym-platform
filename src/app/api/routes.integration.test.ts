@@ -114,6 +114,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.LOCAL_PLATFORM_STATE_FILE;
+  delete process.env.MONGODB_URI;
+  delete process.env.MONGODB_DB_NAME;
+  delete process.env.CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS;
   if (originalMollieApiKey === undefined) {
     delete process.env.MOLLIE_API_KEY;
   } else {
@@ -150,6 +153,32 @@ describe("api route integrations", () => {
     expect(payload.data.csrfToken).toMatch(/^v1\./);
     expect(payload.data.csrfHeader).toBe(MUTATION_CSRF_HEADER);
     expect(payload.data.idempotencyHeader).toBe(IDEMPOTENCY_HEADER);
+  });
+
+  it("retries the global services cache after an initial mongo boot failure", async () => {
+    await bootstrapLocalPlatform({
+      tenantName: "Retry Ready Gym",
+      ownerName: "Retry Owner",
+      ownerEmail: "owner@retry-ready.test",
+      password: "strong-pass-123",
+    });
+
+    process.env.MONGODB_URI = "mongodb://127.0.0.1:1/gym-platform";
+    process.env.MONGODB_DB_NAME = "gym-platform";
+    process.env.CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS = "25";
+    globalThis.__gymPlatformServices = undefined;
+
+    await expect(getGymPlatformServices()).rejects.toThrow(
+      "MongoDB-verbinding mislukt",
+    );
+
+    delete process.env.MONGODB_URI;
+    delete process.env.MONGODB_DB_NAME;
+    delete process.env.CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS;
+
+    const services = await getGymPlatformServices();
+
+    expect(services).toBeDefined();
   });
 
   it("logs owners into the dashboard and members into the reservation portal", async () => {

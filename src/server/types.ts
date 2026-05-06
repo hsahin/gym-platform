@@ -224,6 +224,7 @@ export interface BillingInvoice {
   readonly refundedAt?: string;
   readonly lastWebhookEventType?: string;
   readonly externalReference?: string;
+  readonly checkoutUrl?: string;
 }
 
 export interface BillingRefund {

@@ -174,17 +174,10 @@ describe("dashboard management UI wiring", () => {
     const marketing = readSource("dashboard/pages/MarketingDashboardPage.tsx");
     const retention = readSource("dashboard/pages/RetentionDashboardPage.tsx");
 
-    expect(payments).toContain("<details");
-    expect(payments).toContain("Geavanceerde betaalcontrole");
-    expect(payments).toContain("Alleen gebruiken met support");
-    expect(payments.indexOf("Geavanceerde betaalcontrole")).toBeLessThan(
-      payments.indexOf("Type betaalupdate"),
-    );
-    expect(payments).toContain("webhookRegistrationDisabledReason");
-    expect(payments).toContain("missingWebhookRegistrationFields");
-    expect(payments).toContain("Webhook registreren kan nog niet");
-    expect(payments).toContain("webhook-url");
-    expect(payments).toContain("Webhook registreren");
+    expect(payments).toContain("Ontvangsten en dagcontrole");
+    expect(payments).toContain("Alleen bij afwijkingen");
+    expect(payments).toContain("Open betaallink");
+    expect(payments).toContain("invoice.checkoutUrl");
 
     expect(workbench).toContain("DisabledActionReason");
     expect(workbench).toContain("missingBillingPreviewFields");
@@ -192,6 +185,7 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).toContain("mollieClientLinkDisabledReason");
     expect(workbench).toContain("billingSettingsDisabledReason");
     expect(workbench).toContain("billingPreviewDisabledReason");
+    expect(workbench).toContain("webhook-url");
     expect(workbench).toContain("parseEuroInputToCents");
     expect(workbench).toContain("formatEuroFromCents");
     expect(workbench).toContain('label="Testbedrag (€)"');

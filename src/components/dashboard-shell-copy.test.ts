@@ -308,8 +308,6 @@ describe("dashboard shell copy", () => {
     expect(paymentsSource).not.toContain("Direct debit");
     expect(paymentsSource).not.toContain("Payment request");
     expect(paymentsSource).not.toContain("One-time");
-    expect(paymentsSource).not.toContain("Refund");
-    expect(paymentsSource).not.toContain("Reconcile");
     expect(paymentsSource).not.toContain("Billing profile, enabled flows, and settlement state.");
   });
 

@@ -712,6 +712,10 @@ async function resolveStore(): Promise<Pick<GymPlatformRuntime, "store" | "store
     const client = createMongoClient({
       uri: process.env.MONGODB_URI,
       appName: PRODUCT_NAME,
+      serverSelectionTimeoutMs: getPositiveIntegerEnv(
+        "CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS",
+        30_000,
+      ),
     });
     await client.connect();
 
@@ -1623,6 +1627,58 @@ function resolveConfiguredAppBaseUrl() {
   ).trim();
 }
 
+function isPrivateWebhookHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+
+  if (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
+  }
+
+  const octets = normalized.split(".").map((part) => Number(part));
+
+  if (
+    octets.length === 4 &&
+    octets.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)
+  ) {
+    const [first, second] = octets;
+
+    return (
+      first === 10 ||
+      first === 127 ||
+      (first === 192 && second === 168) ||
+      (first === 172 && second >= 16 && second <= 31)
+    );
+  }
+
+  return false;
+}
+
+function resolveConfiguredMollieWebhookBaseUrl() {
+  const configuredBaseUrl =
+    process.env.MOLLIE_WEBHOOK_BASE_URL?.trim() || resolveConfiguredAppBaseUrl();
+
+  if (!configuredBaseUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(configuredBaseUrl);
+
+    if (isPrivateWebhookHostname(url.hostname)) {
+      return "";
+    }
+
+    return configuredBaseUrl.replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
 function hasMollieConnectTokens(billing: StoredBillingSettings | null | undefined) {
   return Boolean(
     billing?.mollieConnect?.refreshToken?.trim() &&
@@ -1648,6 +1704,21 @@ function isLiveBillingProviderConfigured(
 }
 
 function buildMollieWebhookUrl(tenantContext: TenantContext) {
+  const webhookBaseUrl = resolveConfiguredMollieWebhookBaseUrl();
+
+  if (!webhookBaseUrl) {
+    if (isProductionRuntime()) {
+      throw new AppError("Mollie webhook-url ontbreekt of is niet publiek bereikbaar.", {
+        code: "INVALID_INPUT",
+        details: {
+          missingEnv: ["MOLLIE_WEBHOOK_BASE_URL or APP_BASE_URL"],
+        },
+      });
+    }
+
+    return undefined;
+  }
+
   const params = new URLSearchParams({
     tenantId: tenantContext.tenantId,
   });
@@ -1664,7 +1735,7 @@ function buildMollieWebhookUrl(tenantContext: TenantContext) {
     });
   }
 
-  return `${resolveAppBaseUrl()}/api/platform/billing/mollie/webhook?${params.toString()}`;
+  return `${webhookBaseUrl}/api/platform/billing/mollie/webhook?${params.toString()}`;
 }
 
 function buildBillingRedirectUrl(invoiceId: string) {
@@ -2005,12 +2076,16 @@ function selectBillingPaymentMethod(
   billing: StoredBillingSettings,
   invoiceSource: GymDashboardSnapshot["billingBackoffice"]["invoices"][number]["source"],
 ) {
-  if (invoiceSource === "membership" && billing.paymentMethods.includes("direct_debit")) {
-    return "direct_debit" as const;
-  }
-
   if (billing.paymentMethods.includes("payment_request")) {
     return "payment_request" as const;
+  }
+
+  if (billing.paymentMethods.includes("one_time")) {
+    return "one_time" as const;
+  }
+
+  if (invoiceSource === "membership" && billing.paymentMethods.includes("direct_debit")) {
+    return "direct_debit" as const;
   }
 
   return billing.paymentMethods[0] ?? "one_time";
@@ -2067,6 +2142,7 @@ async function attachMolliePaymentToInvoice(
     id: invoice.id,
     status: "open",
     externalReference: intent.providerPaymentId,
+    checkoutUrl: intent.checkoutUrl,
     lastWebhookEventType: options?.eventLabel ?? "payment.created",
   });
 
@@ -7951,6 +8027,9 @@ declare global {
 }
 
 export function getGymPlatformServices() {
-  globalThis.__gymPlatformServices ??= createGymPlatformServices();
+  globalThis.__gymPlatformServices ??= createGymPlatformServices().catch((error) => {
+    globalThis.__gymPlatformServices = undefined;
+    throw error;
+  });
   return globalThis.__gymPlatformServices;
 }

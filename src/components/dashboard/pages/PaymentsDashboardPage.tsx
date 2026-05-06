@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import {
+  useEffect,
+  useState,
+  useTransition,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard } from "lucide-react";
-import { Card, Chip, Input, Label } from "@heroui/react";
+import { Card, Chip, Input, Label, Tooltip } from "@heroui/react";
+import { FloatingToc } from "@heroui-pro/react";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { toast } from "sonner";
@@ -25,6 +31,15 @@ import {
 } from "@/lib/ui-labels";
 import { formatEuroFromCents, parseEuroInputToCents } from "@/lib/currency";
 
+const pageSections = [
+  { id: "revenue-setup", label: "Omzet" },
+  { id: "collections-queue", label: "Opvolging" },
+  { id: "mollie-account", label: "Mollie" },
+  { id: "billing-backoffice", label: "Facturen" },
+  { id: "settlement-control", label: "Dagcontrole" },
+  { id: "payment-modules", label: "Modules" },
+] as const;
+
 function formatMissingFields(fields: ReadonlyArray<string>) {
   if (fields.length === 0) {
     return "";
@@ -37,16 +52,74 @@ function formatMissingFields(fields: ReadonlyArray<string>) {
   return `${fields.slice(0, -1).join(", ")} en ${fields.at(-1)}`;
 }
 
+function ActionButton({
+  helpTitle,
+  helpDescription,
+  children,
+  ...props
+}: ComponentProps<typeof Button> & {
+  readonly helpTitle?: string;
+  readonly helpDescription?: string;
+}) {
+  const button = <Button {...props}>{children}</Button>;
+
+  if (!helpDescription) {
+    return button;
+  }
+
+  return (
+    <Tooltip delay={200}>
+      <Tooltip.Trigger>
+        <span className="inline-flex">{button}</span>
+      </Tooltip.Trigger>
+      <Tooltip.Content className="max-w-sm rounded-2xl border border-border/70 bg-surface p-4 text-left shadow-overlay">
+        <Tooltip.Arrow />
+        <div className="space-y-1">
+          {helpTitle ? <p className="text-sm font-semibold">{helpTitle}</p> : null}
+          <p className="text-muted text-sm leading-6">{helpDescription}</p>
+        </div>
+      </Tooltip.Content>
+    </Tooltip>
+  );
+}
+
+function ActionCluster({ children }: { readonly children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-2">{children}</div>;
+}
+
+function InfoCard({
+  label,
+  value,
+  children,
+}: {
+  readonly label: string;
+  readonly value?: string;
+  readonly children?: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-surface px-4 py-4">
+      <p className="text-sm font-medium">{label}</p>
+      {value ? <p className="mt-1 text-sm leading-6">{value}</p> : null}
+      {children ? <div className="mt-3 flex flex-wrap gap-2">{children}</div> : null}
+    </div>
+  );
+}
+
 export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [activeSectionId, setActiveSectionId] = useState<(typeof pageSections)[number]["id"]>(
+    pageSections[0].id,
+  );
   const paymentFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "payments",
   );
   const [webshopCollectionName, setWebshopCollectionName] = useState(
     snapshot.revenueWorkspace.webshopCollectionName,
   );
-  const [pointOfSaleMode, setPointOfSaleMode] = useState(snapshot.revenueWorkspace.pointOfSaleMode);
+  const [pointOfSaleMode, setPointOfSaleMode] = useState(
+    snapshot.revenueWorkspace.pointOfSaleMode,
+  );
   const [cardTerminalLabel, setCardTerminalLabel] = useState(
     snapshot.revenueWorkspace.cardTerminalLabel,
   );
@@ -75,7 +148,9 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   const [collectionDueAt, setCollectionDueAt] = useState("2026-05-01T09:00:00.000Z");
   const [collectionNotes, setCollectionNotes] = useState("");
   const [invoiceMemberId, setInvoiceMemberId] = useState(snapshot.members[0]?.id ?? "");
-  const [invoiceMemberName, setInvoiceMemberName] = useState(snapshot.members[0]?.fullName ?? "");
+  const [invoiceMemberName, setInvoiceMemberName] = useState(
+    snapshot.members[0]?.fullName ?? "",
+  );
   const [invoiceDescription, setInvoiceDescription] = useState("Lidmaatschap factuur");
   const [invoiceAmountInput, setInvoiceAmountInput] = useState(formatEuroFromCents(0));
   const [invoiceDueAt, setInvoiceDueAt] = useState("2026-05-01T08:00:00.000Z");
@@ -85,18 +160,20 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(
     snapshot.billingBackoffice.invoices[0]?.id ?? "",
   );
-  const [webhookEventType, setWebhookEventType] = useState("betaling.betaald");
-  const [webhookStatus, setWebhookStatus] = useState<"received" | "processed" | "failed">("processed");
+  const [paymentOutcome, setPaymentOutcome] = useState("betaling ontvangen");
+  const [paymentUpdateStatus, setPaymentUpdateStatus] = useState<
+    "received" | "processed" | "failed"
+  >("processed");
   const [providerReference, setProviderReference] = useState("betaling-123");
-  const [payloadSummary, setPayloadSummary] = useState("Betaalupdate verwerkt");
-  const [terugbetalingAmountInput, setTerugbetalingAmountInput] = useState(
-    formatEuroFromCents(0),
+  const [payloadSummary, setPayloadSummary] = useState("Betaling goed verwerkt");
+  const [refundAmountInput, setRefundAmountInput] = useState(formatEuroFromCents(0));
+  const [refundReason, setRefundReason] = useState("Terugbetaling");
+  const [dailyControlNote, setDailyControlNote] = useState(
+    "Controle van ontvangen betalingen",
   );
-  const [terugbetalingReason, setTerugbetalingReason] = useState("Terugbetaling");
-  const [dagafsluitingNote, setDagafsluitingNote] = useState("Dagelijkse uitbetalingscontrole");
   const collectionAmountCents = parseEuroInputToCents(collectionAmountInput);
   const invoiceAmountCents = parseEuroInputToCents(invoiceAmountInput);
-  const terugbetalingAmountCents = parseEuroInputToCents(terugbetalingAmountInput);
+  const refundAmountCents = parseEuroInputToCents(refundAmountInput);
 
   useEffect(() => {
     setWebshopCollectionName(snapshot.revenueWorkspace.webshopCollectionName);
@@ -111,463 +188,752 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
     setSelectedInvoiceId(snapshot.billingBackoffice.invoices[0]?.id ?? "");
   }, [snapshot.billingBackoffice.invoices, snapshot.members, snapshot.revenueWorkspace]);
 
-  const missingWebhookRegistrationFields = [
+  useEffect(() => {
+    const targets = pageSections
+      .map((section) => document.getElementById(section.id))
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (targets.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const nextVisible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+
+        if (nextVisible?.target.id) {
+          setActiveSectionId(nextVisible.target.id as (typeof pageSections)[number]["id"]);
+        }
+      },
+      {
+        rootMargin: "-18% 0px -58% 0px",
+        threshold: [0.2, 0.45, 0.7],
+      },
+    );
+
+    for (const section of targets) {
+      observer.observe(section);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const missingPaymentUpdateFields = [
     selectedInvoiceId ? null : "factuur",
-    webhookEventType.trim() ? null : "type betaalupdate",
-    providerReference.trim() ? null : "betaalreferentie",
+    paymentOutcome.trim() ? null : "betaaluitkomst",
+    providerReference.trim() ? null : "betalingskenmerk",
     payloadSummary.trim() ? null : "samenvatting",
-    snapshot.payments.webhookUrlConfigured ? null : "webhook-url",
+    snapshot.payments.webhookUrlConfigured ? null : "Mollie-koppeling",
   ].filter((field): field is string => Boolean(field));
-  const webhookRegistrationDisabledReason = isPending
+  const paymentUpdateDisabledReason = isPending
     ? "Even wachten: er loopt al een betaalactie."
-    : missingWebhookRegistrationFields.length > 0
-      ? `Webhook registreren kan nog niet: vul ${formatMissingFields(missingWebhookRegistrationFields)} in.`
+    : missingPaymentUpdateFields.length > 0
+      ? `Ontvangst bijwerken kan nog niet: vul ${formatMissingFields(missingPaymentUpdateFields)} in.`
       : null;
 
-  return (
-    <div className="section-stack min-w-0 max-w-full overflow-x-clip">
-      <PageSection
-        title="Omzetinstellingen"
-        description="Stel webshop, balieverkoop en automatische incasso in zodat betalingen op de vloer kloppen."
-        actions={
-          <Button
-            isDisabled={isPending}
-            variant="outline"
-            onPress={() =>
-              startTransition(async () => {
-                try {
-                  await submitDashboardMutation("/api/platform/revenue-settings", {
-                    webshopCollectionName,
-                    pointOfSaleMode,
-                    cardTerminalLabel,
-                    autocollectPolicy,
-                    directDebitLeadDays,
-                  });
-                  toast.success("Omzetinstellingen opgeslagen.");
-                  router.refresh();
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error ? error.message : "Omzetinstellingen opslaan mislukt.",
-                  );
-                }
-              })
-            }
-          >
-            {isPending ? "Opslaan..." : "Omzet opslaan"}
-          </Button>
-        }
-      >
-        <Card className="min-w-0 max-w-full rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
-          <Card.Content className="grid min-w-0 max-w-full gap-4 md:grid-cols-2">
-            <div className="field-stack">
-              <Label>Webshop collectie</Label>
-              <Input
-                fullWidth
-                value={webshopCollectionName}
-                onChange={(event) => setWebshopCollectionName(event.target.value)}
-              />
-            </div>
-            <div className="field-stack">
-              <label className="text-sm font-medium">Kassamodus</label>
-              <NativeSelect fullWidth>
-                <NativeSelect.Trigger
-                  value={pointOfSaleMode}
-                  onChange={(event) =>
-                    setPointOfSaleMode(
-                      event.target.value as typeof snapshot.revenueWorkspace.pointOfSaleMode,
-                    )
-                  }
-                >
-                  {(["frontdesk", "kiosk", "hybrid"] as const).map((mode) => (
-                    <NativeSelect.Option key={mode} value={mode}>
-                      {getPointOfSaleModeLabel(mode)}
-                    </NativeSelect.Option>
-                  ))}
-                  <NativeSelect.Indicator />
-                </NativeSelect.Trigger>
-              </NativeSelect>
-            </div>
-            <div className="field-stack">
-              <Label>Betaalterminal</Label>
-              <Input
-                fullWidth
-                value={cardTerminalLabel}
-                onChange={(event) => setCardTerminalLabel(event.target.value)}
-              />
-            </div>
-            <div className="field-stack">
-              <Label>Incassobeleid</Label>
-              <Input
-                fullWidth
-                value={autocollectPolicy}
-                onChange={(event) => setAutocollectPolicy(event.target.value)}
-              />
-            </div>
-            <div className="field-stack">
-              <Label>Voorbereiding incasso (dagen)</Label>
-              <Input
-                fullWidth
-                min={1}
-                type="number"
-                value={String(directDebitLeadDays)}
-                onChange={(event) => setDirectDebitLeadDays(Number(event.target.value || "0"))}
-              />
-            </div>
-          </Card.Content>
-        </Card>
-      </PageSection>
+  function scrollToSection(id: (typeof pageSections)[number]["id"]) {
+    setActiveSectionId(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
-      <PageSection
-        title="Opvolging open betalingen"
-        description="Volg mislukte incasso’s, toeslagen en betaalverzoeken op zonder externe spreadsheet."
-        actions={
-          <Button
-            isDisabled={isPending}
-            variant="outline"
-            onPress={() =>
-              startTransition(async () => {
-                try {
-                  await submitDashboardMutation("/api/platform/collection-cases", {
-                    memberId: selectedCollectionMemberId || undefined,
-                    memberName: collectionMemberName,
-                    paymentMethod: collectionPaymentMethod,
-                    status: collectionStatus,
-                    amountCents: collectionAmountCents,
-                    reason: collectionReason,
-                    dueAt: collectionDueAt,
-                    notes: collectionNotes || undefined,
-                  });
-                  setCollectionAmountInput(formatEuroFromCents(0));
-                  setCollectionReason("");
-                  setCollectionNotes("");
-                  toast.success("Betaalopvolging toegevoegd.");
-                  router.refresh();
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error ? error.message : "Betaalopvolging toevoegen mislukt.",
-                  );
-                }
-              })
+  return (
+    <div className="min-w-0 xl:grid xl:grid-cols-[minmax(0,1fr)_72px] xl:gap-8">
+      <div className="section-stack min-w-0 max-w-full overflow-x-clip">
+        <div id="revenue-setup" className="scroll-mt-28">
+          <PageSection
+            title="Omzetinstellingen"
+            description="Leg vast hoe deze club verkoopt op de vloer en hoe medewerkers automatische incasso plannen."
+            actions={
+              <ActionCluster>
+                <ActionButton
+                  isDisabled={isPending}
+                  variant="outline"
+                  helpTitle="Omzet opslaan"
+                  helpDescription="Slaat de afspraken voor webshop, balie en incasso op voor deze club. Dit verandert geen betalingen die vandaag al zijn gestart."
+                  onPress={() =>
+                    startTransition(async () => {
+                      try {
+                        await submitDashboardMutation("/api/platform/revenue-settings", {
+                          webshopCollectionName,
+                          pointOfSaleMode,
+                          cardTerminalLabel,
+                          autocollectPolicy,
+                          directDebitLeadDays,
+                        });
+                        toast.success("Omzetinstellingen opgeslagen.");
+                        router.refresh();
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Omzetinstellingen opslaan mislukt.",
+                        );
+                      }
+                    })
+                  }
+                >
+                  {isPending ? "Opslaan..." : "Omzet opslaan"}
+                </ActionButton>
+              </ActionCluster>
             }
           >
-            {isPending ? "Opslaan..." : "Betaalopvolging toevoegen"}
-          </Button>
-        }
-      >
-        <Card className="min-w-0 max-w-full rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
-          <Card.Content className="grid min-w-0 max-w-full gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="field-stack">
-              <label className="text-sm font-medium">Lid</label>
-              <NativeSelect fullWidth>
-                <NativeSelect.Trigger
-                  value={selectedCollectionMemberId}
-                  onChange={(event) => {
-                    setSelectedCollectionMemberId(event.target.value);
-                    const member = snapshot.members.find((entry) => entry.id === event.target.value);
-                    setCollectionMemberName(member?.fullName ?? "");
-                  }}
-                >
-                  {snapshot.members.map((member) => (
-                    <NativeSelect.Option key={member.id} value={member.id}>
-                      {member.fullName}
-                    </NativeSelect.Option>
-                  ))}
-                  <NativeSelect.Indicator />
-                </NativeSelect.Trigger>
-              </NativeSelect>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+                <Card.Header className="items-start">
+                  <div className="space-y-1">
+                    <Card.Title>Verkoop op de vloer</Card.Title>
+                    <Card.Description>
+                      Alles wat medewerkers nodig hebben om webshop en balie eenduidig te gebruiken.
+                    </Card.Description>
+                  </div>
+                </Card.Header>
+                <Card.Content className="grid min-w-0 gap-4 md:grid-cols-2">
+                  <div className="field-stack md:col-span-2">
+                    <Label>Webshop collectie</Label>
+                    <Input
+                      fullWidth
+                      value={webshopCollectionName}
+                      onChange={(event) => setWebshopCollectionName(event.target.value)}
+                    />
+                  </div>
+                  <div className="field-stack">
+                    <label className="text-sm font-medium">Kassamodus</label>
+                    <NativeSelect fullWidth>
+                      <NativeSelect.Trigger
+                        value={pointOfSaleMode}
+                        onChange={(event) =>
+                          setPointOfSaleMode(
+                            event.target.value as typeof snapshot.revenueWorkspace.pointOfSaleMode,
+                          )
+                        }
+                      >
+                        {(["frontdesk", "kiosk", "hybrid"] as const).map((mode) => (
+                          <NativeSelect.Option key={mode} value={mode}>
+                            {getPointOfSaleModeLabel(mode)}
+                          </NativeSelect.Option>
+                        ))}
+                        <NativeSelect.Indicator />
+                      </NativeSelect.Trigger>
+                    </NativeSelect>
+                  </div>
+                  <div className="field-stack">
+                    <Label>Naam op de betaalterminal</Label>
+                    <Input
+                      fullWidth
+                      value={cardTerminalLabel}
+                      onChange={(event) => setCardTerminalLabel(event.target.value)}
+                    />
+                  </div>
+                </Card.Content>
+              </Card>
+
+              <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+                <Card.Header className="items-start">
+                  <div className="space-y-1">
+                    <Card.Title>Incasso-afspraken</Card.Title>
+                    <Card.Description>
+                      Leg vast hoe medewerkers maandelijkse incasso en opvolging plannen.
+                    </Card.Description>
+                  </div>
+                </Card.Header>
+                <Card.Content className="grid min-w-0 gap-4">
+                  <div className="field-stack">
+                    <Label>Incassobeleid</Label>
+                    <Input
+                      fullWidth
+                      value={autocollectPolicy}
+                      onChange={(event) => setAutocollectPolicy(event.target.value)}
+                    />
+                  </div>
+                  <div className="field-stack max-w-56">
+                    <Label>Voorbereiding incasso (dagen)</Label>
+                    <Input
+                      fullWidth
+                      min={1}
+                      type="number"
+                      value={String(directDebitLeadDays)}
+                      onChange={(event) =>
+                        setDirectDebitLeadDays(Number(event.target.value || "0"))
+                      }
+                    />
+                  </div>
+                </Card.Content>
+              </Card>
             </div>
-            <div className="field-stack">
-              <Label>Lidnaam</Label>
-              <Input fullWidth value={collectionMemberName} onChange={(event) => setCollectionMemberName(event.target.value)} />
-            </div>
-            <div className="field-stack">
-              <label className="text-sm font-medium">Betaalmethode</label>
-              <NativeSelect fullWidth>
-                <NativeSelect.Trigger
-                  value={collectionPaymentMethod}
-                  onChange={(event) =>
-                    setCollectionPaymentMethod(event.target.value as typeof collectionPaymentMethod)
+          </PageSection>
+        </div>
+
+        <div id="collections-queue" className="scroll-mt-28">
+          <PageSection
+            title="Opvolging open betalingen"
+            description="Houd intern bij welke betalingen nog nagebeld, hersteld of handmatig afgerond moeten worden."
+            actions={
+              <ActionCluster>
+                <ActionButton
+                  isDisabled={isPending}
+                  variant="outline"
+                  helpTitle="Betaalopvolging toevoegen"
+                  helpDescription="Maakt een opvolgdossier aan voor medewerkers. Gebruik dit voor open posten die nog aandacht vragen, los van de live betaalstroom."
+                  onPress={() =>
+                    startTransition(async () => {
+                      try {
+                        await submitDashboardMutation("/api/platform/collection-cases", {
+                          memberId: selectedCollectionMemberId || undefined,
+                          memberName: collectionMemberName,
+                          paymentMethod: collectionPaymentMethod,
+                          status: collectionStatus,
+                          amountCents: collectionAmountCents,
+                          reason: collectionReason,
+                          dueAt: collectionDueAt,
+                          notes: collectionNotes || undefined,
+                        });
+                        setCollectionAmountInput(formatEuroFromCents(0));
+                        setCollectionReason("");
+                        setCollectionNotes("");
+                        toast.success("Betaalopvolging toegevoegd.");
+                        router.refresh();
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Betaalopvolging toevoegen mislukt.",
+                        );
+                      }
+                    })
                   }
                 >
-                  {(["direct_debit", "payment_request", "one_time", "cash", "bank_transfer"] as const).map((method) => (
-                    <NativeSelect.Option key={method} value={method}>
-                      {getBillingPaymentMethodLabel(method)}
-                    </NativeSelect.Option>
-                  ))}
-                  <NativeSelect.Indicator />
-                </NativeSelect.Trigger>
-              </NativeSelect>
-            </div>
-            <div className="field-stack">
-              <label className="text-sm font-medium">Status</label>
-              <NativeSelect fullWidth>
-                <NativeSelect.Trigger
-                  value={collectionStatus}
-                  onChange={(event) =>
-                    setCollectionStatus(event.target.value as typeof collectionStatus)
-                  }
-                >
-                  {(["open", "retrying", "resolved", "cancelled"] as const).map((status) => (
-                    <NativeSelect.Option key={status} value={status}>
-                      {getCollectionCaseStatusLabel(status)}
-                    </NativeSelect.Option>
-                  ))}
-                  <NativeSelect.Indicator />
-                </NativeSelect.Trigger>
-              </NativeSelect>
-            </div>
-            <div className="field-stack">
-              <Label>Bedrag (€)</Label>
-              <Input
-                fullWidth
-                inputMode="decimal"
-                placeholder="€ 24,95"
-                type="text"
-                value={collectionAmountInput}
-                onBlur={() => setCollectionAmountInput(formatEuroFromCents(collectionAmountCents))}
-                onChange={(event) => setCollectionAmountInput(event.target.value)}
-              />
-            </div>
-            <div className="field-stack">
-              <Label>Reden</Label>
-              <Input fullWidth value={collectionReason} onChange={(event) => setCollectionReason(event.target.value)} />
-            </div>
-            <div className="field-stack">
-              <Label>Vervaldatum</Label>
-              <Input fullWidth value={collectionDueAt} onChange={(event) => setCollectionDueAt(event.target.value)} />
-            </div>
-            <div className="field-stack">
-              <Label>Notities</Label>
-              <Input fullWidth value={collectionNotes} onChange={(event) => setCollectionNotes(event.target.value)} />
-            </div>
-          </Card.Content>
-        </Card>
-        <div className="grid gap-3">
-          {snapshot.collectionCases.map((collectionCase) => (
-            <Card key={collectionCase.id} className="min-w-0 max-w-full rounded-2xl border-border/80 bg-surface-secondary">
-              <Card.Content className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <p className="font-medium">{collectionCase.memberName}</p>
-                  <p className="text-muted text-sm">
-                    {collectionCase.reason} · {formatEuroFromCents(collectionCase.amountCents)}
-                  </p>
-                  <p className="text-muted text-sm">
-                    {getBillingPaymentMethodLabel(collectionCase.paymentMethod)} ·{" "}
-                    {getCollectionCaseStatusLabel(collectionCase.status)}
-                  </p>
+                  {isPending ? "Opslaan..." : "Betaalopvolging toevoegen"}
+                </ActionButton>
+              </ActionCluster>
+            }
+          >
+            <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+              <Card.Header className="items-start">
+                <div className="space-y-1">
+                  <Card.Title>Nieuw opvolgdossier</Card.Title>
+                  <Card.Description>
+                    Leg vast om wie het gaat, welk bedrag nog openstaat en wat medewerkers moeten doen.
+                  </Card.Description>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {(["retrying", "resolved", "cancelled"] as const).map((nextStatus) => (
-                    <Button
-                      key={nextStatus}
-                      size="sm"
-                      variant="outline"
-                      onPress={() =>
-                        startTransition(async () => {
-                          try {
-                            await submitDashboardMutation(
-                              "/api/platform/collection-cases",
-                              {
-                                id: collectionCase.id,
-                                status: nextStatus,
-                              },
-                              { method: "PATCH" },
-                            );
-                            toast.success("Betaalopvolging bijgewerkt.");
-                            router.refresh();
-                          } catch (error) {
-                            toast.error(
-                              error instanceof Error
-                                ? error.message
-                                : "Betaalopvolging bijwerken mislukt.",
-                            );
-                          }
-                        })
+              </Card.Header>
+              <Card.Content className="grid min-w-0 max-w-full gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="field-stack">
+                  <label className="text-sm font-medium">Lid</label>
+                  <NativeSelect fullWidth>
+                    <NativeSelect.Trigger
+                      value={selectedCollectionMemberId}
+                      onChange={(event) => {
+                        setSelectedCollectionMemberId(event.target.value);
+                        const member = snapshot.members.find(
+                          (entry) => entry.id === event.target.value,
+                        );
+                        setCollectionMemberName(member?.fullName ?? "");
+                      }}
+                    >
+                      {snapshot.members.map((member) => (
+                        <NativeSelect.Option key={member.id} value={member.id}>
+                          {member.fullName}
+                        </NativeSelect.Option>
+                      ))}
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Trigger>
+                  </NativeSelect>
+                </div>
+                <div className="field-stack">
+                  <Label>Naam op het dossier</Label>
+                  <Input
+                    fullWidth
+                    value={collectionMemberName}
+                    onChange={(event) => setCollectionMemberName(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <label className="text-sm font-medium">Betaalmethode</label>
+                  <NativeSelect fullWidth>
+                    <NativeSelect.Trigger
+                      value={collectionPaymentMethod}
+                      onChange={(event) =>
+                        setCollectionPaymentMethod(
+                          event.target.value as typeof collectionPaymentMethod,
+                        )
                       }
                     >
-                      {getCollectionCaseStatusLabel(nextStatus)}
-                    </Button>
-                  ))}
+                      {(
+                        [
+                          "direct_debit",
+                          "payment_request",
+                          "one_time",
+                          "cash",
+                          "bank_transfer",
+                        ] as const
+                      ).map((method) => (
+                        <NativeSelect.Option key={method} value={method}>
+                          {getBillingPaymentMethodLabel(method)}
+                        </NativeSelect.Option>
+                      ))}
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Trigger>
+                  </NativeSelect>
+                </div>
+                <div className="field-stack">
+                  <label className="text-sm font-medium">Status</label>
+                  <NativeSelect fullWidth>
+                    <NativeSelect.Trigger
+                      value={collectionStatus}
+                      onChange={(event) =>
+                        setCollectionStatus(event.target.value as typeof collectionStatus)
+                      }
+                    >
+                      {(["open", "retrying", "resolved", "cancelled"] as const).map(
+                        (status) => (
+                          <NativeSelect.Option key={status} value={status}>
+                            {getCollectionCaseStatusLabel(status)}
+                          </NativeSelect.Option>
+                        ),
+                      )}
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Trigger>
+                  </NativeSelect>
+                </div>
+                <div className="field-stack">
+                  <Label>Bedrag (€)</Label>
+                  <Input
+                    fullWidth
+                    inputMode="decimal"
+                    placeholder="€ 24,95"
+                    type="text"
+                    value={collectionAmountInput}
+                    onBlur={() =>
+                      setCollectionAmountInput(formatEuroFromCents(collectionAmountCents))
+                    }
+                    onChange={(event) => setCollectionAmountInput(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Waarom staat dit nog open?</Label>
+                  <Input
+                    fullWidth
+                    value={collectionReason}
+                    onChange={(event) => setCollectionReason(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Opvolgen voor</Label>
+                  <Input
+                    fullWidth
+                    value={collectionDueAt}
+                    onChange={(event) => setCollectionDueAt(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Interne notities</Label>
+                  <Input
+                    fullWidth
+                    value={collectionNotes}
+                    onChange={(event) => setCollectionNotes(event.target.value)}
+                  />
                 </div>
               </Card.Content>
             </Card>
-          ))}
-        </div>
-      </PageSection>
 
-      <PageSection
-        title="Betalingsbeheer"
-        description="Werk facturen, mislukte betalingen en terugbetalingen af zonder externe tooling."
-      >
-        <Card className="min-w-0 max-w-full rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
-          <Card.Content className="grid min-w-0 max-w-full gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <div className="field-stack">
-              <label className="text-sm font-medium">Lid</label>
-              <NativeSelect fullWidth>
-                <NativeSelect.Trigger
-                  value={invoiceMemberId}
-                  onChange={(event) => {
-                    setInvoiceMemberId(event.target.value);
-                    const member = snapshot.members.find((entry) => entry.id === event.target.value);
-                    setInvoiceMemberName(member?.fullName ?? "");
-                  }}
+            <div className="grid gap-3">
+              {snapshot.collectionCases.map((collectionCase) => (
+                <Card
+                  key={collectionCase.id}
+                  className="min-w-0 rounded-2xl border-border/80 bg-surface-secondary"
                 >
-                  {snapshot.members.map((member) => (
-                    <NativeSelect.Option key={member.id} value={member.id}>
-                      {member.fullName}
-                    </NativeSelect.Option>
-                  ))}
-                  <NativeSelect.Indicator />
-                </NativeSelect.Trigger>
-              </NativeSelect>
+                  <Card.Content className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium">{collectionCase.memberName}</p>
+                      <p className="text-muted text-sm">
+                        {collectionCase.reason} · {formatEuroFromCents(collectionCase.amountCents)}
+                      </p>
+                      <p className="text-muted text-sm">
+                        {getBillingPaymentMethodLabel(collectionCase.paymentMethod)} ·{" "}
+                        {getCollectionCaseStatusLabel(collectionCase.status)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(["retrying", "resolved", "cancelled"] as const).map((nextStatus) => (
+                        <Button
+                          key={nextStatus}
+                          size="sm"
+                          variant="outline"
+                          onPress={() =>
+                            startTransition(async () => {
+                              try {
+                                await submitDashboardMutation(
+                                  "/api/platform/collection-cases",
+                                  {
+                                    id: collectionCase.id,
+                                    status: nextStatus,
+                                  },
+                                  { method: "PATCH" },
+                                );
+                                toast.success("Betaalopvolging bijgewerkt.");
+                                router.refresh();
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Betaalopvolging bijwerken mislukt.",
+                                );
+                              }
+                            })
+                          }
+                        >
+                          {getCollectionCaseStatusLabel(nextStatus)}
+                        </Button>
+                      ))}
+                    </div>
+                  </Card.Content>
+                </Card>
+              ))}
             </div>
-            <div className="field-stack">
-              <Label>Beschrijving</Label>
-              <Input fullWidth value={invoiceDescription} onChange={(event) => setInvoiceDescription(event.target.value)} />
-            </div>
-            <div className="field-stack">
-              <Label>Bedrag (€)</Label>
-              <Input
-                fullWidth
-                inputMode="decimal"
-                placeholder="€ 119,00"
-                type="text"
-                value={invoiceAmountInput}
-                onBlur={() => setInvoiceAmountInput(formatEuroFromCents(invoiceAmountCents))}
-                onChange={(event) => setInvoiceAmountInput(event.target.value)}
-              />
-            </div>
-            <div className="field-stack">
-              <Label>Vervalt op</Label>
-              <Input fullWidth value={invoiceDueAt} onChange={(event) => setInvoiceDueAt(event.target.value)} />
-            </div>
-            <div className="field-stack">
-              <label className="text-sm font-medium">Bron</label>
-              <NativeSelect fullWidth>
-                <NativeSelect.Trigger value={invoiceSource} onChange={(event) => setInvoiceSource(event.target.value as typeof invoiceSource)}>
-                  {(["membership", "signup_checkout", "appointment_pack", "late_fee", "manual"] as const).map((source) => (
-                    <NativeSelect.Option key={source} value={source}>
-                      {getBillingInvoiceSourceLabel(source)}
-                    </NativeSelect.Option>
-                  ))}
-                  <NativeSelect.Indicator />
-                </NativeSelect.Trigger>
-              </NativeSelect>
-            </div>
-            <div className="field-stack justify-end">
-              <Button
-                isDisabled={isPending}
-                variant="outline"
-                onPress={() =>
-                  startTransition(async () => {
-                    try {
-                      await submitDashboardMutation("/api/platform/billing-backoffice", {
-                        operation: "create_invoice",
-                        memberId: invoiceMemberId || undefined,
-                        memberName: invoiceMemberName,
-                        description: invoiceDescription,
-                        amountCents: invoiceAmountCents,
-                        dueAt: invoiceDueAt,
-                        source: invoiceSource,
-                      });
-                      toast.success("Factuur toegevoegd.");
-                      router.refresh();
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Factuur toevoegen mislukt.");
-                    }
-                  })
-                }
-              >
-                Factuur toevoegen
-              </Button>
-            </div>
-          </Card.Content>
-        </Card>
+          </PageSection>
+        </div>
 
-        <div className="grid gap-3">
-          {snapshot.billingBackoffice.invoices.map((invoice) => (
-            <Card key={invoice.id} className="min-w-0 max-w-full rounded-2xl border-border/80 bg-surface-secondary">
-              <Card.Content className="space-y-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium">{invoice.memberName}</p>
-                    <p className="text-muted text-sm">
-                      {invoice.description} · {formatEuroFromCents(invoice.amountCents)} ·{" "}
-                      {getBillingInvoiceStatusLabel(invoice.status)}
-                    </p>
+        <div id="mollie-account" className="scroll-mt-28">
+          <PageSection
+            title="Betalingen"
+            description="Hier regel je de Mollie-betaalrekening, de betaalroutes voor leden en de vertaling naar de dagelijkse operatie."
+          >
+            <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+              <Card.Header className="items-start gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Chip size="sm" variant="soft">
+                      Mollie
+                    </Chip>
+                    <Chip size="sm" variant="soft">
+                      {snapshot.payments.statusLabel}
+                    </Chip>
                   </div>
-                  <Chip size="sm" variant="soft">
-                    pogingen: {invoice.retryCount}
+                  <Card.Title>
+                    {snapshot.payments.profileLabel || "Betaalrekening nog niet gekoppeld"}
+                  </Card.Title>
+                  <Card.Description>{snapshot.payments.helpText}</Card.Description>
+                </div>
+              </Card.Header>
+              <Card.Content className="grid gap-4 lg:grid-cols-3">
+                <InfoCard label="Betaalroutes voor leden">
+                  {snapshot.payments.paymentMethods.length > 0 ? (
+                    snapshot.payments.paymentMethods.map((method) => (
+                      <Chip key={method} size="sm" variant="tertiary">
+                        {getBillingPaymentMethodLabel(method)}
+                      </Chip>
+                    ))
+                  ) : (
+                    <Chip size="sm" variant="tertiary">
+                      Nog geen routes gekozen
+                    </Chip>
+                  )}
+                </InfoCard>
+                <InfoCard
+                  label="Contact voor betaalvragen"
+                  value={snapshot.payments.supportEmail || "Nog niet ingevuld"}
+                />
+                <InfoCard
+                  label="Omschrijving op uitbetalingen"
+                  value={snapshot.payments.settlementLabel || "Nog niet ingevuld"}
+                />
+              </Card.Content>
+            </Card>
+
+            <LazyPlatformWorkbench
+              sections={["payments"]}
+              showLaunchHeader={false}
+              snapshot={snapshot}
+              stackSections
+            />
+          </PageSection>
+        </div>
+
+        <div id="billing-backoffice" className="scroll-mt-28">
+          <PageSection
+            title="Betalingsbeheer"
+            description="Maak betaalverzoeken aan, bied gemiste betalingen opnieuw aan en verwerk terugbetalingen in dezelfde werkomgeving."
+          >
+            <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+              <Card.Header className="items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <Card.Title>Factuur klaarzetten</Card.Title>
+                  <Card.Description>
+                    Maak een nieuw betaalverzoek klaar voor een lid. Zodra Mollie live staat,
+                    krijgt dit verzoek direct een betaalroute mee.
+                  </Card.Description>
+                </div>
+                <ActionCluster>
+                  <ActionButton
+                    isDisabled={isPending}
+                    variant="outline"
+                    helpTitle="Factuur toevoegen"
+                    helpDescription="Maakt een nieuw betaalverzoek aan voor dit lid. Gebruik dit voor losse betalingen, open lidmaatschappen of extra kosten."
+                    onPress={() =>
+                      startTransition(async () => {
+                        try {
+                          await submitDashboardMutation("/api/platform/billing-backoffice", {
+                            operation: "create_invoice",
+                            memberId: invoiceMemberId || undefined,
+                            memberName: invoiceMemberName,
+                            description: invoiceDescription,
+                            amountCents: invoiceAmountCents,
+                            dueAt: invoiceDueAt,
+                            source: invoiceSource,
+                          });
+                          toast.success("Factuur toegevoegd.");
+                          router.refresh();
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Factuur toevoegen mislukt.",
+                          );
+                        }
+                      })
+                    }
+                  >
+                    {isPending ? "Opslaan..." : "Factuur toevoegen"}
+                  </ActionButton>
+                </ActionCluster>
+              </Card.Header>
+              <Card.Content className="grid min-w-0 max-w-full gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="field-stack">
+                  <label className="text-sm font-medium">Lid</label>
+                  <NativeSelect fullWidth>
+                    <NativeSelect.Trigger
+                      value={invoiceMemberId}
+                      onChange={(event) => {
+                        setInvoiceMemberId(event.target.value);
+                        const member = snapshot.members.find(
+                          (entry) => entry.id === event.target.value,
+                        );
+                        setInvoiceMemberName(member?.fullName ?? "");
+                      }}
+                    >
+                      {snapshot.members.map((member) => (
+                        <NativeSelect.Option key={member.id} value={member.id}>
+                          {member.fullName}
+                        </NativeSelect.Option>
+                      ))}
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Trigger>
+                  </NativeSelect>
+                </div>
+                <div className="field-stack">
+                  <Label>Beschrijving</Label>
+                  <Input
+                    fullWidth
+                    value={invoiceDescription}
+                    onChange={(event) => setInvoiceDescription(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Bedrag (€)</Label>
+                  <Input
+                    fullWidth
+                    inputMode="decimal"
+                    placeholder="€ 119,00"
+                    type="text"
+                    value={invoiceAmountInput}
+                    onBlur={() => setInvoiceAmountInput(formatEuroFromCents(invoiceAmountCents))}
+                    onChange={(event) => setInvoiceAmountInput(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <Label>Vervalt op</Label>
+                  <Input
+                    fullWidth
+                    value={invoiceDueAt}
+                    onChange={(event) => setInvoiceDueAt(event.target.value)}
+                  />
+                </div>
+                <div className="field-stack">
+                  <label className="text-sm font-medium">Bron</label>
+                  <NativeSelect fullWidth>
+                    <NativeSelect.Trigger
+                      value={invoiceSource}
+                      onChange={(event) =>
+                        setInvoiceSource(event.target.value as typeof invoiceSource)
+                      }
+                    >
+                      {(
+                        [
+                          "membership",
+                          "signup_checkout",
+                          "appointment_pack",
+                          "late_fee",
+                          "manual",
+                        ] as const
+                      ).map((source) => (
+                        <NativeSelect.Option key={source} value={source}>
+                          {getBillingInvoiceSourceLabel(source)}
+                        </NativeSelect.Option>
+                      ))}
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Trigger>
+                  </NativeSelect>
+                </div>
+              </Card.Content>
+            </Card>
+
+            <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+              <Card.Header className="items-start">
+                <div className="space-y-1">
+                  <Card.Title>Lopende betaalverzoeken</Card.Title>
+                  <Card.Description>
+                    Bekijk welke betalingen nog openstaan en stuur zonodig een nieuwe betaalmogelijkheid of een terugbetaling.
+                  </Card.Description>
+                </div>
+              </Card.Header>
+              <Card.Content className="grid gap-3">
+                {snapshot.billingBackoffice.invoices.map((invoice) => (
+                  <Card
+                    key={invoice.id}
+                    className="min-w-0 rounded-2xl border-border/80 bg-surface"
+                  >
+                    <Card.Content className="space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{invoice.memberName}</p>
+                          <p className="text-muted text-sm">
+                            {invoice.description} · {formatEuroFromCents(invoice.amountCents)} ·{" "}
+                            {getBillingInvoiceStatusLabel(invoice.status)}
+                          </p>
+                        </div>
+                        <Chip size="sm" variant="soft">
+                          pogingen: {invoice.retryCount}
+                        </Chip>
+                      </div>
+                      {invoice.checkoutUrl ? (
+                        <div className="space-y-2">
+                          <p className="text-muted text-sm font-medium">Betaallink</p>
+                          <button
+                            className="text-sm break-all text-primary hover:underline"
+                            type="button"
+                            onClick={() =>
+                              window.open(
+                                invoice.checkoutUrl,
+                                "_blank",
+                                "noopener,noreferrer",
+                              )
+                            }
+                          >
+                            {invoice.checkoutUrl}
+                          </button>
+                        </div>
+                      ) : null}
+                      <ActionCluster>
+                        {invoice.checkoutUrl ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onPress={() =>
+                              window.open(
+                                invoice.checkoutUrl,
+                                "_blank",
+                                "noopener,noreferrer",
+                              )
+                            }
+                          >
+                            Open betaallink
+                          </Button>
+                        ) : null}
+                        <ActionButton
+                          size="sm"
+                          variant="outline"
+                          helpTitle="Opnieuw proberen"
+                          helpDescription="Maakt voor deze factuur een nieuwe betaalmogelijkheid aan. Gebruik dit na een verlopen, geweigerde of gemiste betaling."
+                          onPress={() =>
+                            startTransition(async () => {
+                              try {
+                                await submitDashboardMutation(
+                                  "/api/platform/billing-backoffice",
+                                  {
+                                    operation: "retry_invoice",
+                                    invoiceId: invoice.id,
+                                    reason: "Nieuwe betaalpoging",
+                                  },
+                                );
+                                toast.success("Nieuwe betaalpoging ingepland.");
+                                router.refresh();
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Nieuwe betaalpoging mislukt.",
+                                );
+                              }
+                            })
+                          }
+                        >
+                          Opnieuw proberen
+                        </ActionButton>
+                        <ActionButton
+                          size="sm"
+                          variant="ghost"
+                          helpTitle="Terugbetalen"
+                          helpDescription="Boekt geld terug naar het lid voor deze factuur. Gebruik dit alleen nadat het bedrag en de reden zijn gecontroleerd."
+                          onPress={() =>
+                            startTransition(async () => {
+                              try {
+                                await submitDashboardMutation(
+                                  "/api/platform/billing-backoffice",
+                                  {
+                                    operation: "refund_invoice",
+                                    invoiceId: invoice.id,
+                                    amountCents: refundAmountCents || invoice.amountCents,
+                                    reason: refundReason,
+                                  },
+                                );
+                                toast.success("Terugbetaling vastgelegd.");
+                                router.refresh();
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Terugbetaling mislukt.",
+                                );
+                              }
+                            })
+                          }
+                        >
+                          Terugbetalen
+                        </ActionButton>
+                      </ActionCluster>
+                    </Card.Content>
+                  </Card>
+                ))}
+              </Card.Content>
+            </Card>
+          </PageSection>
+        </div>
+
+        <div id="settlement-control" className="scroll-mt-28">
+          <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
+            <Card.Header className="items-start gap-4">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Card.Title>Ontvangsten en dagcontrole</Card.Title>
+                  <Chip size="sm" variant="tertiary">
+                    Alleen bij afwijkingen
                   </Chip>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onPress={() =>
-                      startTransition(async () => {
-                        try {
-                          await submitDashboardMutation("/api/platform/billing-backoffice", {
-                            operation: "retry_invoice",
-                            invoiceId: invoice.id,
-                            reason: "Nieuwe betaalpoging",
-                          });
-                          toast.success("Nieuwe betaalpoging ingepland.");
-                          router.refresh();
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Nieuwe betaalpoging mislukt.");
-                        }
-                      })
-                    }
-                  >
-                    Opnieuw proberen
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onPress={() =>
-                      startTransition(async () => {
-                        try {
-                          await submitDashboardMutation("/api/platform/billing-backoffice", {
-                            operation: "refund_invoice",
-                            invoiceId: invoice.id,
-                            amountCents: terugbetalingAmountCents || invoice.amountCents,
-                            reason: terugbetalingReason,
-                          });
-                          toast.success("Terugbetaling vastgelegd.");
-                          router.refresh();
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Terugbetaling mislukt.");
-                        }
-                      })
-                    }
-                  >
-                    Terugbetalen
-                  </Button>
-                </div>
-              </Card.Content>
-            </Card>
-          ))}
-        </div>
-
-        <details className="min-w-0 max-w-full rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
-          <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-4 px-5 py-4 marker:hidden">
-            <div className="min-w-0 space-y-1">
-              <p className="font-medium">Geavanceerde betaalcontrole</p>
-              <p className="text-muted text-sm leading-6">
-                Alleen gebruiken met support voor betaalupdates, referenties en dagafsluiting.
-              </p>
-            </div>
-            <Chip size="sm" variant="tertiary">
-              Geavanceerd
-            </Chip>
-          </summary>
-          <Card className="mx-4 mb-4 min-w-0 max-w-full rounded-[24px] border border-border/70 bg-surface shadow-none">
+                <Card.Description>
+                  Werk een ontvangen betaling bij wanneer je geld hebt teruggevonden of leg aan het einde van de dag vast welke posten nog aandacht vragen.
+                </Card.Description>
+              </div>
+            </Card.Header>
             <Card.Content className="grid min-w-0 max-w-full gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="field-stack">
                 <label className="text-sm font-medium">Factuur</label>
                 <NativeSelect fullWidth>
-                  <NativeSelect.Trigger value={selectedInvoiceId} onChange={(event) => setSelectedInvoiceId(event.target.value)}>
+                  <NativeSelect.Trigger
+                    value={selectedInvoiceId}
+                    onChange={(event) => setSelectedInvoiceId(event.target.value)}
+                  >
                     {snapshot.billingBackoffice.invoices.map((invoice) => (
                       <NativeSelect.Option key={invoice.id} value={invoice.id}>
                         {invoice.memberName} · {getBillingInvoiceStatusLabel(invoice.status)}
@@ -578,21 +944,38 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
                 </NativeSelect>
               </div>
               <div className="field-stack">
-                <Label>Type betaalupdate</Label>
-                <Input fullWidth value={webhookEventType} onChange={(event) => setWebhookEventType(event.target.value)} />
+                <Label>Betaaluitkomst</Label>
+                <Input
+                  fullWidth
+                  value={paymentOutcome}
+                  onChange={(event) => setPaymentOutcome(event.target.value)}
+                />
               </div>
               <div className="field-stack">
-                <Label>Betaalreferentie</Label>
-                <Input fullWidth value={providerReference} onChange={(event) => setProviderReference(event.target.value)} />
+                <Label>Betalingskenmerk</Label>
+                <Input
+                  fullWidth
+                  value={providerReference}
+                  onChange={(event) => setProviderReference(event.target.value)}
+                />
               </div>
               <div className="field-stack">
-                <Label>Samenvatting</Label>
-                <Input fullWidth value={payloadSummary} onChange={(event) => setPayloadSummary(event.target.value)} />
+                <Label>Wat is er gebeurd?</Label>
+                <Input
+                  fullWidth
+                  value={payloadSummary}
+                  onChange={(event) => setPayloadSummary(event.target.value)}
+                />
               </div>
               <div className="field-stack">
-                <Label>Verwerkingsstatus</Label>
+                <Label>Afhandelstatus</Label>
                 <NativeSelect fullWidth>
-                  <NativeSelect.Trigger value={webhookStatus} onChange={(event) => setWebhookStatus(event.target.value as typeof webhookStatus)}>
+                  <NativeSelect.Trigger
+                    value={paymentUpdateStatus}
+                    onChange={(event) =>
+                      setPaymentUpdateStatus(event.target.value as typeof paymentUpdateStatus)
+                    }
+                  >
                     {(["received", "processed", "failed"] as const).map((nextStatus) => (
                       <NativeSelect.Option key={nextStatus} value={nextStatus}>
                         {getBillingWebhookStatusLabel(nextStatus)}
@@ -609,123 +992,135 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
                   inputMode="decimal"
                   placeholder="€ 24,95"
                   type="text"
-                  value={terugbetalingAmountInput}
-                  onBlur={() =>
-                    setTerugbetalingAmountInput(formatEuroFromCents(terugbetalingAmountCents))
-                  }
-                  onChange={(event) => setTerugbetalingAmountInput(event.target.value)}
+                  value={refundAmountInput}
+                  onBlur={() => setRefundAmountInput(formatEuroFromCents(refundAmountCents))}
+                  onChange={(event) => setRefundAmountInput(event.target.value)}
                 />
               </div>
               <div className="field-stack">
                 <Label>Reden terugbetaling</Label>
-                <Input fullWidth value={terugbetalingReason} onChange={(event) => setTerugbetalingReason(event.target.value)} />
+                <Input
+                  fullWidth
+                  value={refundReason}
+                  onChange={(event) => setRefundReason(event.target.value)}
+                />
               </div>
               <div className="field-stack">
-                <Label>Notitie dagafsluiting</Label>
-                <Input fullWidth value={dagafsluitingNote} onChange={(event) => setDagafsluitingNote(event.target.value)} />
+                <Label>Notitie dagcontrole</Label>
+                <Input
+                  fullWidth
+                  value={dailyControlNote}
+                  onChange={(event) => setDailyControlNote(event.target.value)}
+                />
               </div>
             </Card.Content>
             <Card.Content className="flex flex-wrap gap-3 pt-0">
               <div className="flex max-w-full flex-col gap-2">
-                <Button
-                  isDisabled={Boolean(webhookRegistrationDisabledReason)}
-                  variant="outline"
+                <ActionCluster>
+                  <ActionButton
+                    isDisabled={Boolean(paymentUpdateDisabledReason)}
+                    variant="outline"
+                    helpTitle="Ontvangst bijwerken"
+                    helpDescription="Werk de stand van een betaling bij wanneer je geld hebt teruggevonden en de administratie meteen gelijk wilt zetten."
+                    onPress={() =>
+                      startTransition(async () => {
+                        try {
+                          await submitDashboardMutation("/api/platform/billing-backoffice", {
+                            operation: "record_webhook",
+                            invoiceId: selectedInvoiceId,
+                            eventType: paymentOutcome,
+                            status: paymentUpdateStatus,
+                            providerReference,
+                            payloadSummary,
+                          });
+                          toast.success("Ontvangst bijgewerkt.");
+                          router.refresh();
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Ontvangst bijwerken mislukt.",
+                          );
+                        }
+                      })
+                    }
+                  >
+                    Ontvangst bijwerken
+                  </ActionButton>
+                </ActionCluster>
+                <DisabledActionReason reason={paymentUpdateDisabledReason} />
+              </div>
+              <ActionCluster>
+                <ActionButton
+                  isDisabled={isPending}
+                  variant="ghost"
+                  helpTitle="Dagcontrole opslaan"
+                  helpDescription="Leg vast welke betalingen al kloppen en welke nog aandacht nodig hebben. Dit helpt medewerkers de dag netjes af te ronden."
                   onPress={() =>
                     startTransition(async () => {
                       try {
                         await submitDashboardMutation("/api/platform/billing-backoffice", {
-                          operation: "record_webhook",
-                          invoiceId: selectedInvoiceId,
-                          eventType: webhookEventType,
-                          status: webhookStatus,
-                          providerReference,
-                          payloadSummary,
+                          operation: "reconcile",
+                          note: dailyControlNote,
                         });
-                        toast.success("Webhook geregistreerd.");
+                        toast.success("Dagcontrole opgeslagen.");
                         router.refresh();
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Webhook registreren mislukt.");
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Dagcontrole opslaan mislukt.",
+                        );
                       }
                     })
                   }
                 >
-                  Webhook registreren
-                </Button>
-                <DisabledActionReason reason={webhookRegistrationDisabledReason} />
-              </div>
-              <Button
-                isDisabled={isPending}
-                variant="ghost"
-                onPress={() =>
-                  startTransition(async () => {
-                    try {
-                      await submitDashboardMutation("/api/platform/billing-backoffice", {
-                        operation: "reconcile",
-                        note: dagafsluitingNote,
-                      });
-                      toast.success("Dagafsluiting gecontroleerd.");
-                      router.refresh();
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Dagafsluiting controleren mislukt.");
-                    }
-                  })
-                }
-              >
-                Dagafsluiting controleren
-              </Button>
-            </Card.Content>
-          </Card>
-        </details>
-      </PageSection>
-
-      <PageSection
-        title="Betalingen"
-        description="Betaalprofiel, actieve betaalroutes en uitbetalingsstatus."
-      >
-        <div className="grid gap-4">
-          <Card className="min-w-0 max-w-full rounded-2xl border-border/80 bg-surface-secondary">
-            <Card.Content className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                <p className="font-medium">{snapshot.payments.profileLabel}</p>
-              </div>
-              <p className="text-muted text-sm">{snapshot.payments.helpText}</p>
-              <div className="flex flex-wrap gap-2">
-                <Chip size="sm" variant="soft">
-                  {snapshot.payments.statusLabel}
-                </Chip>
-                {snapshot.payments.paymentMethods.map((method) => (
-                  <Chip key={method} size="sm" variant="tertiary">
-                    {getBillingPaymentMethodLabel(method)}
-                  </Chip>
-                ))}
-              </div>
-            </Card.Content>
-          </Card>
-
-          <Card className="min-w-0 max-w-full rounded-2xl border-border/80 bg-surface-secondary">
-            <Card.Content className="space-y-2">
-              <p className="text-muted text-sm">Betaalsupport</p>
-              <p className="break-all font-medium">{snapshot.payments.supportEmail}</p>
-              <p className="text-muted text-sm">Uitbetaling: {snapshot.payments.settlementLabel}</p>
+                  Dagcontrole opslaan
+                </ActionButton>
+              </ActionCluster>
             </Card.Content>
           </Card>
         </div>
-      </PageSection>
 
-      <LazyPlatformWorkbench
-        sections={["payments"]}
-        showLaunchHeader={false}
-        snapshot={snapshot}
-        stackSections
-      />
+        <div id="payment-modules" className="scroll-mt-28">
+          <PageSection
+            title="Betaalmodules"
+            description="Compact overzicht van betaalverwerking, incasso en betaalopvolging."
+          >
+            <FeatureModuleBoard
+              currentPage="payments"
+              features={paymentFeatures}
+              snapshot={snapshot}
+            />
+          </PageSection>
+        </div>
+      </div>
 
-      <PageSection
-        title="Betaalmodules"
-        description="Compact overzicht van betaalverwerking, incasso en betaalopvolging."
-      >
-        <FeatureModuleBoard currentPage="payments" features={paymentFeatures} snapshot={snapshot} />
-      </PageSection>
+      <div className="hidden xl:block">
+        <div className="sticky top-28 flex justify-end">
+          <FloatingToc placement="left" triggerMode="press">
+            <FloatingToc.Trigger aria-label="Inhoud betalingen">
+              {pageSections.map((section) => (
+                <FloatingToc.Bar
+                  key={section.id}
+                  active={section.id === activeSectionId}
+                />
+              ))}
+            </FloatingToc.Trigger>
+            <FloatingToc.Content>
+              {pageSections.map((section) => (
+                <FloatingToc.Item
+                  key={section.id}
+                  active={section.id === activeSectionId}
+                  onClick={() => scrollToSection(section.id)}
+                >
+                  {section.label}
+                </FloatingToc.Item>
+              ))}
+            </FloatingToc.Content>
+          </FloatingToc>
+        </div>
+      </div>
     </div>
   );
 }

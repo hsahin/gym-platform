@@ -1,4 +1,5 @@
 import { AppError } from "@claimtech/core";
+import { isMollieTestMode } from "@/server/runtime/mollie-connect";
 import type { BillingPaymentMethod } from "@/server/types";
 
 const MOLLIE_API_BASE_URL = "https://api.mollie.com/v2";
@@ -47,7 +48,7 @@ export interface CreateMolliePaymentIntentInput {
   readonly sequenceType?: "oneoff" | "first" | "recurring";
   readonly customer?: CreateMollieCustomerInput;
   readonly redirectUrl: string;
-  readonly webhookUrl: string;
+  readonly webhookUrl?: string;
   readonly profileId?: string;
   readonly metadata?: Record<string, string | number | boolean | null | undefined>;
 }
@@ -86,7 +87,7 @@ export interface CreateMollieSubscriptionInput {
   readonly currency: string;
   readonly interval: string;
   readonly description: string;
-  readonly webhookUrl: string;
+  readonly webhookUrl?: string;
   readonly startDate?: string;
   readonly metadata?: Record<string, string | number | boolean | null | undefined>;
 }
@@ -259,10 +260,16 @@ export function createMolliePaymentProvider(options?: {
 
   const fetchImpl = options?.fetchImpl ?? fetch;
   const apiBaseUrl = options?.apiBaseUrl ?? MOLLIE_API_BASE_URL;
-  const testMode = Boolean(options?.testMode);
+  const supportsExplicitTestMode = Boolean(accessToken);
+  const testMode =
+    typeof options?.testMode === "boolean"
+      ? options.testMode
+      : supportsExplicitTestMode
+        ? isMollieTestMode()
+        : false;
 
   function buildPath(path: string, options?: { readonly testModeInBody?: boolean }) {
-    if (!testMode || options?.testModeInBody) {
+    if (!supportsExplicitTestMode || !testMode || options?.testModeInBody) {
       return path;
     }
 
@@ -309,7 +316,7 @@ export function createMolliePaymentProvider(options?: {
           body: JSON.stringify({
             name: input.customer.name,
             email: input.customer.email,
-            ...(testMode ? { testmode: true } : {}),
+            ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
           }),
         }, { testModeInBody: true });
         providerCustomerId = customerResponse.id?.trim();
@@ -333,7 +340,7 @@ export function createMolliePaymentProvider(options?: {
         },
         description: input.description,
         redirectUrl: input.redirectUrl,
-        webhookUrl: input.webhookUrl,
+        ...(input.webhookUrl ? { webhookUrl: input.webhookUrl } : {}),
         ...(accessToken && input.profileId?.trim()
           ? { profileId: input.profileId.trim() }
           : {}),
@@ -342,7 +349,7 @@ export function createMolliePaymentProvider(options?: {
         ...(providerCustomerId && input.sequenceType !== "first"
           ? { customerId: providerCustomerId }
           : {}),
-        ...(testMode ? { testmode: true } : {}),
+        ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
         metadata: compactMetadata(input.metadata),
       };
       const paymentPath = providerCustomerId
@@ -401,10 +408,10 @@ export function createMolliePaymentProvider(options?: {
             },
             interval: input.interval,
             description: input.description,
-            webhookUrl: input.webhookUrl,
+            ...(input.webhookUrl ? { webhookUrl: input.webhookUrl } : {}),
             method: "directdebit",
             ...(input.startDate ? { startDate: input.startDate } : {}),
-            ...(testMode ? { testmode: true } : {}),
+            ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
             metadata: compactMetadata(input.metadata),
           }),
         },
@@ -435,7 +442,7 @@ export function createMolliePaymentProvider(options?: {
               value: formatMollieAmount(input.amountCents),
             },
             description: input.description,
-            ...(testMode ? { testmode: true } : {}),
+            ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
           }),
         },
         { testModeInBody: true },

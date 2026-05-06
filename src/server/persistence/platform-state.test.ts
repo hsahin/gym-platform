@@ -1119,4 +1119,18 @@ describe("platform state", () => {
       code: "INVALID_INPUT",
     });
   });
+
+  it("retries mongo-backed state initialization after a transient connection failure", async () => {
+    vi.stubEnv("MONGODB_URI", "mongodb://127.0.0.1:1/gym-platform");
+    vi.stubEnv("MONGODB_DB_NAME", "gym-platform");
+    vi.stubEnv("CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS", "25");
+
+    await expect(readLocalPlatformState()).rejects.toThrow();
+
+    delete process.env.MONGODB_URI;
+    delete process.env.MONGODB_DB_NAME;
+    delete process.env.CLAIMTECH_MONGO_SERVER_SELECTION_TIMEOUT_MS;
+
+    await expect(readLocalPlatformState()).resolves.toBeNull();
+  });
 });

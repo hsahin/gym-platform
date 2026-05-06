@@ -96,6 +96,136 @@ describe("mollie payment provider", () => {
     });
   });
 
+  it("can create a Mollie payment intent without a webhook url for local development", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+
+      expect(init?.method).toBe("POST");
+      expect(body).toMatchObject({
+        amount: {
+          currency: "EUR",
+          value: "24.95",
+        },
+        description: "Local intake bundle",
+        redirectUrl: "http://localhost:3003/dashboard/payments?invoice=inv_local",
+      });
+      expect(body).not.toHaveProperty("webhookUrl");
+
+      return jsonResponse({
+        id: "tr_local_checkout_1",
+        status: "open",
+        _links: {
+          checkout: {
+            href: "https://pay.mollie.com/p/local-test",
+          },
+        },
+      });
+    });
+    const provider = createMolliePaymentProvider({
+      apiKey: "test_live_key",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+
+    const intent = await provider.createPaymentIntent({
+      amountCents: 2495,
+      currency: "EUR",
+      description: "Local intake bundle",
+      paymentMethod: "payment_request",
+      redirectUrl: "http://localhost:3003/dashboard/payments?invoice=inv_local",
+      metadata: {
+        invoiceId: "inv_local",
+        tenantId: "tenant_local",
+      },
+    });
+
+    expect(intent).toEqual({
+      providerPaymentId: "tr_local_checkout_1",
+      checkoutUrl: "https://pay.mollie.com/p/local-test",
+      status: "open",
+    });
+  });
+
+  it("does not send testmode for api-key based payment intents", async () => {
+    const previousTestMode = process.env.MOLLIE_TEST_MODE;
+    process.env.MOLLIE_TEST_MODE = "true";
+
+    try {
+      const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+
+        expect(body).not.toHaveProperty("testmode");
+
+        return jsonResponse({
+          id: "tr_env_testmode_1",
+          status: "open",
+          _links: {
+            checkout: {
+              href: "https://pay.mollie.com/p/env-testmode",
+            },
+          },
+        });
+      });
+      const provider = createMolliePaymentProvider({
+        apiKey: "test_live_key",
+        fetchImpl: fetchMock,
+      });
+
+      await expect(
+        provider.createPaymentIntent({
+          amountCents: 300,
+          currency: "EUR",
+          description: "Testmode invoice",
+          paymentMethod: "payment_request",
+          redirectUrl: "http://localhost:3003/dashboard/payments?invoice=inv_testmode",
+          metadata: {
+            invoiceId: "inv_testmode",
+            tenantId: "tenant_testmode",
+          },
+        }),
+      ).resolves.toMatchObject({
+        providerPaymentId: "tr_env_testmode_1",
+      });
+    } finally {
+      if (previousTestMode === undefined) {
+        delete process.env.MOLLIE_TEST_MODE;
+      } else {
+        process.env.MOLLIE_TEST_MODE = previousTestMode;
+      }
+    }
+  });
+
+  it("does not append testmode to read calls for api-key based requests", async () => {
+    const previousTestMode = process.env.MOLLIE_TEST_MODE;
+    process.env.MOLLIE_TEST_MODE = "true";
+
+    try {
+      const fetchMock = vi.fn(async (url: string | URL | Request) => {
+        expect(String(url)).toBe("https://api.mollie.com/v2/payments/tr_api_key_1");
+
+        return jsonResponse({
+          id: "tr_api_key_1",
+          status: "paid",
+        });
+      });
+      const provider = createMolliePaymentProvider({
+        apiKey: "test_live_key",
+        fetchImpl: fetchMock,
+      });
+
+      await expect(provider.getPayment("tr_api_key_1")).resolves.toMatchObject({
+        providerPaymentId: "tr_api_key_1",
+        status: "paid",
+      });
+    } finally {
+      if (previousTestMode === undefined) {
+        delete process.env.MOLLIE_TEST_MODE;
+      } else {
+        process.env.MOLLIE_TEST_MODE = previousTestMode;
+      }
+    }
+  });
+
   it("creates a customer first for automatic direct debit mandate checkout", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);

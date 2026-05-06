@@ -2483,7 +2483,10 @@ describe("gym platform services", () => {
         );
       }
 
-      if (target.endsWith("/payments/tr_signup_checkout_1") && (!init?.method || init.method === "GET")) {
+      if (
+        target.includes("/payments/tr_signup_checkout_1") &&
+        (!init?.method || init.method === "GET")
+      ) {
         return new Response(
           JSON.stringify({
             id: "tr_signup_checkout_1",
@@ -3098,6 +3101,7 @@ describe("gym platform services", () => {
           metadata?: { invoiceId?: string; tenantId?: string };
           webhookUrl?: string;
           redirectUrl?: string;
+          method?: string;
         };
 
         expect(body.amount).toEqual({ currency: "EUR", value: "119.00" });
@@ -3105,6 +3109,7 @@ describe("gym platform services", () => {
         expect(body.metadata?.invoiceId).toBeTruthy();
         expect(body.webhookUrl).toContain("/api/platform/billing/mollie/webhook");
         expect(body.redirectUrl).toContain("/dashboard/payments");
+        expect(body.method).toBeUndefined();
 
         const id = paymentCreateCount === 1 ? "tr_invoice_1" : "tr_retry_2";
         return new Response(
@@ -3121,7 +3126,7 @@ describe("gym platform services", () => {
         );
       }
 
-      if (target.endsWith("/payments/tr_retry_2") && (!init?.method || init.method === "GET")) {
+      if (target.includes("/payments/tr_retry_2") && (!init?.method || init.method === "GET")) {
         return new Response(
           JSON.stringify({
             id: "tr_retry_2",
@@ -3191,7 +3196,9 @@ describe("gym platform services", () => {
     const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
 
     expect(invoice.externalReference).toBe("tr_invoice_1");
+    expect(invoice.checkoutUrl).toBe("https://pay.mollie.com/p/tr_invoice_1");
     expect(retried.externalReference).toBe("tr_retry_2");
+    expect(retried.checkoutUrl).toBe("https://pay.mollie.com/p/tr_retry_2");
     expect(webhook).toMatchObject({
       invoiceId: invoice.id,
       eventType: "payment.paid",
@@ -4412,6 +4419,56 @@ describe("gym platform services", () => {
     expect(action.providerPaymentId).toBe("tr_request_1");
     expect(action.summary).toContain("Mollie");
     expect(action.summary).toContain("Noa van Dijk");
+  });
+
+  it("creates a local Mollie payment request without a public webhook url", async () => {
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "http://localhost:3003";
+    globalThis.fetch =
+      vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          webhookUrl?: string;
+          redirectUrl?: string;
+        };
+
+        expect(body.webhookUrl).toBeUndefined();
+        expect(body.redirectUrl).toContain("http://localhost:3003/dashboard/payments");
+
+        return new Response(
+          JSON.stringify({
+            id: "tr_request_local_1",
+            status: "open",
+            _links: {
+              checkout: {
+                href: "https://pay.mollie.com/p/request-local",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as typeof fetch;
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["direct_debit", "one_time", "payment_request"],
+    });
+
+    const action = await services.requestBillingPreview(ownerActor, tenantContext, {
+      paymentMethod: "payment_request",
+      amountCents: 2495,
+      currency: "EUR",
+      description: "Local intake bundle",
+      memberName: "Noa van Dijk",
+    });
+
+    expect(action.checkoutUrl).toBe("https://pay.mollie.com/p/request-local");
+    expect(action.providerPaymentId).toBe("tr_request_local_1");
   });
 
   it("blocks Mollie payment actions when provider access is missing", async () => {
