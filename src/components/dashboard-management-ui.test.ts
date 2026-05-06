@@ -19,18 +19,18 @@ describe("dashboard management UI wiring", () => {
     const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
     const settings = readSource("dashboard/pages/SettingsDashboardPage.tsx");
 
-    expect(members).toContain("DashboardEntityActions");
-    expect(members).toContain('endpoint="/api/platform/members"');
+    expect(members).toContain("DashboardEntityDataGrid");
+    expect(members).toContain('endpoint: "/api/platform/members"');
     expect(members).toContain("memberSearch");
     expect(members).toContain("memberStatusFilter");
 
-    expect(contracts).toContain("DashboardEntityActions");
-    expect(contracts).toContain('endpoint="/api/platform/membership-plans"');
+    expect(contracts).toContain("DashboardEntityDataGrid");
+    expect(contracts).toContain('endpoint: "/api/platform/membership-plans"');
     expect(contracts).toContain("planSearch");
     expect(contracts).toContain("planStatusFilter");
 
-    expect(classes).toContain("DashboardEntityActions");
-    expect(classes).toContain('endpoint="/api/platform/classes"');
+    expect(classes).toContain("DashboardEntityDataGrid");
+    expect(classes).toContain('endpoint: "/api/platform/classes"');
     expect(classes).toContain("classSearch");
     expect(classes).toContain("classStatusFilter");
     expect(classes).toContain("buildClassTypeTabs");
@@ -45,12 +45,35 @@ describe("dashboard management UI wiring", () => {
     expect(classes).toContain("Verwijder serie");
     expect(classes).toContain("delete_series");
 
-    expect(settings).toContain("DashboardEntityActions");
-    expect(settings).toContain('endpoint="/api/platform/locations"');
-    expect(settings).toContain('endpoint="/api/platform/trainers"');
-    expect(settings).toContain('endpoint="/api/platform/staff"');
+    expect(settings).toContain("DashboardEntityDataGrid");
+    expect(settings).toContain('endpoint: "/api/platform/locations"');
+    expect(settings).toContain('endpoint: "/api/platform/trainers"');
+    expect(settings).toContain('endpoint: "/api/platform/staff"');
     expect(settings).toContain("settingsSearch");
     expect(settings).toContain("settingsStatusFilter");
+  });
+
+  it("uses HeroUI Pro DataGrid for editable operational lists instead of expandable cards", () => {
+    const members = readSource("dashboard/pages/MembersDashboardPage.tsx");
+    const contracts = readSource("dashboard/pages/ContractsDashboardPage.tsx");
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+    const settings = readSource("dashboard/pages/SettingsDashboardPage.tsx");
+    const entityGrid = readSource("dashboard/DashboardEntityDataGrid.tsx");
+    const entityActions = readSource("DashboardEntityActions.tsx");
+
+    for (const source of [members, contracts, classes, settings]) {
+      expect(source).toContain("DashboardEntityDataGrid");
+    }
+
+    expect(entityGrid).toContain('@/components/dashboard/HydrationSafeDataGrid');
+    expect(entityGrid).toContain("allowsColumnResize");
+    expect(entityGrid).toContain('selectionMode="single"');
+    expect(entityGrid).toContain("showSelectionCheckboxes");
+    expect(entityGrid).toContain("contentClassName");
+    expect(entityGrid).toContain("Beheer");
+    expect(entityActions).not.toContain("<details");
+    expect(entityActions).not.toContain("<summary");
+    expect(entityActions).toContain("Beheer geselecteerde");
   });
 
   it("keeps dashboard list filtering on the shared management helper", () => {
@@ -340,10 +363,10 @@ describe("dashboard management UI wiring", () => {
     expect(classes).toContain("Trainer ontbreekt");
     expect(classes).toContain("buildLocationFieldOptions");
     expect(classes).toContain("buildTrainerFieldOptions");
-    expect(classes).toContain("Vestiging:");
-    expect(classes).toContain("Trainer:");
-    expect(classes).toContain("Duur:");
-    expect(classes).toContain("Capaciteit:");
+    expect(classes).toContain('header: "Vestiging"');
+    expect(classes).toContain('header: "Trainer"');
+    expect(classes).toContain('label: "Duur minuten"');
+    expect(classes).toContain('label: "Capaciteit"');
   });
 
   it("uses the HeroUI Pro KPI group for overview facts", () => {

@@ -3,15 +3,15 @@
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Chip, Input, Label, Switch, TextArea } from "@heroui/react";
-import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { BookingDialog } from "@/components/BookingDialog";
 import { CancelBookingButton } from "@/components/CancelBookingButton";
-import { DashboardEntityActions } from "@/components/DashboardEntityActions";
+import { DashboardEntityDataGrid } from "@/components/dashboard/DashboardEntityDataGrid";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
+import { type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import {
@@ -205,6 +205,106 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const trainerNameById = new Map(
     snapshot.trainers.map((trainer) => [trainer.id, trainer.fullName]),
   );
+  type ClassSessionRow = (typeof snapshot.classSessions)[number];
+  const classSessionColumns: DataGridColumn<ClassSessionRow>[] = [
+    {
+      id: "title",
+      header: "Les",
+      accessorKey: "title",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 240,
+      pinned: "start",
+      cell: (session) => (
+        <span className="grid min-w-0 gap-1">
+          <span className="truncate font-medium">{session.title}</span>
+          <span className="text-muted truncate text-xs">
+            {getBookingKindLabel(session.bookingKind ?? "class")} · {session.focus}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "startsAt",
+      header: "Start",
+      accessorKey: "startsAt",
+      allowsSorting: true,
+      minWidth: 190,
+      cell: (session) => formatDateTime(session.startsAt),
+    },
+    {
+      id: "locationId",
+      header: "Vestiging",
+      accessorKey: "locationId",
+      allowsSorting: true,
+      minWidth: 160,
+      cell: (session) =>
+        locationNameById.get(session.locationId) ??
+        (session.locationId ? `Onbekende vestiging (${session.locationId})` : "Vestiging ontbreekt"),
+    },
+    {
+      id: "trainerId",
+      header: "Trainer",
+      accessorKey: "trainerId",
+      allowsSorting: true,
+      minWidth: 170,
+      cell: (session) =>
+        (session.bookingKind ?? "class") === "open_gym"
+          ? "Geen trainer nodig"
+          : trainerNameById.get(session.trainerId) ??
+            (session.trainerId ? `Onbekende trainer (${session.trainerId})` : "Trainer ontbreekt"),
+    },
+    {
+      id: "capacity",
+      header: "Bezetting",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 120,
+      sortFn: (left, right) => left.bookedCount / left.capacity - right.bookedCount / right.capacity,
+      cell: (session) => (
+        <span className="tabular-nums">
+          {session.bookedCount}/{session.capacity}
+        </span>
+      ),
+    },
+    {
+      id: "level",
+      header: "Niveau",
+      accessorKey: "level",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (session) => (
+        <Chip size="sm" variant="tertiary">
+          {getClassLevelLabel(session.level)}
+        </Chip>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (session) => (
+        <Chip size="sm" variant="tertiary">
+          {getEntityStatusLabel(session.status)}
+        </Chip>
+      ),
+    },
+    {
+      id: "series",
+      header: "Serie",
+      minWidth: 100,
+      cell: (session) =>
+        session.seriesId ? (
+          <Chip size="sm" variant="soft">
+            Ja
+          </Chip>
+        ) : (
+          <span className="text-muted text-sm">Nee</span>
+        ),
+    },
+  ];
   const typeFilteredBookings =
     selectedClassTypeKey === ALL_CLASS_TYPE_KEY
       ? recentBookings
@@ -862,162 +962,121 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                   </label>
                 </div>
                 {filteredClassSessions.length > 0 ? (
-                <ListView aria-label="Lessen" items={filteredClassSessions}>
-                  {(session) => {
+                <DashboardEntityDataGrid
+                  ariaLabel="Lessen"
+                  columns={classSessionColumns}
+                  contentClassName="min-w-[1180px]"
+                  data={filteredClassSessions}
+                  defaultSortDescriptor={{ column: "startsAt", direction: "ascending" }}
+                  getRowId={(session) => session.id}
+                  getActionsProps={(session) => {
                     const bookingKind = session.bookingKind ?? "class";
-                    const locationName =
-                      locationNameById.get(session.locationId) ??
-                      (session.locationId
-                        ? `Onbekende vestiging (${session.locationId})`
-                        : "Vestiging ontbreekt");
-                    const trainerName =
-                      bookingKind === "open_gym"
-                        ? "Geen trainer nodig"
-                        : trainerNameById.get(session.trainerId) ??
-                          (session.trainerId
-                            ? `Onbekende trainer (${session.trainerId})`
-                            : "Trainer ontbreekt");
 
-                    return (
-                    <ListView.Item id={session.id} textValue={session.title}>
-                      <ListView.ItemContent>
-                        <ListView.Title>{session.title}</ListView.Title>
-                        <ListView.Description>
-                          <span className="block">
-                            {formatDateTime(session.startsAt)} · Vestiging: {locationName} ·
-                            Trainer: {trainerName}
-                          </span>
-                          <span className="block">
-                            Duur: {session.durationMinutes} min · Capaciteit:{" "}
-                            {session.bookedCount}/{session.capacity} · Focus: {session.focus}
-                          </span>
-                        </ListView.Description>
-                      </ListView.ItemContent>
-                      <div className="flex flex-wrap gap-2">
-                        <Chip size="sm" variant="tertiary">
-                          {getBookingKindLabel(bookingKind)}
-                        </Chip>
-                        <Chip size="sm" variant="tertiary">
-                          {getClassLevelLabel(session.level)}
-                        </Chip>
-                        <Chip size="sm" variant="tertiary">
-                          {getEntityStatusLabel(session.status)}
-                        </Chip>
-                        {session.seriesId ? (
-                          <Chip size="sm" variant="soft">
-                            Serie
-                          </Chip>
-                        ) : null}
-                      </div>
-                      <DashboardEntityActions
-                        endpoint="/api/platform/classes"
-                        entityLabel={`Les ${session.title}`}
-                        updatePayloadBase={{
-                          id: session.id,
-                          expectedVersion: session.version,
-                        }}
-                        archivePayload={{
-                          id: session.id,
-                          expectedVersion: session.version,
-                        }}
-                        deletePayload={{
-                          id: session.id,
-                          expectedVersion: session.version,
-                        }}
-                        extraActions={
-                          session.seriesId
-                            ? [
-                                {
-                                  label: "Verwijder serie",
-                                  method: "DELETE",
-                                  payload: {
-                                    operation: "delete_series",
-                                    id: session.id,
-                                    expectedVersion: session.version,
-                                  },
-                                  successMessage: `Serie ${session.title} verwijderd.`,
-                                  tone: "danger",
-                                },
-                              ]
-                            : []
-                        }
-                        fields={[
-                          { name: "title", label: "Lesnaam", defaultValue: session.title },
-                          {
-                            name: "bookingKind",
-                            label: "Boekingstype",
-                            defaultValue: bookingKind,
-                            type: "select",
-                            options: [
-                              { value: "class", label: "Les met trainer" },
-                              { value: "open_gym", label: "Boekbare gymplek" },
-                            ],
-                          },
-                          {
-                            name: "locationId",
-                            label: "Vestiging",
-                            defaultValue: session.locationId,
-                            type: "select",
-                            options: buildLocationFieldOptions(session.locationId, snapshot.locations),
-                          },
-                          {
-                            name: "trainerId",
-                            label: "Trainer",
-                            defaultValue: session.trainerId,
-                            type: "select",
-                            options: buildTrainerFieldOptions(
-                              session.trainerId,
-                              bookingKind,
-                              snapshot.trainers,
-                            ),
-                          },
-                          {
-                            name: "startsAt",
-                            label: "Starttijd",
-                            defaultValue: session.startsAt.slice(0, 16),
-                            type: "datetime-local",
-                          },
-                          {
-                            name: "durationMinutes",
-                            label: "Duur minuten",
-                            defaultValue: session.durationMinutes,
-                            type: "number",
-                          },
-                          {
-                            name: "capacity",
-                            label: "Capaciteit",
-                            defaultValue: session.capacity,
-                            type: "number",
-                          },
-                          {
-                            name: "level",
-                            label: "Niveau",
-                            defaultValue: session.level,
-                            type: "select",
-                            options: [
-                              { value: "beginner", label: "Beginner" },
-                              { value: "mixed", label: "Gemengd" },
-                              { value: "advanced", label: "Gevorderd" },
-                            ],
-                          },
-                          { name: "focus", label: "Focus", defaultValue: session.focus },
-                          {
-                            name: "status",
-                            label: "Status",
-                            defaultValue: session.status,
-                            type: "select",
-                            options: [
-                              { value: "active", label: "Actief" },
-                              { value: "paused", label: "Gepauzeerd" },
-                              { value: "archived", label: "Gearchiveerd" },
-                            ],
-                          },
-                        ]}
-                      />
-                    </ListView.Item>
-                    );
+                    return {
+                      endpoint: "/api/platform/classes",
+                      entityLabel: `Les ${session.title}`,
+                      updatePayloadBase: {
+                        id: session.id,
+                        expectedVersion: session.version,
+                      },
+                      archivePayload: {
+                        id: session.id,
+                        expectedVersion: session.version,
+                      },
+                      deletePayload: {
+                        id: session.id,
+                        expectedVersion: session.version,
+                      },
+                      extraActions: session.seriesId
+                        ? [
+                            {
+                              label: "Verwijder serie",
+                              method: "DELETE",
+                              payload: {
+                                operation: "delete_series",
+                                id: session.id,
+                                expectedVersion: session.version,
+                              },
+                              successMessage: `Serie ${session.title} verwijderd.`,
+                              tone: "danger",
+                            },
+                          ]
+                        : [],
+                      fields: [
+                        { name: "title", label: "Lesnaam", defaultValue: session.title },
+                        {
+                          name: "bookingKind",
+                          label: "Boekingstype",
+                          defaultValue: bookingKind,
+                          type: "select",
+                          options: [
+                            { value: "class", label: "Les met trainer" },
+                            { value: "open_gym", label: "Boekbare gymplek" },
+                          ],
+                        },
+                        {
+                          name: "locationId",
+                          label: "Vestiging",
+                          defaultValue: session.locationId,
+                          type: "select",
+                          options: buildLocationFieldOptions(session.locationId, snapshot.locations),
+                        },
+                        {
+                          name: "trainerId",
+                          label: "Trainer",
+                          defaultValue: session.trainerId,
+                          type: "select",
+                          options: buildTrainerFieldOptions(
+                            session.trainerId,
+                            bookingKind,
+                            snapshot.trainers,
+                          ),
+                        },
+                        {
+                          name: "startsAt",
+                          label: "Starttijd",
+                          defaultValue: session.startsAt.slice(0, 16),
+                          type: "datetime-local",
+                        },
+                        {
+                          name: "durationMinutes",
+                          label: "Duur minuten",
+                          defaultValue: session.durationMinutes,
+                          type: "number",
+                        },
+                        {
+                          name: "capacity",
+                          label: "Capaciteit",
+                          defaultValue: session.capacity,
+                          type: "number",
+                        },
+                        {
+                          name: "level",
+                          label: "Niveau",
+                          defaultValue: session.level,
+                          type: "select",
+                          options: [
+                            { value: "beginner", label: "Beginner" },
+                            { value: "mixed", label: "Gemengd" },
+                            { value: "advanced", label: "Gevorderd" },
+                          ],
+                        },
+                        { name: "focus", label: "Focus", defaultValue: session.focus },
+                        {
+                          name: "status",
+                          label: "Status",
+                          defaultValue: session.status,
+                          type: "select",
+                          options: [
+                            { value: "active", label: "Actief" },
+                            { value: "paused", label: "Gepauzeerd" },
+                            { value: "archived", label: "Gearchiveerd" },
+                          ],
+                        },
+                      ],
+                    };
                   }}
-                </ListView>
+                />
                 ) : (
                   <EmptyPanel
                     title="Geen lessen gevonden"

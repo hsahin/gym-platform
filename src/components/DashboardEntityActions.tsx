@@ -3,6 +3,7 @@
 import { useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { buildMutationHeaders } from "@/lib/mutation-security-client";
 
 export interface EntityActionOption {
@@ -27,11 +28,11 @@ export interface EntityExtraAction {
 }
 
 function inputClassName() {
-  return "mt-1 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-orange-400";
+  return "mt-1 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-accent";
 }
 
 function textareaClassName() {
-  return "mt-1 min-h-20 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-orange-400";
+  return "mt-1 min-h-24 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-accent";
 }
 
 async function submitEntityMutation(
@@ -78,6 +79,28 @@ function readFieldValue(formData: FormData, field: EntityActionField) {
   }
 }
 
+export interface DashboardEntityActionsProps {
+  endpoint: string;
+  updatePayloadBase: Record<string, unknown>;
+  archivePayload: Record<string, unknown>;
+  deletePayload: Record<string, unknown>;
+  fields: ReadonlyArray<EntityActionField>;
+  entityLabel: string;
+  extraActions?: ReadonlyArray<EntityExtraAction>;
+}
+
+function extraActionVariant(action: EntityExtraAction) {
+  if (action.tone === "danger") {
+    return "danger-soft" as const;
+  }
+
+  if (action.tone === "warning") {
+    return "outline" as const;
+  }
+
+  return "ghost" as const;
+}
+
 export function DashboardEntityActions({
   endpoint,
   updatePayloadBase,
@@ -86,15 +109,7 @@ export function DashboardEntityActions({
   fields,
   entityLabel,
   extraActions = [],
-}: {
-  endpoint: string;
-  updatePayloadBase: Record<string, unknown>;
-  archivePayload: Record<string, unknown>;
-  deletePayload: Record<string, unknown>;
-  fields: ReadonlyArray<EntityActionField>;
-  entityLabel: string;
-  extraActions?: ReadonlyArray<EntityExtraAction>;
-}) {
+}: DashboardEntityActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -128,15 +143,16 @@ export function DashboardEntityActions({
   }
 
   return (
-    <details className="mt-3 rounded-xl border border-white/[0.08] bg-black/25 p-3">
-      <summary className="cursor-pointer text-sm font-medium text-orange-200">
-        Beheer {entityLabel.toLowerCase()}
-      </summary>
-      <form className="mt-3 grid gap-3 md:grid-cols-2" onSubmit={updateEntity}>
+    <div className="rounded-2xl border border-border bg-surface-secondary p-4">
+      <div className="mb-4">
+        <p className="text-sm font-semibold">Beheer geselecteerde</p>
+        <p className="text-muted mt-1 text-sm">{entityLabel}</p>
+      </div>
+      <form className="grid gap-3 md:grid-cols-2" onSubmit={updateEntity}>
         {fields.map((field) => (
           <label
             key={field.name}
-            className={`text-xs font-medium text-white/55 ${
+            className={`text-xs font-medium text-muted ${
               field.type === "textarea" || field.type === "list" ? "md:col-span-2" : ""
             }`}
           >
@@ -170,18 +186,15 @@ export function DashboardEntityActions({
           </label>
         ))}
         <div className="flex flex-wrap justify-end gap-2 md:col-span-2">
-          <button
-            className="rounded-full border border-white/10 px-3 py-2 text-xs font-medium text-white/70 transition hover:border-orange-300 hover:text-white"
-            type="submit"
-            disabled={isPending}
-          >
+          <Button isDisabled={isPending} size="sm" type="submit" variant="primary">
             Opslaan
-          </button>
-          <button
-            className="rounded-full border border-amber-400/30 px-3 py-2 text-xs font-medium text-amber-200 transition hover:bg-amber-400/10"
+          </Button>
+          <Button
+            isDisabled={isPending}
+            size="sm"
             type="button"
-            disabled={isPending}
-            onClick={() =>
+            variant="outline"
+            onPress={() =>
               run(
                 () =>
                   submitEntityMutation(endpoint, "PATCH", {
@@ -193,12 +206,13 @@ export function DashboardEntityActions({
             }
           >
             Archiveer
-          </button>
-          <button
-            className="rounded-full border border-red-400/30 px-3 py-2 text-xs font-medium text-red-200 transition hover:bg-red-400/10"
+          </Button>
+          <Button
+            isDisabled={isPending}
+            size="sm"
             type="button"
-            disabled={isPending}
-            onClick={() =>
+            variant="danger-soft"
+            onPress={() =>
               run(
                 () => submitEntityMutation(endpoint, "DELETE", deletePayload),
                 `${entityLabel} verwijderd.`,
@@ -206,20 +220,15 @@ export function DashboardEntityActions({
             }
           >
             Verwijder
-          </button>
+          </Button>
           {extraActions.map((action) => (
-            <button
+            <Button
               key={action.label}
-              className={`rounded-full border px-3 py-2 text-xs font-medium transition ${
-                action.tone === "danger"
-                  ? "border-red-400/30 text-red-200 hover:bg-red-400/10"
-                  : action.tone === "warning"
-                    ? "border-amber-400/30 text-amber-200 hover:bg-amber-400/10"
-                    : "border-white/10 text-white/70 hover:border-orange-300 hover:text-white"
-              }`}
+              isDisabled={isPending}
+              size="sm"
               type="button"
-              disabled={isPending}
-              onClick={() =>
+              variant={extraActionVariant(action)}
+              onPress={() =>
                 run(
                   () => submitEntityMutation(endpoint, action.method, action.payload),
                   action.successMessage,
@@ -227,10 +236,10 @@ export function DashboardEntityActions({
               }
             >
               {action.label}
-            </button>
+            </Button>
           ))}
         </div>
       </form>
-    </details>
+    </div>
   );
 }

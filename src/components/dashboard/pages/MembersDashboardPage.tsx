@@ -4,10 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Chip, Input, Label } from "@heroui/react";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
-import { ListView } from "@/components/dashboard/HydrationSafeListView";
+import {
+  DataGrid,
+  type DataGridColumn,
+} from "@/components/dashboard/HydrationSafeDataGrid";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
-import { DashboardEntityActions } from "@/components/DashboardEntityActions";
+import { DashboardEntityDataGrid } from "@/components/dashboard/DashboardEntityDataGrid";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
@@ -51,6 +54,139 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
     filterKey: "status",
     filterValue: memberStatusFilter,
   });
+  type MemberRow = (typeof snapshot.members)[number];
+  type WaiverRow = (typeof snapshot.waivers)[number];
+  const memberColumns: DataGridColumn<MemberRow>[] = [
+    {
+      id: "fullName",
+      header: "Lid",
+      accessorKey: "fullName",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+      cell: (member) => (
+        <span className="grid min-w-0 gap-1">
+          <span className="truncate font-medium">{member.fullName}</span>
+          <span className="text-muted truncate text-xs">
+            {member.email} · {formatDate(member.joinedAt)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "membershipPlanId",
+      header: "Lidmaatschap",
+      accessorKey: "membershipPlanId",
+      allowsSorting: true,
+      minWidth: 160,
+      cell: (member) => membershipPlansById.get(member.membershipPlanId) ?? member.membershipPlanId,
+    },
+    {
+      id: "homeLocationId",
+      header: "Vestiging",
+      accessorKey: "homeLocationId",
+      allowsSorting: true,
+      minWidth: 150,
+      cell: (member) => locationsById.get(member.homeLocationId) ?? member.homeLocationId,
+    },
+    {
+      id: "phone",
+      header: "Telefoon",
+      accessorKey: "phone",
+      minWidth: 140,
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 120,
+      cell: (member) => {
+        const chip = statusChip(member.status);
+
+        return (
+          <Chip color={chip.color} size="sm" variant={chip.variant}>
+            {getMemberStatusLabel(member.status)}
+          </Chip>
+        );
+      },
+    },
+    {
+      id: "waiverStatus",
+      header: "Waiver",
+      accessorKey: "waiverStatus",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (member) => (
+        <Chip size="sm" variant="tertiary">
+          {getWaiverStatusLabel(member.waiverStatus)}
+        </Chip>
+      ),
+    },
+    {
+      id: "portal",
+      header: "Portaal",
+      minWidth: 110,
+      cell: (member) =>
+        snapshot.memberPortalAccessMemberIds.includes(member.id) ? (
+          <Chip size="sm" variant="soft">
+            Actief
+          </Chip>
+        ) : (
+          <span className="text-muted text-sm">Niet actief</span>
+        ),
+    },
+    {
+      id: "tags",
+      header: "Tags",
+      minWidth: 180,
+      cell: (member) => (
+        <span className="text-muted line-clamp-1 text-sm">
+          {member.tags.length > 0 ? member.tags.join(", ") : "Geen tags"}
+        </span>
+      ),
+    },
+  ];
+  const waiverColumns: DataGridColumn<WaiverRow>[] = [
+    {
+      id: "memberName",
+      header: "Lid",
+      accessorKey: "memberName",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+    },
+    {
+      id: "fileName",
+      header: "Document",
+      minWidth: 220,
+      cell: (waiver) => waiver.fileName ?? "Nog geen document",
+    },
+    {
+      id: "expiresAt",
+      header: "Verloopt",
+      minWidth: 150,
+      cell: (waiver) => (waiver.expiresAt ? formatDate(waiver.expiresAt) : "Geen verloopdatum"),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (waiver) => {
+        const chip = statusChip(waiver.status);
+
+        return (
+          <Chip color={chip.color} size="sm" variant={chip.variant}>
+            {getWaiverRecordStatusLabel(waiver.status)}
+          </Chip>
+        );
+      },
+    },
+  ];
 
   function updateSignupDraft(signupId: string, patch: Partial<(typeof signupDrafts)[string]>) {
     setSignupDrafts((current) => ({
@@ -108,109 +244,88 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                 </label>
               </div>
               {filteredMembers.length > 0 ? (
-              <ListView aria-label="Leden" items={filteredMembers}>
-                {(member) => {
-                  const chip = statusChip(member.status);
-
-                  return (
-                    <ListView.Item id={member.id} textValue={member.fullName}>
-                      <ListView.ItemContent>
-                        <ListView.Title>{member.fullName}</ListView.Title>
-                        <ListView.Description>
-                          {member.email} · {formatDate(member.joinedAt)}
-                        </ListView.Description>
-                      </ListView.ItemContent>
-                      <div className="flex flex-wrap gap-2">
-                        <Chip color={chip.color} size="sm" variant={chip.variant}>
-                          {getMemberStatusLabel(member.status)}
-                        </Chip>
-                        <Chip size="sm" variant="tertiary">
-                          {getWaiverStatusLabel(member.waiverStatus)}
-                        </Chip>
-                        {snapshot.memberPortalAccessMemberIds.includes(member.id) ? (
-                          <Chip size="sm" variant="soft">
-                            portal
-                          </Chip>
-                        ) : null}
-                      </div>
-                      <DashboardEntityActions
-                        endpoint="/api/platform/members"
-                        entityLabel={`Lid ${member.fullName}`}
-                        updatePayloadBase={{
-                          id: member.id,
-                          expectedVersion: member.version,
-                        }}
-                        archivePayload={{
-                          id: member.id,
-                          expectedVersion: member.version,
-                        }}
-                        deletePayload={{
-                          id: member.id,
-                          expectedVersion: member.version,
-                        }}
-                        fields={[
-                          { name: "fullName", label: "Naam", defaultValue: member.fullName },
-                          { name: "email", label: "E-mail", defaultValue: member.email, type: "email" },
-                          { name: "phone", label: "Telefoon", defaultValue: member.phone },
-                          {
-                            name: "phoneCountry",
-                            label: "Landcode",
-                            defaultValue: member.phoneCountry,
-                            type: "select",
-                            options: ["NL", "BE", "DE", "GB", "US", "AE"].map((country) => ({
-                              value: country,
-                              label: country,
-                            })),
-                          },
-                          {
-                            name: "membershipPlanId",
-                            label: "Lidmaatschap",
-                            defaultValue: member.membershipPlanId,
-                            type: "select",
-                            options: snapshot.membershipPlans.map((plan) => ({
-                              value: plan.id,
-                              label: plan.name,
-                            })),
-                          },
-                          {
-                            name: "homeLocationId",
-                            label: "Vestiging",
-                            defaultValue: member.homeLocationId,
-                            type: "select",
-                            options: snapshot.locations.map((location) => ({
-                              value: location.id,
-                              label: location.name,
-                            })),
-                          },
-                          {
-                            name: "status",
-                            label: "Status",
-                            defaultValue: member.status,
-                            type: "select",
-                            options: [
-                              { value: "active", label: "Actief" },
-                              { value: "trial", label: "Proeflid" },
-                              { value: "paused", label: "Gepauzeerd" },
-                              { value: "archived", label: "Gearchiveerd" },
-                            ],
-                          },
-                          {
-                            name: "waiverStatus",
-                            label: "Waiver",
-                            defaultValue: member.waiverStatus,
-                            type: "select",
-                            options: [
-                              { value: "complete", label: "Compleet" },
-                              { value: "pending", label: "Open" },
-                            ],
-                          },
-                          { name: "tags", label: "Tags", defaultValue: member.tags, type: "list" },
-                        ]}
-                      />
-                    </ListView.Item>
-                  );
-                }}
-              </ListView>
+              <DashboardEntityDataGrid
+                ariaLabel="Leden"
+                columns={memberColumns}
+                contentClassName="min-w-[1180px]"
+                data={filteredMembers}
+                defaultSortDescriptor={{ column: "fullName", direction: "ascending" }}
+                getRowId={(member) => member.id}
+                getActionsProps={(member) => ({
+                  endpoint: "/api/platform/members",
+                  entityLabel: `Lid ${member.fullName}`,
+                  updatePayloadBase: {
+                    id: member.id,
+                    expectedVersion: member.version,
+                  },
+                  archivePayload: {
+                    id: member.id,
+                    expectedVersion: member.version,
+                  },
+                  deletePayload: {
+                    id: member.id,
+                    expectedVersion: member.version,
+                  },
+                  fields: [
+                    { name: "fullName", label: "Naam", defaultValue: member.fullName },
+                    { name: "email", label: "E-mail", defaultValue: member.email, type: "email" },
+                    { name: "phone", label: "Telefoon", defaultValue: member.phone },
+                    {
+                      name: "phoneCountry",
+                      label: "Landcode",
+                      defaultValue: member.phoneCountry,
+                      type: "select",
+                      options: ["NL", "BE", "DE", "GB", "US", "AE"].map((country) => ({
+                        value: country,
+                        label: country,
+                      })),
+                    },
+                    {
+                      name: "membershipPlanId",
+                      label: "Lidmaatschap",
+                      defaultValue: member.membershipPlanId,
+                      type: "select",
+                      options: snapshot.membershipPlans.map((plan) => ({
+                        value: plan.id,
+                        label: plan.name,
+                      })),
+                    },
+                    {
+                      name: "homeLocationId",
+                      label: "Vestiging",
+                      defaultValue: member.homeLocationId,
+                      type: "select",
+                      options: snapshot.locations.map((location) => ({
+                        value: location.id,
+                        label: location.name,
+                      })),
+                    },
+                    {
+                      name: "status",
+                      label: "Status",
+                      defaultValue: member.status,
+                      type: "select",
+                      options: [
+                        { value: "active", label: "Actief" },
+                        { value: "trial", label: "Proeflid" },
+                        { value: "paused", label: "Gepauzeerd" },
+                        { value: "archived", label: "Gearchiveerd" },
+                      ],
+                    },
+                    {
+                      name: "waiverStatus",
+                      label: "Waiver",
+                      defaultValue: member.waiverStatus,
+                      type: "select",
+                      options: [
+                        { value: "complete", label: "Compleet" },
+                        { value: "pending", label: "Open" },
+                      ],
+                    },
+                    { name: "tags", label: "Tags", defaultValue: member.tags, type: "list" },
+                  ],
+                })}
+              />
               ) : (
                 <EmptyPanel
                   title="Geen leden gevonden"
@@ -225,26 +340,15 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
               />
             )
           ) : snapshot.waivers.length > 0 ? (
-            <ListView aria-label="Waivers" items={snapshot.waivers}>
-              {(waiver) => {
-                const chip = statusChip(waiver.status);
-
-                return (
-                  <ListView.Item id={waiver.memberId} textValue={waiver.memberName}>
-                    <ListView.ItemContent>
-                      <ListView.Title>{waiver.memberName}</ListView.Title>
-                      <ListView.Description>
-                        {waiver.fileName ?? "Nog geen document"} ·{" "}
-                        {waiver.expiresAt ? formatDate(waiver.expiresAt) : "Geen verloopdatum"}
-                      </ListView.Description>
-                    </ListView.ItemContent>
-                    <Chip color={chip.color} size="sm" variant={chip.variant}>
-                      {getWaiverRecordStatusLabel(waiver.status)}
-                    </Chip>
-                  </ListView.Item>
-                );
-              }}
-            </ListView>
+            <DataGrid
+              allowsColumnResize
+              aria-label="Waivers"
+              columns={waiverColumns}
+              contentClassName="min-w-[720px]"
+              data={[...snapshot.waivers]}
+              defaultSortDescriptor={{ column: "memberName", direction: "ascending" }}
+              getRowId={(waiver) => waiver.memberId}
+            />
           ) : (
             <EmptyPanel
               title="Nog geen waivers"

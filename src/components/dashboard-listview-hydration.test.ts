@@ -4,12 +4,14 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
+import { DataGrid } from "@/components/dashboard/HydrationSafeDataGrid";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 
 const dashboardDirectory = path.join(process.cwd(), "src/components/dashboard");
 const adapterFile = path.join(dashboardDirectory, "HydrationSafeListView.tsx");
+const dataGridAdapterFile = path.join(dashboardDirectory, "HydrationSafeDataGrid.tsx");
 const buttonAdapterFile = path.join(dashboardDirectory, "HydrationSafeButton.tsx");
 const nativeSelectAdapterFile = path.join(
   dashboardDirectory,
@@ -67,6 +69,30 @@ describe("dashboard ListView hydration safety", () => {
     }
   });
 
+  it("routes editable dashboard DataGrid usage through the hydration-safe adapter", async () => {
+    const dashboardFiles = (await collectComponentFiles(dashboardDirectory)).filter(
+      (filePath) => filePath !== dataGridAdapterFile,
+    );
+    const files = await Promise.all(
+      dashboardFiles.map(async (filePath) => ({
+        fileName: path.relative(process.cwd(), filePath),
+        source: await readFile(filePath, "utf8"),
+      })),
+    );
+
+    for (const file of files) {
+      expect(file.source, `${file.fileName} imports raw HeroUI DataGrid`).not.toContain(
+        '@heroui-pro/react/data-grid',
+      );
+
+      if (file.source.includes("<DataGrid")) {
+        expect(file.source, `${file.fileName} must import the safe DataGrid`).toContain(
+          '@/components/dashboard/HydrationSafeDataGrid',
+        );
+      }
+    }
+  });
+
   it("keeps the adapter SSR-stable before mounting React Aria ListView", async () => {
     const source = await readFile(adapterFile, "utf8");
 
@@ -96,11 +122,41 @@ describe("dashboard ListView hydration safety", () => {
     expect(fallbackMarkup).toContain("Hydration-safe list");
   });
 
+  it("keeps the DataGrid adapter SSR-stable before mounting React Aria DataGrid", async () => {
+    const source = await readFile(dataGridAdapterFile, "utf8");
+
+    expect(source).toContain('@heroui-pro/react/data-grid');
+    expect(source).toContain("data-hydration-safe-data-grid");
+    expect(source).toContain("suppressHydrationWarning");
+    expect(source).toContain("useEffect");
+    expect(DataGrid).toBeTypeOf("function");
+
+    const DataGridForRender = DataGrid as unknown as (
+      props: Record<string, unknown>,
+    ) => ReactElement;
+    const fallbackMarkup = renderToStaticMarkup(
+      (createElement as typeof createElement & ((...args: unknown[]) => ReactElement))(
+        DataGridForRender,
+        {
+          "aria-label": "Hydration-safe data grid",
+          className: "dashboard-grid",
+          columns: [],
+          data: [],
+          getRowId: () => "row",
+        },
+      ),
+    );
+
+    expect(fallbackMarkup).toContain("data-hydration-safe-data-grid");
+    expect(fallbackMarkup).toContain("Hydration-safe data grid");
+  });
+
   it("routes React Aria style dashboard controls through hydration-safe adapters", async () => {
     const dashboardFiles = (await collectComponentFiles(dashboardDirectory)).filter(
       (filePath) =>
         ![
           adapterFile,
+          dataGridAdapterFile,
           buttonAdapterFile,
           nativeSelectAdapterFile,
           segmentAdapterFile,

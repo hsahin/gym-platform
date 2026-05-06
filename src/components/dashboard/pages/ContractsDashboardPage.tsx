@@ -4,8 +4,9 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Chip, Input, Label } from "@heroui/react";
 import { toast } from "sonner";
-import { DashboardEntityActions } from "@/components/DashboardEntityActions";
+import { DashboardEntityDataGrid } from "@/components/dashboard/DashboardEntityDataGrid";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
+import { type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
@@ -49,6 +50,68 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
     filterKey: "status",
     filterValue: planStatusFilter,
   });
+  type MembershipPlanRow = (typeof snapshot.membershipPlans)[number];
+  const planColumns: DataGridColumn<MembershipPlanRow>[] = [
+    {
+      id: "name",
+      header: "Lidmaatschap",
+      accessorKey: "name",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+      cell: (plan) => (
+        <span className="grid min-w-0 gap-1">
+          <span className="truncate font-medium">{plan.name}</span>
+          <span className="text-muted truncate text-xs">
+            {plan.perks.length > 0 ? plan.perks.join(", ") : "Geen voordelen"}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "priceMonthly",
+      header: "Prijs",
+      accessorKey: "priceMonthly",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 110,
+      cell: (plan) => <span className="tabular-nums">EUR {plan.priceMonthly}/maand</span>,
+    },
+    {
+      id: "billingCycle",
+      header: "Contractduur",
+      accessorKey: "billingCycle",
+      allowsSorting: true,
+      minWidth: 150,
+      cell: (plan) => (
+        <Chip size="sm" variant="soft">
+          {getMembershipBillingCycleLabel(plan.billingCycle)}
+        </Chip>
+      ),
+    },
+    {
+      id: "activeMembers",
+      header: "Actieve leden",
+      accessorKey: "activeMembers",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (plan) => <span className="tabular-nums">{plan.activeMembers}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (plan) => (
+        <Chip size="sm" variant="tertiary">
+          {getEntityStatusLabel(plan.status)}
+        </Chip>
+      ),
+    },
+  ];
   const trainerNamesById = new Map(
     snapshot.trainers.map((trainer) => [trainer.id, trainer.fullName]),
   );
@@ -139,88 +202,67 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
             </label>
           </div>
           {filteredPlans.length > 0 ? (
-          <div className="grid gap-3">
-            {filteredPlans.map((plan) => (
-              <Card key={plan.id} className="rounded-2xl border-border/80">
-                <Card.Content className="grid gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="font-medium">{plan.name}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Chip size="sm" variant="soft">
-                        {getMembershipBillingCycleLabel(plan.billingCycle)}
-                      </Chip>
-                      <Chip size="sm" variant="tertiary">
-                        {getEntityStatusLabel(plan.status)}
-                      </Chip>
-                    </div>
-                  </div>
-                  <p className="text-muted text-sm">
-                    EUR {plan.priceMonthly}/maand · {plan.activeMembers} actieve leden
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {plan.perks.map((perk) => (
-                      <Chip key={perk} size="sm" variant="tertiary">
-                        {perk}
-                      </Chip>
-                    ))}
-                  </div>
-                  <DashboardEntityActions
-                    endpoint="/api/platform/membership-plans"
-                    entityLabel={`Lidmaatschap ${plan.name}`}
-                    updatePayloadBase={{
-                      id: plan.id,
-                      expectedVersion: plan.version,
-                    }}
-                    archivePayload={{
-                      id: plan.id,
-                      expectedVersion: plan.version,
-                    }}
-                    deletePayload={{
-                      id: plan.id,
-                      expectedVersion: plan.version,
-                    }}
-                    fields={[
-                      { name: "name", label: "Naam", defaultValue: plan.name },
-                      {
-                        name: "priceMonthly",
-                        label: "Prijs per maand",
-                        defaultValue: plan.priceMonthly,
-                        type: "number",
-                      },
-                      {
-                        name: "billingCycle",
-                        label: "Contractduur",
-                        defaultValue: plan.billingCycle,
-                        type: "select",
-                        options: [
-                          { value: "monthly", label: "Maand" },
-                          { value: "semiannual", label: "6 maanden" },
-                          { value: "annual", label: "Jaar" },
-                        ],
-                      },
-                      {
-                        name: "status",
-                        label: "Status",
-                        defaultValue: plan.status,
-                        type: "select",
-                        options: [
-                          { value: "active", label: "Actief" },
-                          { value: "paused", label: "Gepauzeerd" },
-                          { value: "archived", label: "Gearchiveerd" },
-                        ],
-                      },
-                      {
-                        name: "perks",
-                        label: "Voordelen",
-                        defaultValue: plan.perks,
-                        type: "list",
-                      },
-                    ]}
-                  />
-                </Card.Content>
-              </Card>
-            ))}
-          </div>
+          <DashboardEntityDataGrid
+            ariaLabel="Lidmaatschappen"
+            columns={planColumns}
+            contentClassName="min-w-[900px]"
+            data={filteredPlans}
+            defaultSortDescriptor={{ column: "name", direction: "ascending" }}
+            getRowId={(plan) => plan.id}
+            getActionsProps={(plan) => ({
+              endpoint: "/api/platform/membership-plans",
+              entityLabel: `Lidmaatschap ${plan.name}`,
+              updatePayloadBase: {
+                id: plan.id,
+                expectedVersion: plan.version,
+              },
+              archivePayload: {
+                id: plan.id,
+                expectedVersion: plan.version,
+              },
+              deletePayload: {
+                id: plan.id,
+                expectedVersion: plan.version,
+              },
+              fields: [
+                { name: "name", label: "Naam", defaultValue: plan.name },
+                {
+                  name: "priceMonthly",
+                  label: "Prijs per maand",
+                  defaultValue: plan.priceMonthly,
+                  type: "number",
+                },
+                {
+                  name: "billingCycle",
+                  label: "Contractduur",
+                  defaultValue: plan.billingCycle,
+                  type: "select",
+                  options: [
+                    { value: "monthly", label: "Maand" },
+                    { value: "semiannual", label: "6 maanden" },
+                    { value: "annual", label: "Jaar" },
+                  ],
+                },
+                {
+                  name: "status",
+                  label: "Status",
+                  defaultValue: plan.status,
+                  type: "select",
+                  options: [
+                    { value: "active", label: "Actief" },
+                    { value: "paused", label: "Gepauzeerd" },
+                    { value: "archived", label: "Gearchiveerd" },
+                  ],
+                },
+                {
+                  name: "perks",
+                  label: "Voordelen",
+                  defaultValue: plan.perks,
+                  type: "list",
+                },
+              ],
+            })}
+          />
           ) : (
             <EmptyPanel
               title="Geen lidmaatschappen gevonden"

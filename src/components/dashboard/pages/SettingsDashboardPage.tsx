@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ShieldCheck, Users } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { Card, Chip, Input, Label } from "@heroui/react";
-import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
-import { DashboardEntityActions } from "@/components/DashboardEntityActions";
+import { DashboardEntityDataGrid } from "@/components/dashboard/DashboardEntityDataGrid";
+import { type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import { LazyPlatformWorkbench } from "@/components/dashboard/LazyPlatformWorkbench";
 import { EmptyPanel, PageSection, type DashboardPageProps } from "@/components/dashboard/shared";
@@ -42,6 +42,146 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
     filterKey: "status",
     filterValue: settingsStatusFilter,
   });
+  type LocationRow = (typeof snapshot.locations)[number];
+  type TrainerRow = (typeof snapshot.trainers)[number];
+  type StaffRow = (typeof snapshot.staff)[number];
+  const locationColumns: DataGridColumn<LocationRow>[] = [
+    {
+      id: "name",
+      header: "Vestiging",
+      accessorKey: "name",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+      cell: (location) => (
+        <span className="grid min-w-0 gap-1">
+          <span className="truncate font-medium">{location.name}</span>
+          <span className="text-muted truncate text-xs">
+            {location.city} · {location.neighborhood}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "managerName",
+      header: "Manager",
+      accessorKey: "managerName",
+      allowsSorting: true,
+      minWidth: 170,
+    },
+    {
+      id: "capacity",
+      header: "Capaciteit",
+      accessorKey: "capacity",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 120,
+      cell: (location) => <span className="tabular-nums">{location.capacity}</span>,
+    },
+    {
+      id: "amenities",
+      header: "Voorzieningen",
+      minWidth: 220,
+      cell: (location) => (
+        <span className="text-muted line-clamp-1 text-sm">
+          {location.amenities.length > 0 ? location.amenities.join(", ") : "Geen voorzieningen"}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (location) => (
+        <Chip size="sm" variant="tertiary">
+          {getEntityStatusLabel(location.status)}
+        </Chip>
+      ),
+    },
+  ];
+  const trainerColumns: DataGridColumn<TrainerRow>[] = [
+    {
+      id: "fullName",
+      header: "Trainer",
+      accessorKey: "fullName",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+    },
+    {
+      id: "homeLocationId",
+      header: "Vestiging",
+      accessorKey: "homeLocationId",
+      allowsSorting: true,
+      minWidth: 170,
+      cell: (trainer) =>
+        snapshot.locations.find((location) => location.id === trainer.homeLocationId)?.name ??
+        "Onbekende vestiging",
+    },
+    {
+      id: "specialties",
+      header: "Specialisaties",
+      minWidth: 230,
+      cell: (trainer) => (
+        <span className="text-muted line-clamp-1 text-sm">
+          {[...trainer.specialties, ...trainer.certifications].join(", ") || "Geen specialisaties"}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (trainer) => (
+        <Chip size="sm" variant="tertiary">
+          {getTrainerStatusLabel(trainer.status)}
+        </Chip>
+      ),
+    },
+  ];
+  const staffColumns: DataGridColumn<StaffRow>[] = [
+    {
+      id: "displayName",
+      header: "Medewerker",
+      accessorKey: "displayName",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+      cell: (member) => (
+        <span className="grid min-w-0 gap-1">
+          <span className="truncate font-medium">{member.displayName}</span>
+          <span className="text-muted truncate text-xs">{member.email}</span>
+        </span>
+      ),
+    },
+    {
+      id: "roleKey",
+      header: "Rol",
+      accessorKey: "roleKey",
+      allowsSorting: true,
+      minWidth: 160,
+      cell: (member) => member.roles.map(getRoleLabel).join(", "),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (member) => (
+        <Chip size="sm" variant="tertiary">
+          {getEntityStatusLabel(member.status)}
+        </Chip>
+      ),
+    },
+  ];
 
   return (
     <div className="section-stack">
@@ -91,81 +231,67 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                   </label>
                 </div>
                 {filteredLocations.length > 0 ? (
-                filteredLocations.map((location) => (
-                  <Card key={location.id} className="rounded-2xl border-border/80">
-                    <Card.Content className="space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="font-medium">{location.name}</p>
-                        <Chip size="sm" variant="tertiary">
-                          {getEntityStatusLabel(location.status)}
-                        </Chip>
-                      </div>
-                      <p className="text-muted text-sm">
-                        {location.city} · {location.neighborhood} · {location.capacity} capaciteit
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {location.amenities.map((amenity) => (
-                          <Chip key={amenity} size="sm" variant="tertiary">
-                            {amenity}
-                          </Chip>
-                        ))}
-                      </div>
-                      <DashboardEntityActions
-                        endpoint="/api/platform/locations"
-                        entityLabel={`Vestiging ${location.name}`}
-                        updatePayloadBase={{
-                          id: location.id,
-                          expectedVersion: location.version,
-                        }}
-                        archivePayload={{
-                          id: location.id,
-                          expectedVersion: location.version,
-                        }}
-                        deletePayload={{
-                          id: location.id,
-                          expectedVersion: location.version,
-                        }}
-                        fields={[
-                          { name: "name", label: "Naam", defaultValue: location.name },
-                          { name: "city", label: "Stad", defaultValue: location.city },
-                          {
-                            name: "neighborhood",
-                            label: "Wijk",
-                            defaultValue: location.neighborhood,
-                          },
-                          {
-                            name: "capacity",
-                            label: "Capaciteit",
-                            defaultValue: location.capacity,
-                            type: "number",
-                          },
-                          {
-                            name: "managerName",
-                            label: "Manager",
-                            defaultValue: location.managerName,
-                          },
-                          {
-                            name: "status",
-                            label: "Status",
-                            defaultValue: location.status,
-                            type: "select",
-                            options: [
-                              { value: "active", label: "Actief" },
-                              { value: "paused", label: "Gepauzeerd" },
-                              { value: "archived", label: "Gearchiveerd" },
-                            ],
-                          },
-                          {
-                            name: "amenities",
-                            label: "Voorzieningen",
-                            defaultValue: location.amenities,
-                            type: "list",
-                          },
-                        ]}
-                      />
-                    </Card.Content>
-                  </Card>
-                ))
+                <DashboardEntityDataGrid
+                  ariaLabel="Vestigingen"
+                  columns={locationColumns}
+                  contentClassName="min-w-[980px]"
+                  data={filteredLocations}
+                  defaultSortDescriptor={{ column: "name", direction: "ascending" }}
+                  getRowId={(location) => location.id}
+                  getActionsProps={(location) => ({
+                    endpoint: "/api/platform/locations",
+                    entityLabel: `Vestiging ${location.name}`,
+                    updatePayloadBase: {
+                      id: location.id,
+                      expectedVersion: location.version,
+                    },
+                    archivePayload: {
+                      id: location.id,
+                      expectedVersion: location.version,
+                    },
+                    deletePayload: {
+                      id: location.id,
+                      expectedVersion: location.version,
+                    },
+                    fields: [
+                      { name: "name", label: "Naam", defaultValue: location.name },
+                      { name: "city", label: "Stad", defaultValue: location.city },
+                      {
+                        name: "neighborhood",
+                        label: "Wijk",
+                        defaultValue: location.neighborhood,
+                      },
+                      {
+                        name: "capacity",
+                        label: "Capaciteit",
+                        defaultValue: location.capacity,
+                        type: "number",
+                      },
+                      {
+                        name: "managerName",
+                        label: "Manager",
+                        defaultValue: location.managerName,
+                      },
+                      {
+                        name: "status",
+                        label: "Status",
+                        defaultValue: location.status,
+                        type: "select",
+                        options: [
+                          { value: "active", label: "Actief" },
+                          { value: "paused", label: "Gepauzeerd" },
+                          { value: "archived", label: "Gearchiveerd" },
+                        ],
+                      },
+                      {
+                        name: "amenities",
+                        label: "Voorzieningen",
+                        defaultValue: location.amenities,
+                        type: "list",
+                      },
+                    ],
+                  })}
+                />
                 ) : (
                   <EmptyPanel
                     title="Geen vestigingen gevonden"
@@ -225,85 +351,70 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                   filteredTrainers.length > 0 ? (
                     <div className="grid gap-3">
                       <p className="text-sm font-semibold">Trainers</p>
-                      {filteredTrainers.map((trainer) => (
-                        <Card key={trainer.id} className="rounded-2xl border-border/80">
-                          <Card.Content className="space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <p className="font-medium">{trainer.fullName}</p>
-                              <Chip size="sm" variant="tertiary">
-                                {getTrainerStatusLabel(trainer.status)}
-                              </Chip>
-                            </div>
-                            <p className="text-muted text-sm">
-                              {snapshot.locations.find((location) => location.id === trainer.homeLocationId)?.name ??
-                                "Onbekende vestiging"}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {[...trainer.specialties, ...trainer.certifications].map((label) => (
-                                <Chip key={label} size="sm" variant="tertiary">
-                                  {label}
-                                </Chip>
-                              ))}
-                            </div>
-                            <DashboardEntityActions
-                              endpoint="/api/platform/trainers"
-                              entityLabel={`Trainer ${trainer.fullName}`}
-                              updatePayloadBase={{
-                                id: trainer.id,
-                                expectedVersion: trainer.version,
-                              }}
-                              archivePayload={{
-                                id: trainer.id,
-                                expectedVersion: trainer.version,
-                              }}
-                              deletePayload={{
-                                id: trainer.id,
-                                expectedVersion: trainer.version,
-                              }}
-                              fields={[
-                                {
-                                  name: "fullName",
-                                  label: "Naam",
-                                  defaultValue: trainer.fullName,
-                                },
-                                {
-                                  name: "homeLocationId",
-                                  label: "Vestiging",
-                                  defaultValue: trainer.homeLocationId,
-                                  type: "select",
-                                  options: snapshot.locations.map((location) => ({
-                                    value: location.id,
-                                    label: location.name,
-                                  })),
-                                },
-                                {
-                                  name: "status",
-                                  label: "Status",
-                                  defaultValue: trainer.status,
-                                  type: "select",
-                                  options: [
-                                    { value: "active", label: "Actief" },
-                                    { value: "away", label: "Afwezig" },
-                                    { value: "archived", label: "Gearchiveerd" },
-                                  ],
-                                },
-                                {
-                                  name: "specialties",
-                                  label: "Specialisaties",
-                                  defaultValue: trainer.specialties,
-                                  type: "list",
-                                },
-                                {
-                                  name: "certifications",
-                                  label: "Certificeringen",
-                                  defaultValue: trainer.certifications,
-                                  type: "list",
-                                },
-                              ]}
-                            />
-                          </Card.Content>
-                        </Card>
-                      ))}
+                      <DashboardEntityDataGrid
+                        ariaLabel="Trainers"
+                        columns={trainerColumns}
+                        contentClassName="min-w-[900px]"
+                        data={filteredTrainers}
+                        defaultSortDescriptor={{ column: "fullName", direction: "ascending" }}
+                        getRowId={(trainer) => trainer.id}
+                        getActionsProps={(trainer) => ({
+                          endpoint: "/api/platform/trainers",
+                          entityLabel: `Trainer ${trainer.fullName}`,
+                          updatePayloadBase: {
+                            id: trainer.id,
+                            expectedVersion: trainer.version,
+                          },
+                          archivePayload: {
+                            id: trainer.id,
+                            expectedVersion: trainer.version,
+                          },
+                          deletePayload: {
+                            id: trainer.id,
+                            expectedVersion: trainer.version,
+                          },
+                          fields: [
+                            {
+                              name: "fullName",
+                              label: "Naam",
+                              defaultValue: trainer.fullName,
+                            },
+                            {
+                              name: "homeLocationId",
+                              label: "Vestiging",
+                              defaultValue: trainer.homeLocationId,
+                              type: "select",
+                              options: snapshot.locations.map((location) => ({
+                                value: location.id,
+                                label: location.name,
+                              })),
+                            },
+                            {
+                              name: "status",
+                              label: "Status",
+                              defaultValue: trainer.status,
+                              type: "select",
+                              options: [
+                                { value: "active", label: "Actief" },
+                                { value: "away", label: "Afwezig" },
+                                { value: "archived", label: "Gearchiveerd" },
+                              ],
+                            },
+                            {
+                              name: "specialties",
+                              label: "Specialisaties",
+                              defaultValue: trainer.specialties,
+                              type: "list",
+                            },
+                            {
+                              name: "certifications",
+                              label: "Certificeringen",
+                              defaultValue: trainer.certifications,
+                              type: "list",
+                            },
+                          ],
+                        })}
+                      />
                     </div>
                   ) : (
                     <EmptyPanel
@@ -315,70 +426,60 @@ export function SettingsDashboardPage({ snapshot }: DashboardPageProps) {
                 {filteredStaff.length > 0 ? (
                 <>
                 <p className="text-sm font-semibold">Medewerkeraccounts</p>
-                <ListView aria-label="Medewerkeraccounts" items={filteredStaff}>
-                  {(member) => (
-                    <ListView.Item id={member.id} textValue={member.displayName}>
-                      <ListView.ItemContent>
-                        <ListView.Title>{member.displayName}</ListView.Title>
-                      <ListView.Description>
-                          {member.email} · {member.roles.map(getRoleLabel).join(", ")}
-                        </ListView.Description>
-                      </ListView.ItemContent>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Chip size="sm" variant="tertiary">
-                          {getEntityStatusLabel(member.status)}
-                        </Chip>
-                        <Users className="text-muted h-4 w-4" />
-                      </div>
-                      <DashboardEntityActions
-                        endpoint="/api/platform/staff"
-                        entityLabel={`Medewerker ${member.displayName}`}
-                        updatePayloadBase={{
-                          userId: member.id,
-                          expectedUpdatedAt: member.updatedAt ?? "",
-                        }}
-                        archivePayload={{
-                          userId: member.id,
-                          expectedUpdatedAt: member.updatedAt ?? "",
-                        }}
-                        deletePayload={{
-                          userId: member.id,
-                          expectedUpdatedAt: member.updatedAt ?? "",
-                        }}
-                        fields={[
-                          {
-                            name: "displayName",
-                            label: "Naam",
-                            defaultValue: member.displayName,
-                          },
-                          { name: "email", label: "E-mail", defaultValue: member.email, type: "email" },
-                          {
-                            name: "roleKey",
-                            label: "Rol",
-                            defaultValue: member.roleKey ?? "frontdesk",
-                            type: "select",
-                            options: [
-                              { value: "owner", label: "Eigenaar" },
-                              { value: "manager", label: "Manager" },
-                              { value: "trainer", label: "Trainer" },
-                              { value: "frontdesk", label: "Balie" },
-                            ],
-                          },
-                          {
-                            name: "status",
-                            label: "Status",
-                            defaultValue: member.status,
-                            type: "select",
-                            options: [
-                              { value: "active", label: "Actief" },
-                              { value: "archived", label: "Gearchiveerd" },
-                            ],
-                          },
-                        ]}
-                      />
-                    </ListView.Item>
-                  )}
-                </ListView>
+                <DashboardEntityDataGrid
+                  ariaLabel="Medewerkeraccounts"
+                  columns={staffColumns}
+                  contentClassName="min-w-[760px]"
+                  data={filteredStaff}
+                  defaultSortDescriptor={{ column: "displayName", direction: "ascending" }}
+                  getRowId={(member) => member.id}
+                  getActionsProps={(member) => ({
+                    endpoint: "/api/platform/staff",
+                    entityLabel: `Medewerker ${member.displayName}`,
+                    updatePayloadBase: {
+                      userId: member.id,
+                      expectedUpdatedAt: member.updatedAt ?? "",
+                    },
+                    archivePayload: {
+                      userId: member.id,
+                      expectedUpdatedAt: member.updatedAt ?? "",
+                    },
+                    deletePayload: {
+                      userId: member.id,
+                      expectedUpdatedAt: member.updatedAt ?? "",
+                    },
+                    fields: [
+                      {
+                        name: "displayName",
+                        label: "Naam",
+                        defaultValue: member.displayName,
+                      },
+                      { name: "email", label: "E-mail", defaultValue: member.email, type: "email" },
+                      {
+                        name: "roleKey",
+                        label: "Rol",
+                        defaultValue: member.roleKey ?? "frontdesk",
+                        type: "select",
+                        options: [
+                          { value: "owner", label: "Eigenaar" },
+                          { value: "manager", label: "Manager" },
+                          { value: "trainer", label: "Trainer" },
+                          { value: "frontdesk", label: "Balie" },
+                        ],
+                      },
+                      {
+                        name: "status",
+                        label: "Status",
+                        defaultValue: member.status,
+                        type: "select",
+                        options: [
+                          { value: "active", label: "Actief" },
+                          { value: "archived", label: "Gearchiveerd" },
+                        ],
+                      },
+                    ],
+                  })}
+                />
                 </>
                 ) : (
                   <EmptyPanel
