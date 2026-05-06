@@ -12,6 +12,7 @@ describe("currency helpers", () => {
     expect(parseEuroInputToCents("24.95")).toBe(2495);
     expect(parseEuroInputToCents("1.234,56")).toBe(123456);
     expect(parseEuroInputToCents("1.234")).toBe(123400);
+    expect(parseEuroInputToCents("80")).toBe(8000);
     expect(parseEuroInputToCents("")).toBe(0);
   });
 });

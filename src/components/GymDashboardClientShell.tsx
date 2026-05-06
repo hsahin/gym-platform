@@ -6,6 +6,7 @@ import { Avatar, Chip } from "@heroui/react";
 import { AppLayout } from "@heroui-pro/react/app-layout";
 import { Navbar } from "@heroui-pro/react/navbar";
 import { Sidebar } from "@heroui-pro/react/sidebar";
+import { Heading as DialogHeading } from "react-aria-components/Dialog";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import {
   AppWindow,
@@ -110,6 +111,8 @@ const navigationItems = [
   icon: typeof LayoutDashboard;
 }>;
 
+type NavigationItem = (typeof navigationItems)[number];
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -117,6 +120,75 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+function DashboardSidebarContent({
+  actorInitials,
+  currentPage,
+  items,
+  roleLabel,
+  snapshot,
+}: {
+  readonly actorInitials: string;
+  readonly currentPage: DashboardPageKey;
+  readonly items: ReadonlyArray<NavigationItem>;
+  readonly roleLabel: string;
+  readonly snapshot: GymDashboardSnapshot;
+}) {
+  return (
+    <>
+      <DialogHeading slot="title" className="sr-only">
+        Dashboardnavigatie
+      </DialogHeading>
+      <Sidebar.Header className="px-4 py-5">
+        <Link href="/" className="flex min-w-0 items-center gap-3">
+          <div className="app-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold shadow-none">
+            G
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-semibold">GymOS</p>
+            <p className="text-muted truncate text-xs">
+              Werkruimte voor dagelijkse operatie
+            </p>
+          </div>
+        </Link>
+      </Sidebar.Header>
+
+      <Sidebar.Content>
+        <Sidebar.Group>
+          <Sidebar.Menu aria-label="Dashboardnavigatie" closeMobileOnAction>
+            {items.map((item) => (
+              <Sidebar.MenuItem
+                key={item.key}
+                href={item.href}
+                isCurrent={item.key === currentPage}
+                className="rounded-2xl"
+              >
+                <Sidebar.MenuIcon>
+                  <item.icon className="h-4 w-4" />
+                </Sidebar.MenuIcon>
+                <Sidebar.MenuLabel>{item.label}</Sidebar.MenuLabel>
+              </Sidebar.MenuItem>
+            ))}
+          </Sidebar.Menu>
+        </Sidebar.Group>
+      </Sidebar.Content>
+
+      <Sidebar.Footer className="space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar>
+            <Avatar.Fallback>{actorInitials}</Avatar.Fallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{snapshot.actorName}</p>
+            <p className="text-muted truncate text-xs">
+              {snapshot.actorEmail ?? roleLabel}
+            </p>
+          </div>
+        </div>
+      </Sidebar.Footer>
+    </>
+  );
 }
 
 export function GymDashboardClientShell({
@@ -145,16 +217,24 @@ export function GymDashboardClientShell({
 
   return (
     <AppLayout
-      className="min-h-screen min-w-0 overflow-x-clip bg-background"
+      className="min-h-screen min-w-0 overflow-x-clip bg-background [--sidebar-width:17.5rem] [--sidebar-width-collapsed:3.5rem]"
+      navigate={router.push}
+      sidebarCollapsible="offcanvas"
+      sidebarVariant="floating"
       navbar={
         <Navbar
+          height="auto"
           className="border-b border-border/80 bg-background/88 backdrop-blur"
           maxWidth="full"
         >
-          <Navbar.Header className="px-3 py-3 sm:px-4 lg:px-6">
-            <div className="flex w-full min-w-0 max-w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Navbar.Header className="px-3 py-2.5 sm:px-4 lg:px-5">
+            <div className="grid w-full min-w-0 max-w-full gap-3 lg:grid-cols-[auto_minmax(14rem,1fr)_auto] lg:items-center">
               <div className="flex min-w-0 items-center gap-3">
-                <AppLayout.MenuToggle />
+                <AppLayout.MenuToggle aria-label="Menu openen" />
+                <Sidebar.Trigger
+                  aria-label="Navigatie in- of uitklappen"
+                  className="hidden md:inline-flex"
+                />
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Chip size="sm" variant="soft">
                     {snapshot.tenantName}
@@ -198,56 +278,30 @@ export function GymDashboardClientShell({
         </Navbar>
       }
       sidebar={
-        <Sidebar className="border-r border-border/70 bg-background">
-          <Sidebar.Header className="px-4 py-5">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="app-surface flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-semibold shadow-none">
-                G
-              </div>
-              <div>
-                <p className="font-semibold">GymOS</p>
-                <p className="text-muted text-xs">Werkruimte voor dagelijkse operatie</p>
-              </div>
-            </Link>
-          </Sidebar.Header>
-
-          <Sidebar.Content>
-            <Sidebar.Group>
-              <Sidebar.Menu aria-label="Dashboardnavigatie">
-                {visibleNavigationItems.map((item) => (
-                  <Sidebar.MenuItem
-                    key={item.key}
-                    href={item.href}
-                    isCurrent={item.key === currentPage}
-                    className="rounded-2xl"
-                  >
-                    <Sidebar.MenuIcon>
-                      <item.icon className="h-4 w-4" />
-                    </Sidebar.MenuIcon>
-                    <Sidebar.MenuLabel>{item.label}</Sidebar.MenuLabel>
-                  </Sidebar.MenuItem>
-                ))}
-              </Sidebar.Menu>
-            </Sidebar.Group>
-          </Sidebar.Content>
-
-          <Sidebar.Footer className="space-y-3 px-4 py-4">
-            <div className="flex items-center gap-3">
-              <Avatar>
-                <Avatar.Fallback>{actorInitials}</Avatar.Fallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{snapshot.actorName}</p>
-                <p className="text-muted truncate text-xs">
-                  {snapshot.actorEmail ?? roleLabel}
-                </p>
-              </div>
-            </div>
-          </Sidebar.Footer>
-        </Sidebar>
+        <>
+          <Sidebar aria-label="Dashboard zijmenu" className="bg-background">
+            <DashboardSidebarContent
+              actorInitials={actorInitials}
+              currentPage={currentPage}
+              items={visibleNavigationItems}
+              roleLabel={roleLabel}
+              snapshot={snapshot}
+            />
+            <Sidebar.Rail aria-label="Navigatie inklappen" />
+          </Sidebar>
+          <Sidebar.Mobile aria-label="Dashboardnavigatie" backdrop="blur">
+            <DashboardSidebarContent
+              actorInitials={actorInitials}
+              currentPage={currentPage}
+              items={visibleNavigationItems}
+              roleLabel={roleLabel}
+              snapshot={snapshot}
+            />
+          </Sidebar.Mobile>
+        </>
       }
     >
-      <main className="app-page section-stack min-w-0 max-w-full overflow-x-clip py-6 md:py-8">
+      <div className="app-page section-stack min-w-0 max-w-full overflow-x-clip pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:pt-6 md:py-8">
         <header className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
           <div className="min-w-0 space-y-3">
             <Chip size="sm" variant="tertiary" className="w-fit sm:hidden">
@@ -264,7 +318,7 @@ export function GymDashboardClientShell({
           </div>
         </header>
         <GymDashboard currentPage={currentPage} snapshot={snapshot} />
-      </main>
+      </div>
     </AppLayout>
   );
 }

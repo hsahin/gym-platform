@@ -231,7 +231,7 @@ describe("dashboard management UI wiring", () => {
     expect(globals).toContain(".mobile-feature-module-board");
     expect(globals).toContain("@media (max-width: 640px)");
     expect(shell).toContain(
-      'className="app-page section-stack min-w-0 max-w-full overflow-x-clip py-6 md:py-8"',
+      'className="app-page section-stack min-w-0 max-w-full overflow-x-clip pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:pt-6 md:py-8"',
     );
     expect(shared).toContain(
       '<section className="grid min-w-0 max-w-full content-start gap-4 overflow-x-clip">',
@@ -250,6 +250,22 @@ describe("dashboard management UI wiring", () => {
     expect(moduleBoard).toContain("mobile-feature-module-board min-w-0 max-w-full");
     expect(moduleBoard).toContain('className={`min-h-0 min-w-0 max-w-full flex-wrap');
     expect(search).toContain("min-w-0 max-w-xl md:min-w-[14rem]");
+  });
+
+  it("uses the HeroUI Pro floating app layout with a real mobile sidebar sheet", () => {
+    const shell = readSource("GymDashboardClientShell.tsx");
+
+    expect(shell).toContain('sidebarVariant="floating"');
+    expect(shell).toContain('sidebarCollapsible="offcanvas"');
+    expect(shell).toContain("navigate={router.push}");
+    expect(shell).toContain("<Sidebar.Trigger");
+    expect(shell).toContain('<Sidebar.Mobile aria-label="Dashboardnavigatie" backdrop="blur">');
+    expect(shell).toContain("DashboardSidebarContent");
+    expect(shell).toContain("<DialogHeading");
+    expect(shell).toContain('aria-label="Menu openen"');
+    expect(shell).not.toContain('tooltip="Menu openen"');
+    expect(shell).toContain("pb-[max(1.5rem,env(safe-area-inset-bottom))]");
+    expect(shell).not.toContain("<main className=");
   });
 
   it("exposes Mollie onboarding in business language from the billing workbench", () => {
