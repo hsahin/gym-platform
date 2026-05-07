@@ -281,7 +281,7 @@ export const DASHBOARD_FEATURE_CATALOG: ReadonlyArray<DashboardFeatureDefinition
     categoryTitle: "Betalingen",
     dashboardPage: "payments",
     defaultValue: true,
-    description: "Ondersteun eenmalige betaling met kaart en online checkout via Mollie.",
+    description: "Ondersteun volledige contractbetaling met kaart en online checkout via Mollie.",
     statusLabel: "Live",
   },
   {

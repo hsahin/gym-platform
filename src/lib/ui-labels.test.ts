@@ -19,8 +19,8 @@ import {
 describe("ui labels", () => {
   it("translates payment methods, statuses, roles and flow modes without leaking enum keys", () => {
     expect(getBillingPaymentMethodLabel("direct_debit")).toBe("Automatische incasso");
-    expect(getBillingPaymentMethodLabel("one_time")).toBe("Eenmalige betaling");
-    expect(getBillingPaymentMethodLabel("payment_request")).toBe("Betaalverzoek");
+    expect(getBillingPaymentMethodLabel("one_time")).toBe("Volledige contractbetaling");
+    expect(getBillingPaymentMethodLabel("payment_request")).toBe("Los betaalverzoek");
     expect(getMemberStatusLabel("active")).toBe("Actief");
     expect(getWaiverStatusLabel("pending")).toBe("Waiver open");
     expect(getBookingStatusLabel("checked_in")).toBe("Ingecheckt");

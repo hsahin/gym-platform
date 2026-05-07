@@ -59,8 +59,8 @@ export const UI_LABELS = {
   },
   billingPaymentMethod: {
     direct_debit: "Automatische incasso",
-    one_time: "Eenmalige betaling",
-    payment_request: "Betaalverzoek",
+    one_time: "Volledige contractbetaling",
+    payment_request: "Los betaalverzoek",
     cash: "Contant",
     bank_transfer: "Overschrijving",
   },

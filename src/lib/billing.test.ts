@@ -90,7 +90,7 @@ describe("billing helpers", () => {
 
     expect(getBillingProviderLabel("mollie")).toBe("Mollie");
     expect(getBillingProviderLabel("custom" as never)).toBe("custom");
-    expect(getBillingPaymentMethodLabel("payment_request")).toBe("Betaalverzoek");
+    expect(getBillingPaymentMethodLabel("payment_request")).toBe("Los betaalverzoek");
     expect(getBillingPaymentMethodLabel("manual" as never)).toBe("Onbekend");
     expect(getBillingStatusLabel(createDefaultBillingSettings())).toBe("Niet gekoppeld");
     expect(getBillingStatusLabel(attention)).toBe("Aandacht nodig");
@@ -109,7 +109,7 @@ describe("billing helpers", () => {
     expect(getBillingHelpText(configuredDisabled)).not.toContain("losse sales");
     expect(getBillingHelpText(configuredEnabled)).toContain("live betaalverwerking");
     expect(getBillingHelpText(configuredEnabled, { liveProviderConfigured: true })).toContain(
-      "Automatische incasso, Eenmalige betaling en Betaalverzoek",
+      "Automatische incasso, Volledige contractbetaling en Los betaalverzoek",
     );
     expect(getBillingHelpText(configuredWithoutMethods)).toContain("Vul profielnaam");
   });

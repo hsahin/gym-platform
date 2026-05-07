@@ -1285,6 +1285,60 @@ function normalizeBillingInvoiceSource(value?: string): BillingInvoiceSource {
   }
 }
 
+function isPrivateCheckoutHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+
+  if (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
+  }
+
+  const octets = normalized.split(".").map((part) => Number(part));
+
+  if (
+    octets.length === 4 &&
+    octets.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)
+  ) {
+    const [first, second] = octets;
+
+    return (
+      first === 10 ||
+      first === 127 ||
+      (first === 192 && second === 168) ||
+      (first === 172 && second >= 16 && second <= 31)
+    );
+  }
+
+  return false;
+}
+
+function normalizeCheckoutUrl(value?: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      isPrivateCheckoutHostname(url.hostname)
+    ) {
+      return undefined;
+    }
+
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeBillingReconciliationStatus(value?: string): BillingReconciliationStatus {
   return value === "balanced" ? "balanced" : "attention";
 }
@@ -1407,7 +1461,7 @@ function normalizeBillingBackofficeData(
         refundedAt: invoice.refundedAt ? new Date(invoice.refundedAt).toISOString() : undefined,
         lastWebhookEventType: invoice.lastWebhookEventType?.trim() || undefined,
         externalReference: invoice.externalReference?.trim() || undefined,
-        checkoutUrl: invoice.checkoutUrl?.trim() || undefined,
+        checkoutUrl: normalizeCheckoutUrl(invoice.checkoutUrl),
       }))
       .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt)),
     refunds: (input?.refunds ?? base.refunds)

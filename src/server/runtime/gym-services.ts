@@ -1615,18 +1615,6 @@ function getLiveRemoteAccessProvider(
   return createNukiRemoteAccessProvider();
 }
 
-function resolveAppBaseUrl() {
-  return (resolveConfiguredAppBaseUrl() || "http://localhost:3004").replace(/\/+$/, "");
-}
-
-function resolveConfiguredAppBaseUrl() {
-  return (
-    process.env.APP_BASE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "")
-  ).trim();
-}
-
 function isPrivateWebhookHostname(hostname: string) {
   const normalized = hostname.trim().toLowerCase();
 
@@ -1656,6 +1644,80 @@ function isPrivateWebhookHostname(hostname: string) {
   }
 
   return false;
+}
+
+function normalizeConfiguredBaseUrl(value: string | undefined) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return "";
+    }
+
+    return trimmed.replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function resolveConfiguredAppBaseUrl() {
+  return normalizeConfiguredBaseUrl(
+    process.env.APP_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ""),
+  );
+}
+
+function isPrivateBaseUrl(baseUrl: string) {
+  try {
+    return isPrivateWebhookHostname(new URL(baseUrl).hostname);
+  } catch {
+    return true;
+  }
+}
+
+function resolvePaymentAppBaseUrl() {
+  const configuredBaseUrl = resolveConfiguredAppBaseUrl();
+
+  if (!configuredBaseUrl) {
+    return "";
+  }
+
+  if (isProductionRuntime() && isPrivateBaseUrl(configuredBaseUrl)) {
+    return "";
+  }
+
+  return configuredBaseUrl;
+}
+
+function getMissingPaymentAppBaseUrlMessage(actionLabel: string) {
+  return `De publieke app-url ontbreekt of wijst naar localhost. Vul APP_BASE_URL met de publieke https-url in voordat je ${actionLabel}.`;
+}
+
+function resolveAppBaseUrl() {
+  const configuredBaseUrl = resolvePaymentAppBaseUrl();
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  if (!isProductionRuntime()) {
+    return "http://localhost:3004";
+  }
+
+  throw new AppError(getMissingPaymentAppBaseUrlMessage("een betaallink maakt"), {
+    code: "INVALID_INPUT",
+    details: {
+      provider: "mollie",
+      env: "APP_BASE_URL",
+    },
+  });
 }
 
 function resolveConfiguredMollieWebhookBaseUrl() {
@@ -1689,7 +1751,7 @@ function hasMollieConnectTokens(billing: StoredBillingSettings | null | undefine
 function isLiveBillingProviderConfigured(
   billing?: StoredBillingSettings | null,
 ) {
-  if (!resolveConfiguredAppBaseUrl()) {
+  if (!resolvePaymentAppBaseUrl()) {
     return false;
   }
 
@@ -1821,7 +1883,7 @@ function getMissingPublicSignupBillingFields(
     billing?.paymentMethods && billing.paymentMethods.length > 0 ? null : "betaalroute",
     billing?.supportEmail?.trim() ? null : "supportmail",
     hasProviderCredentials ? null : "betaalkoppeling",
-    resolveConfiguredAppBaseUrl() ? null : "webhook-url",
+    resolvePaymentAppBaseUrl() ? null : "webhook-url",
     isProductionRuntime() && !process.env.MOLLIE_WEBHOOK_SECRET?.trim()
       ? "webhook-beveiliging"
       : null,
@@ -2003,17 +2065,14 @@ async function createLiveBillingProvider(
     );
   }
 
-  if (!resolveConfiguredAppBaseUrl()) {
-    throw new AppError(
-      "De betaalnotificatie-url ontbreekt. Vul APP_BASE_URL met de publieke app-url in voordat je betalingen verwerkt.",
-      {
-        code: "INVALID_INPUT",
-        details: {
-          provider: "mollie",
-          env: "APP_BASE_URL",
-        },
+  if (!resolvePaymentAppBaseUrl()) {
+    throw new AppError(getMissingPaymentAppBaseUrlMessage("betalingen verwerkt"), {
+      code: "INVALID_INPUT",
+      details: {
+        provider: "mollie",
+        env: "APP_BASE_URL",
       },
-    );
+    });
   }
 
   if (isMolliePaymentConfigured()) {
@@ -2047,17 +2106,14 @@ async function createBillingTestPaymentProvider(
     });
   }
 
-  if (!resolveConfiguredAppBaseUrl()) {
-    throw new AppError(
-      "De publieke app-url ontbreekt. Vul APP_BASE_URL in voordat je een betaallink test.",
-      {
-        code: "INVALID_INPUT",
-        details: {
-          provider: "mollie",
-          env: "APP_BASE_URL",
-        },
+  if (!resolvePaymentAppBaseUrl()) {
+    throw new AppError(getMissingPaymentAppBaseUrlMessage("een betaallink test"), {
+      code: "INVALID_INPUT",
+      details: {
+        provider: "mollie",
+        env: "APP_BASE_URL",
       },
-    );
+    });
   }
 
   if (isMolliePaymentConfigured()) {
@@ -2283,7 +2339,7 @@ async function buildBillingSummary(
   const liveProviderConfigured = isLiveBillingProviderConfigured(billing);
   const providerAccessConfigured =
     isMolliePaymentConfigured() || hasMollieConnectTokens(billing);
-  const webhookUrlConfigured = Boolean(resolveConfiguredAppBaseUrl());
+  const webhookUrlConfigured = Boolean(resolvePaymentAppBaseUrl());
   const connect = billing?.mollieConnect;
   const connectScopes = parseMollieScope(connect?.scope);
   const migrationHint =
@@ -2302,7 +2358,7 @@ async function buildBillingSummary(
       connectionStatus: "not_configured",
       statusLabel: "Niet gekoppeld",
       helpText:
-        "Koppel Mollie per gym om automatische incasso, eenmalige betalingen en deelbare betaalverzoeken voor te bereiden.",
+        "Koppel Mollie per gym om automatische incasso, volledige contractbetalingen en losse betaalverzoeken voor te bereiden.",
       previewMode: true,
       providerAccessConfigured,
       webhookUrlConfigured,
@@ -7713,7 +7769,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
       if (input.paymentMethod === "direct_debit") {
         throw new AppError(
-          "Automatische incasso test je via mandaten en leden met een machtiging. Start hier een testbetaling voor een eenmalige betaling of betaalverzoek.",
+          "Automatische incasso test je via mandaten en leden met een machtiging. Start hier een testbetaling voor volledige contractbetaling of een los betaalverzoek.",
           {
             code: "INVALID_INPUT",
             details: { paymentMethod: input.paymentMethod },

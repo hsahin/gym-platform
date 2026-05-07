@@ -330,7 +330,7 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).toContain("Betaalroutes voor leden");
     expect(workbench).toContain("Bepaal welke betaalroutes GymOS");
     expect(workbench).toContain("Automatische incasso int maandelijks");
-    expect(workbench).toContain("Eenmalige betaling rekent de volledige contractperiode");
+    expect(workbench).toContain("Volledige contractbetaling rekent de volledige contractperiode");
     expect(workbench).toContain("paymentMethod.helper");
     expect(workbench).toContain("Testbetaling starten");
     expect(workbench).toContain("Aanmeldlink maken");

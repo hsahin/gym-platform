@@ -282,8 +282,8 @@ export function PublicMembershipSignupPortal({
                     onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}
                   >
                     <NativeSelect.Option value="direct_debit">Automatische incasso</NativeSelect.Option>
-                    <NativeSelect.Option value="one_time">Eenmalige betaling (hele contractduur)</NativeSelect.Option>
-                    <NativeSelect.Option value="payment_request">Betaalverzoek</NativeSelect.Option>
+                    <NativeSelect.Option value="one_time">Volledige contractbetaling</NativeSelect.Option>
+                    <NativeSelect.Option value="payment_request">Los betaalverzoek</NativeSelect.Option>
                     <NativeSelect.Indicator />
                   </NativeSelect.Trigger>
                 </NativeSelect>

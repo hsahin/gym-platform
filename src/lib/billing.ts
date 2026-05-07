@@ -50,7 +50,7 @@ export const BILLING_PROVIDER_OPTIONS: ReadonlyArray<{
     key: "mollie",
     label: "Mollie",
     helper:
-      "Sterke Europese betaalprovider voor incasso, eenmalige betaling en gedeelde betaalverzoeken.",
+      "Sterke Europese betaalprovider voor incasso, volledige contractbetaling en losse betaalverzoeken.",
   },
 ] as const;
 
@@ -222,5 +222,5 @@ export function getBillingHelpText(
     return `Vul profielnaam, profiel-id en support e-mail aan om ${providerLabel} betrouwbaar te kunnen gebruiken.`;
   }
 
-  return "Koppel betaalgegevens per gym om maandelijkse incasso, volledige vooruitbetaling en deelbare betaalverzoeken voor te bereiden.";
+  return "Koppel betaalgegevens per gym om maandelijkse incasso, volledige contractbetaling en losse betaalverzoeken voor te bereiden.";
 }

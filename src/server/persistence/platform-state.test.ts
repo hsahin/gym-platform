@@ -958,6 +958,39 @@ describe("platform state", () => {
     );
   });
 
+  it("does not expose stale localhost checkout urls as open payment links", async () => {
+    const tenant = await bootstrapLocalPlatform({
+      tenantName: "Northside Athletics",
+      ownerName: "Amina Hassan",
+      ownerEmail: "owner@northside.test",
+      password: "strong-pass-123",
+    });
+
+    const invoice = await createLocalTenantBillingInvoice(tenant.tenant.id, {
+      memberName: "Jade Vermeer",
+      description: "Local stale checkout",
+      amountCents: 11900,
+      dueAt: "2026-05-01T08:00:00.000Z",
+      source: "manual",
+      checkoutUrl: "http://localhost:3003/dashboard/payments?mollie=connected",
+    });
+    const updatedInvoice = await updateLocalTenantBillingInvoice(tenant.tenant.id, {
+      id: invoice.id,
+      status: "open",
+      checkoutUrl: "https://pay.mollie.com/p/live-checkout",
+    });
+    const tenantProfile = await getLocalTenantProfile(tenant.tenant.id);
+
+    expect(invoice.checkoutUrl).toBeUndefined();
+    expect(updatedInvoice.checkoutUrl).toBe("https://pay.mollie.com/p/live-checkout");
+    expect(tenantProfile?.moduleData.billingBackoffice.invoices).toContainEqual(
+      expect.objectContaining({
+        id: invoice.id,
+        checkoutUrl: "https://pay.mollie.com/p/live-checkout",
+      }),
+    );
+  });
+
   it("rejects billing updates before setup or for unknown gyms", async () => {
     await expect(
       updateLocalTenantBillingSettings("missing", {

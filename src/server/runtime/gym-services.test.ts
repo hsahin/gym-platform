@@ -15,7 +15,9 @@ import { createGymPlatformServices } from "@/server/runtime/gym-services";
 let tempDir = "";
 const originalMollieApiKey = process.env.MOLLIE_API_KEY;
 const originalMollieTestMode = process.env.MOLLIE_TEST_MODE;
+const originalMollieWebhookSecret = process.env.MOLLIE_WEBHOOK_SECRET;
 const originalAppBaseUrl = process.env.APP_BASE_URL;
+const originalDigitalOceanAppId = process.env.DIGITALOCEAN_APP_ID;
 const originalNukiApiToken = process.env.NUKI_API_TOKEN;
 const originalEnableRealMessages = process.env.ENABLE_REAL_MESSAGES;
 const originalWahaBaseUrl = process.env.WAHA_BASE_URL;
@@ -138,10 +140,20 @@ afterEach(async () => {
   } else {
     process.env.MOLLIE_TEST_MODE = originalMollieTestMode;
   }
+  if (originalMollieWebhookSecret === undefined) {
+    delete process.env.MOLLIE_WEBHOOK_SECRET;
+  } else {
+    process.env.MOLLIE_WEBHOOK_SECRET = originalMollieWebhookSecret;
+  }
   if (originalAppBaseUrl === undefined) {
     delete process.env.APP_BASE_URL;
   } else {
     process.env.APP_BASE_URL = originalAppBaseUrl;
+  }
+  if (originalDigitalOceanAppId === undefined) {
+    delete process.env.DIGITALOCEAN_APP_ID;
+  } else {
+    process.env.DIGITALOCEAN_APP_ID = originalDigitalOceanAppId;
   }
   if (originalNukiApiToken === undefined) {
     delete process.env.NUKI_API_TOKEN;
@@ -4469,6 +4481,40 @@ describe("gym platform services", () => {
 
     expect(action.checkoutUrl).toBe("https://pay.mollie.com/p/request-local");
     expect(action.providerPaymentId).toBe("tr_request_local_1");
+  });
+
+  it("blocks live Mollie payment links when APP_BASE_URL points to localhost in production", async () => {
+    process.env.DIGITALOCEAN_APP_ID = "app-live";
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.MOLLIE_WEBHOOK_SECRET = "webhook-secret";
+    process.env.APP_BASE_URL = "http://localhost:3003";
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as typeof fetch;
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Athletics Payments",
+      profileId: "pfl_test_123456",
+      settlementLabel: "Northside Club",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["payment_request"],
+    });
+
+    await expect(
+      services.requestBillingPreview(ownerActor, tenantContext, {
+        paymentMethod: "payment_request",
+        amountCents: 2495,
+        currency: "EUR",
+        description: "Production intake bundle",
+        memberName: "Noa van Dijk",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("publieke app-url"),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("blocks Mollie payment actions when provider access is missing", async () => {

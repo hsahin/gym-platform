@@ -1986,7 +1986,7 @@ export function PlatformWorkbench({
                     <div className="space-y-1">
                       <p className="font-medium">Betaalroutes voor leden</p>
                       <p className="text-muted text-sm leading-6">
-                        Bepaal welke betaalroutes GymOS voor deze gym mag gebruiken. Automatische incasso int maandelijks; Eenmalige betaling rekent de volledige contractperiode in één keer af.
+                        Bepaal welke betaalroutes GymOS voor deze gym mag gebruiken. Automatische incasso int maandelijks; Volledige contractbetaling rekent de volledige contractperiode in één keer af.
                       </p>
                     </div>
                     <Chip size="sm" variant="tertiary">
@@ -2021,7 +2021,7 @@ export function PlatformWorkbench({
                 </div>
 
                 <Field label="Notities">
-                  <TextArea fullWidth rows={4} placeholder="eerst lidmaatschappen via incasso, intro via betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
+                  <TextArea fullWidth rows={4} placeholder="eerst lidmaatschappen via incasso, intake via los betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
                 </Field>
 
                 {!isMollieConnectConnected ? (
@@ -2114,7 +2114,7 @@ export function PlatformWorkbench({
                   <Card.Header>
                     <Card.Title>Testbetaling starten</Card.Title>
                     <Card.Description>
-                      Start los van de opgeslagen instellingen een testcheckout voor eenmalige betaling of betaalverzoek. Automatische incasso controleer je apart via mandaten.
+                      Start los van de opgeslagen instellingen een testcheckout voor volledige contractbetaling of een los betaalverzoek. Automatische incasso controleer je apart via mandaten.
                     </Card.Description>
                   </Card.Header>
                   <Card.Content className="grid gap-4 md:grid-cols-2">

@@ -189,7 +189,7 @@ export function getDashboardPages(
       key: "payments",
       title: "Betalingen",
       value: input.canManagePayments ? input.paymentsStatusLabel : "Alleen eigenaar",
-      helper: "Mollie, incasso, eenmalige betalingen en betaalverzoeken per gym.",
+      helper: "Mollie, incasso, volledige contractbetalingen en losse betaalverzoeken per gym.",
     },
     {
       key: "mobile",
