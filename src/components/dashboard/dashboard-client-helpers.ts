@@ -7,7 +7,6 @@ const MUTATION_FALLBACK_ERROR_MESSAGE =
   "Opslaan is niet gelukt. Controleer je invoer en probeer het opnieuw.";
 
 const SECURITY_ERROR_CODES = new Set([
-  "FORBIDDEN",
   "CSRF_TOKEN_MISSING",
   "IDEMPOTENCY_KEY_MISSING",
 ]);
@@ -53,6 +52,13 @@ function toDashboardMutationMessage<TResponse>(
   result: DashboardMutationResult<TResponse>,
 ) {
   if (result.error?.code && SECURITY_ERROR_CODES.has(result.error.code)) {
+    return MUTATION_SECURITY_ERROR_MESSAGE;
+  }
+
+  if (
+    result.error?.code === "FORBIDDEN" &&
+    /applicatie-origin|same-origin|mutatie mag/i.test(result.error.message ?? "")
+  ) {
     return MUTATION_SECURITY_ERROR_MESSAGE;
   }
 

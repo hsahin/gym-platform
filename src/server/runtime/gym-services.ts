@@ -5591,7 +5591,6 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async refundBillingInvoice(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["settings.manage"]);
       await assertFeatureEnabled(actor, tenantContext, "billing.processing");
-      await assertFeatureEnabled(actor, tenantContext, "billing.autocollect");
       const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
       const billing = tenantProfile?.billing;
       const liveProvider = await createLiveBillingProvider(tenantContext.tenantId, billing);

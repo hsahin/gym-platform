@@ -100,6 +100,42 @@ describe("dashboard client mutation helpers", () => {
     ).rejects.toThrow(MUTATION_SECURITY_ERROR_MESSAGE);
   });
 
+  it("keeps business forbidden messages visible instead of masking them as security failures", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          ok: true,
+          data: {
+            csrfToken: "signed-csrf-token",
+            expiresInSeconds: 0,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            ok: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "AutoCollect is uitgeschakeld voor deze gym.",
+            },
+          },
+          { status: 403 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      submitDashboardMutation("/api/platform/billing-backoffice", {
+        operation: "refund_invoice",
+        invoiceId: "inv_1",
+        amountCents: 4900,
+        reason: "Correctie",
+      }),
+    ).rejects.toThrow("AutoCollect is uitgeschakeld voor deze gym.");
+  });
+
   it("shows a friendly fallback when the server returns a non-json error page", async () => {
     const fetchMock = vi
       .fn()

@@ -3098,6 +3098,29 @@ describe("gym platform services", () => {
     expect(snapshot.billingBackoffice.reconciliationRuns[0]?.id).toBe(reconciliation.id);
   });
 
+  it("allows manual refunds with billing processing without requiring AutoCollect", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const invoice = await services.createBillingInvoice(ownerActor, tenantContext, {
+      memberName: "Robin de Wit",
+      description: "Correctie mei 2026",
+      amountCents: 11900,
+      dueAt: "2026-05-01T08:00:00.000Z",
+      source: "manual",
+    });
+
+    const refund = await services.refundBillingInvoice(ownerActor, tenantContext, {
+      invoiceId: invoice.id,
+      amountCents: 4900,
+      reason: "Correctie",
+    });
+
+    expect(refund).toMatchObject({
+      invoiceId: invoice.id,
+      amountCents: 4900,
+      status: "processed",
+    });
+  });
+
   it("sends configured billing invoices, retries, refunds and webhook sync to Mollie", async () => {
     process.env.MOLLIE_API_KEY = "test_mollie_live_key";
     process.env.APP_BASE_URL = "https://gym.example";
