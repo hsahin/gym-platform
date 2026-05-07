@@ -16,6 +16,7 @@ import {
   WalletCards,
   XCircle,
 } from "lucide-react";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
 import { toast } from "sonner";
@@ -1153,20 +1154,18 @@ export function PublicReservationPortal({
                 </div>
                 <div className="field-stack">
                   <Label>Start</Label>
-                  <Input
-                    fullWidth
-                    type="date"
+                  <CalendarDatePicker
+                    ariaLabel="Pauze startdatum"
                     value={pauseStartsAt}
-                    onChange={(event) => setPauseStartsAt(event.target.value)}
+                    onChange={setPauseStartsAt}
                   />
                 </div>
                 <div className="field-stack">
                   <Label>Einde</Label>
-                  <Input
-                    fullWidth
-                    type="date"
+                  <CalendarDatePicker
+                    ariaLabel="Pauze einddatum"
                     value={pauseEndsAt}
-                    onChange={(event) => setPauseEndsAt(event.target.value)}
+                    onChange={setPauseEndsAt}
                   />
                 </div>
                 <div className="field-stack">

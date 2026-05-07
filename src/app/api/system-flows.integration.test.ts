@@ -1710,7 +1710,7 @@ describe("system flow integrations", () => {
           phoneCountry: "NL",
           membershipPlanId: plan.id,
           preferredLocationId: location.id,
-          paymentMethod: "payment_request",
+          paymentMethod: "one_time",
           contractAccepted: true,
           waiverAccepted: true,
           portalPassword: "jade-member-123",

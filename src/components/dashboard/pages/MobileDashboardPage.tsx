@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Languages, QrCode, Smartphone, UserRoundCheck } from "lucide-react";
 import { Card, Chip, Input, Label } from "@heroui/react";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
@@ -318,11 +319,19 @@ export function MobileDashboardPage({ snapshot }: DashboardPageProps) {
               <Card.Content className="grid gap-4 md:grid-cols-2">
                 <div className="field-stack">
                   <Label>Pauze start</Label>
-                  <Input fullWidth value={pauseStartsAt} onChange={(event) => setPauseStartsAt(event.target.value)} />
+                  <CalendarDatePicker
+                    ariaLabel="Pauze startdatum"
+                    value={pauseStartsAt}
+                    onChange={setPauseStartsAt}
+                  />
                 </div>
                 <div className="field-stack">
                   <Label>Pauze einde</Label>
-                  <Input fullWidth value={pauseEndsAt} onChange={(event) => setPauseEndsAt(event.target.value)} />
+                  <CalendarDatePicker
+                    ariaLabel="Pauze einddatum"
+                    value={pauseEndsAt}
+                    onChange={setPauseEndsAt}
+                  />
                 </div>
                 <div className="field-stack md:col-span-2">
                   <Label>Reden</Label>

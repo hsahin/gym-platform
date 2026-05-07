@@ -15,6 +15,25 @@ export default async function JoinPage({
       : Array.isArray(resolvedSearchParams?.gym)
         ? resolvedSearchParams.gym[0]
         : undefined;
+  const payment =
+    typeof resolvedSearchParams?.payment === "string"
+      ? resolvedSearchParams.payment
+      : Array.isArray(resolvedSearchParams?.payment)
+        ? resolvedSearchParams.payment[0]
+        : undefined;
+  const invoice =
+    typeof resolvedSearchParams?.invoice === "string"
+      ? resolvedSearchParams.invoice
+      : Array.isArray(resolvedSearchParams?.invoice)
+        ? resolvedSearchParams.invoice[0]
+        : undefined;
+  const paymentReturn =
+    payment === "return"
+      ? {
+          isReturn: true,
+          invoiceId: invoice ?? null,
+        }
+      : undefined;
 
   try {
     const services = await getGymPlatformServices();
@@ -26,6 +45,7 @@ export default async function JoinPage({
       <main className="min-h-screen bg-transparent">
         <div className="app-page">
           <PublicMembershipSignupPortal
+            paymentReturn={paymentReturn}
             snapshot={toPublicMembershipSignupPortalSnapshot(snapshot)}
           />
         </div>

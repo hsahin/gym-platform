@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { FunctionalitySearch } from "@/components/FunctionalitySearch";
 import { GymDashboard } from "@/components/GymDashboard";
+import { DashboardFloatingToc } from "@/components/DashboardFloatingToc";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
 import { getVisibleFunctionalitySearchEntries } from "@/lib/functionality-search";
@@ -228,7 +229,7 @@ export function GymDashboardClientShell({
           maxWidth="full"
         >
           <Navbar.Header className="px-3 py-2.5 sm:px-4 lg:px-5">
-            <div className="grid w-full min-w-0 max-w-full gap-3 lg:grid-cols-[auto_minmax(14rem,1fr)_auto] lg:items-center">
+            <div className="grid w-full min-w-0 max-w-full gap-2 max-[520px]:grid-cols-1 sm:gap-3 xl:grid-cols-[auto_minmax(12rem,22rem)_auto] xl:items-center">
               <div className="flex min-w-0 items-center gap-3">
                 <AppLayout.MenuToggle aria-label="Menu openen" />
                 <Sidebar.Trigger
@@ -256,7 +257,7 @@ export function GymDashboardClientShell({
                 tenantId={tenantId}
               />
 
-              <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 sm:justify-end lg:shrink-0">
+              <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 max-[520px]:w-full sm:justify-end xl:shrink-0">
                 {ctaHref && copy.ctaLabel ? (
                   <Button
                     size="sm"
@@ -301,7 +302,11 @@ export function GymDashboardClientShell({
         </>
       }
     >
-      <div className="app-page section-stack min-w-0 max-w-full overflow-x-clip pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:pt-6 md:py-8">
+      <div
+        className="app-page section-stack min-w-0 max-w-full overflow-x-clip pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:pt-6 md:py-8"
+        data-dashboard-page={currentPage}
+        data-dashboard-toc-root
+      >
         <header className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
           <div className="min-w-0 space-y-3">
             <Chip size="sm" variant="tertiary" className="w-fit sm:hidden">
@@ -318,6 +323,7 @@ export function GymDashboardClientShell({
           </div>
         </header>
         <GymDashboard currentPage={currentPage} snapshot={snapshot} />
+        <DashboardFloatingToc pageKey={currentPage} />
       </div>
     </AppLayout>
   );

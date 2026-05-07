@@ -58,9 +58,9 @@ describe("public surface copy", () => {
     expect(source).toContain("Betaalmethode");
     expect(source).toContain("Automatische incasso");
     expect(source).toContain("Volledige contractbetaling");
-    expect(source).toContain("Los betaalverzoek");
     expect(source).toContain("Ledenportaalwachtwoord");
-    expect(source).toContain("Checkout starten");
+    expect(source).toContain("SEPA machtiging afgeven");
+    expect(source).toContain("Betaling starten");
     expect(source).toContain("checkoutDisabledReason");
     expect(source).toContain("memberMissingFields");
     expect(source).toContain("Online inschrijven is nog niet beschikbaar bij deze club.");
@@ -73,6 +73,7 @@ describe("public surface copy", () => {
     expect(source).not.toContain("contracttemplate");
     expect(source).not.toContain("webhook-url");
     expect(source).not.toContain("snapshot.billingMessage");
+    expect(source).not.toContain("Los betaalverzoek");
     expect(source).not.toContain("snapshot.legalMessage");
     expect(source).not.toContain("snapshot.billingReady");
     expect(source).not.toContain("snapshot.legalReady");
@@ -174,5 +175,44 @@ describe("public surface copy", () => {
     expect(source).toContain("event.preventDefault();");
     expect(source).toContain('type="submit"');
     expect(source).toContain('autoComplete="new-password"');
+  });
+
+  it("uses polished HeroUI Pro form controls for public signup checkout readiness", () => {
+    const source = readComponentSource("PublicMembershipSignupPortal.tsx");
+
+    expect(source).toContain('import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";');
+    expect(source).toContain('import { RadioButtonGroup } from "@heroui-pro/react/radio-button-group";');
+    expect(source).toContain("signupAgreements");
+    expect(source).toContain("setSignupAgreements");
+    expect(source).toContain('name="signupAgreements"');
+    expect(source).toContain('<CheckboxButtonGroup');
+    expect(source).toContain('<CheckboxButtonGroup.Item key="contract" value="contract">');
+    expect(source).toContain('<CheckboxButtonGroup.Item key="waiver" value="waiver">');
+    expect(source).toContain("const contractAccepted = signupAgreements.includes");
+    expect(source).toContain("const waiverAccepted = signupAgreements.includes");
+    expect(source).toContain('<RadioButtonGroup');
+    expect(source).toContain('name="membershipPlanId"');
+    expect(source).toContain('name="paymentMethod"');
+    expect(source).toContain("Maandelijks automatisch via veilige incasso.");
+    expect(source).toContain("Betaal de volledige contractperiode in één keer.");
+    expect(source).toContain("SEPA machtiging");
+    expect(source).toContain('name="iban"');
+    expect(source).toContain("sepaMandateAccepted");
+    expect(source).toContain("fullPaymentDiscountPercent");
+    expect(source).not.toContain("Alleen voor losse afspraken met de club.");
+    expect(source).not.toContain("Los betaalverzoek");
+    expect(source).toContain("fullWidth");
+    expect(source).not.toContain('import { Card, Checkbox, Input, Label } from "@heroui/react";');
+  });
+
+  it("shows a clear public payment return state instead of dropping users on an empty form", () => {
+    const pageSource = readAppSource("join/page.tsx");
+    const componentSource = readComponentSource("PublicMembershipSignupPortal.tsx");
+
+    expect(pageSource).toContain("paymentReturn");
+    expect(pageSource).toContain('payment === "return"');
+    expect(componentSource).toContain("paymentReturn");
+    expect(componentSource).toContain("Je betaling wordt verwerkt");
+    expect(componentSource).toContain("Je aanmelding is ontvangen");
   });
 });

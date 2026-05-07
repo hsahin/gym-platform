@@ -81,6 +81,32 @@ describe("dashboard management UI wiring", () => {
     expect(entityActions).toContain("Beheer geselecteerde");
   });
 
+  it("places the schedule calendar at the top of the lessons page", () => {
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+    const lessonsIndex = classes.indexOf('title="Lessen en reserveringen"');
+    const schedulerIndex = classes.indexOf("<ClassScheduler");
+    const bookingManagementIndex = classes.indexOf('title="Boekingsbeheer"');
+
+    expect(lessonsIndex).toBeGreaterThan(-1);
+    expect(schedulerIndex).toBeGreaterThan(-1);
+    expect(bookingManagementIndex).toBeGreaterThan(-1);
+    expect(lessonsIndex).toBeLessThan(bookingManagementIndex);
+    expect(schedulerIndex).toBeLessThan(bookingManagementIndex);
+  });
+
+  it("groups lesson booking settings and rules behind a HeroUI Pro segment tab", () => {
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+
+    expect(classes).toContain("bookingSettingsView");
+    expect(classes).toContain('title="Boekingsbeheer"');
+    expect(classes).toContain('aria-label="Boekingsbeheer onderdelen"');
+    expect(classes).toContain('<Segment.Item id="settings">Boekingsinstellingen</Segment.Item>');
+    expect(classes).toContain('<Segment.Item id="rules">Boekingsregels</Segment.Item>');
+    expect(classes).toContain("bookingSettingsView === \"settings\"");
+    expect(classes).not.toContain('title="Boekingsinstellingen"');
+    expect(classes).not.toContain('title="Boekingsregels"');
+  });
+
   it("keeps dashboard list filtering on the shared management helper", () => {
     const managedPages = [
       "dashboard/pages/MembersDashboardPage.tsx",
@@ -284,7 +310,7 @@ describe("dashboard management UI wiring", () => {
       'className="app-page section-stack min-w-0 max-w-full overflow-x-clip pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:pt-6 md:py-8"',
     );
     expect(shared).toContain(
-      '<section className="grid min-w-0 max-w-full content-start gap-4 overflow-x-clip">',
+      'className="grid min-w-0 max-w-full scroll-mt-28 content-start gap-4 overflow-x-clip"',
     );
     expect(payments).toContain(
       'className="section-stack min-w-0 max-w-full overflow-x-clip"',
@@ -299,7 +325,36 @@ describe("dashboard management UI wiring", () => {
     );
     expect(moduleBoard).toContain("mobile-feature-module-board min-w-0 max-w-full");
     expect(moduleBoard).toContain('className={`min-h-0 min-w-0 max-w-full flex-wrap');
-    expect(search).toContain("min-w-0 max-w-xl md:min-w-[14rem]");
+    expect(search).toContain("max-w-[22rem]");
+    expect(search).toContain("sm:max-w-[20rem]");
+    expect(search).not.toContain("max-w-xl");
+    expect(shell).toContain("xl:grid-cols-[auto_minmax(12rem,22rem)_auto]");
+    expect(shell).toContain("max-[520px]:grid-cols-1");
+    expect(shell).toContain("max-[520px]:w-full");
+  });
+
+  it("uses one mobile-friendly HeroUI Pro floating table of contents across dashboard pages", () => {
+    const shell = readSource("GymDashboardClientShell.tsx");
+    const shared = readSource("dashboard/shared.tsx");
+    const floatingToc = readSource("DashboardFloatingToc.tsx");
+    const payments = readSource("dashboard/pages/PaymentsDashboardPage.tsx");
+
+    expect(shell).toContain('import { DashboardFloatingToc } from "@/components/DashboardFloatingToc";');
+    expect(shell).toContain("data-dashboard-toc-root");
+    expect(shell).toContain("data-dashboard-page={currentPage}");
+    expect(shell).toContain("<DashboardFloatingToc pageKey={currentPage} />");
+    expect(shared).toContain("data-dashboard-toc-section");
+    expect(shared).toContain("data-dashboard-toc-label");
+    expect(floatingToc).toContain('import { FloatingToc } from "@heroui-pro/react";');
+    expect(floatingToc).toContain('triggerMode="press"');
+    expect(floatingToc).toContain('aria-label="Pagina-inhoud"');
+    expect(floatingToc).toContain("MutationObserver");
+    expect(floatingToc).toContain("IntersectionObserver");
+    expect(floatingToc).toContain("scrollIntoView");
+    expect(floatingToc).toContain("fixed");
+    expect(floatingToc).toContain("max-[520px]");
+    expect(payments).not.toContain("const pageSections");
+    expect(payments).not.toContain("<FloatingToc");
   });
 
   it("uses the HeroUI Pro floating app layout with a real mobile sidebar sheet", () => {
@@ -366,19 +421,51 @@ describe("dashboard management UI wiring", () => {
     expect(workbench).not.toContain("for (const localStart of startsToCreate)");
   });
 
-  it("keeps the full class planning form inside the lessons section", () => {
+  it("moves class planning into a HeroUI modal opened from the scheduler", () => {
     const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+    const scheduler = readSource("dashboard/ClassScheduler.tsx");
 
     expect(classes).toContain('title="Lessen en reserveringen"');
-    expect(classes).toContain("<Card.Title>Les plannen</Card.Title>");
-    expect(classes.indexOf('title="Lessen en reserveringen"')).toBeLessThan(
-      classes.indexOf("<Card.Title>Les plannen</Card.Title>"),
-    );
+    expect(classes).toContain("Modal");
+    expect(classes).toContain("isPlanningModalOpen");
+    expect(classes).toContain("openPlanningModal");
+    expect(classes).toContain("<Modal.Backdrop");
+    expect(classes).toContain('<Modal.Container placement="bottom" scroll="inside" size="lg"');
+    expect(classes).toContain("<Modal.Heading>Les plannen</Modal.Heading>");
+    expect(classes).toContain('id="class-planning-form"');
+    expect(classes).toContain('form="class-planning-form"');
+    expect(classes).toContain("Les inplannen");
+    expect(classes).toContain("onPlanClass={openPlanningModal}");
+    expect(classes).not.toContain("<Card.Title>Les plannen</Card.Title>");
     expect(classes).toContain("Wekelijks herhalen");
     expect(classes).toContain("buildWeeklyRecurringLocalStarts");
     expect(classes).toContain("classes: startsToCreate.map");
     expect(classes).not.toContain('<LazyPlatformWorkbench sections={["classes"]}');
     expect(classes).not.toContain("xl:grid-cols-[minmax(0,1fr)_420px]");
+    expect(scheduler).toContain("onPlanClass");
+    expect(scheduler).toContain("handlePlanClass");
+    expect(scheduler).toContain("Les inplannen");
+    expect(scheduler).not.toContain("visibleSessions.length > 0 ?");
+  });
+
+  it("lets owners bulk-plan free training slots across opening hours", () => {
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+
+    expect(classes).toContain("classPlanningKind");
+    expect(classes).toContain("openGymPlanningMode");
+    expect(classes).toContain("buildOpenGymCapacityLocalStarts");
+    expect(classes).toContain('<Segment.Item id="class">Groepsles</Segment.Item>');
+    expect(classes).toContain('<Segment.Item id="open-gym">Vrij trainen</Segment.Item>');
+    expect(classes).toContain('<Segment.Item id="single">Los uur</Segment.Item>');
+    expect(classes).toContain('<Segment.Item id="opening-hours">Openingstijden vullen</Segment.Item>');
+    expect(classes).toContain('name="openingHoursStart"');
+    expect(classes).toContain('name="openingHoursEnd"');
+    expect(classes).toContain('defaultValue={isOpenGymPlanning ? "60" : "45"}');
+    expect(classes).toContain('defaultValue={isOpenGymPlanning ? "4" : "16"}');
+    expect(classes).toContain('bookingKind: isOpenGymPlanning ? "open_gym" : "class"');
+    expect(classes).toContain('trainerId: isOpenGymPlanning ? ""');
+    expect(classes).toContain('"Maximaal 4 leden per uur"');
+    expect(classes).toContain("Plan maximaal 120 vrije uren of lessen per keer.");
   });
 
   it("shows every class field after planning including location and trainer context", () => {
@@ -498,7 +585,7 @@ describe("dashboard management UI wiring", () => {
 
   it("keeps feature module summaries below the primary owner workflows", () => {
     const pageOrderChecks = [
-      ["dashboard/pages/ClassesDashboardPage.tsx", 'title="Boekingsinstellingen"', 'title="Reserveringsmodules"'],
+      ["dashboard/pages/ClassesDashboardPage.tsx", 'title="Boekingsbeheer"', 'title="Reserveringsmodules"'],
       ["dashboard/pages/MembersDashboardPage.tsx", 'title="Leden"', 'title="Ledenmodules"'],
       ["dashboard/pages/ContractsDashboardPage.tsx", 'title="Lidmaatschappen"', 'title="Contractmodules"'],
       ["dashboard/pages/PaymentsDashboardPage.tsx", 'title="Omzetinstellingen"', 'title="Betaalmodules"'],

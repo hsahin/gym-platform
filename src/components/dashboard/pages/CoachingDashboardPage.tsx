@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, HeartPulse, PlayCircle, Target } from "lucide-react";
 import { Card, Input, Label } from "@heroui/react";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { ListView } from "@/components/dashboard/HydrationSafeListView";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
@@ -354,7 +355,11 @@ export function CoachingDashboardPage({ snapshot }: DashboardPageProps) {
               </div>
               <div className="field-stack md:col-span-2">
                 <Label>Geldig tot</Label>
-                <Input fullWidth value={packValidUntil} onChange={(event) => setPackValidUntil(event.target.value)} />
+                <CalendarDatePicker
+                  ariaLabel="Strippenkaart geldig tot"
+                  value={packValidUntil}
+                  onChange={setPackValidUntil}
+                />
               </div>
             </Card.Content>
           </Card>

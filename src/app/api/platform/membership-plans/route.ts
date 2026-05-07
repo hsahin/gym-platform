@@ -10,6 +10,7 @@ import { getGymPlatformServices } from "@/server/runtime/gym-services";
 const createMembershipPlanSchema = z.object({
   name: z.string().min(2),
   priceMonthly: z.number().positive(),
+  fullPaymentDiscountPercent: z.number().min(0).max(100).default(0),
   billingCycle: z.enum(["monthly", "semiannual", "annual"]),
   perks: z.array(z.string().min(1)).default([]),
 });

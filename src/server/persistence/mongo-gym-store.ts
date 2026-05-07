@@ -1,7 +1,11 @@
 import { AppError } from "@claimtech/core";
 import type { DatabaseClient, TenantDocument } from "@claimtech/database";
 import type { TenantContext } from "@claimtech/tenant";
-import { addMonthsToIsoDate, getMembershipBillingCycleMonths } from "@/lib/memberships";
+import {
+  addMonthsToIsoDate,
+  getMembershipBillingCycleMonths,
+  normalizeFullPaymentDiscountPercent,
+} from "@/lib/memberships";
 import type {
   CancelBookingInput,
   CancelBookingResult,
@@ -71,6 +75,9 @@ function withLocationDefaults(location: CollectionDocument<GymLocation>) {
 function withMembershipPlanDefaults(plan: CollectionDocument<MembershipPlan>) {
   return {
     ...toEntity(plan),
+    fullPaymentDiscountPercent: normalizeFullPaymentDiscountPercent(
+      plan.fullPaymentDiscountPercent,
+    ),
     status: plan.status ?? "active",
   } satisfies MembershipPlan;
 }
@@ -330,6 +337,9 @@ export class MongoGymStore implements GymStore {
       updatedAt: now,
       name: input.name,
       priceMonthly: input.priceMonthly,
+      fullPaymentDiscountPercent: normalizeFullPaymentDiscountPercent(
+        input.fullPaymentDiscountPercent,
+      ),
       currency: "EUR",
       billingCycle: input.billingCycle,
       perks: [...input.perks],
@@ -367,6 +377,9 @@ export class MongoGymStore implements GymStore {
         set: {
           name: input.name,
           priceMonthly: input.priceMonthly,
+          fullPaymentDiscountPercent: normalizeFullPaymentDiscountPercent(
+            input.fullPaymentDiscountPercent,
+          ),
           billingCycle: input.billingCycle,
           perks: [...input.perks],
           status: input.status,

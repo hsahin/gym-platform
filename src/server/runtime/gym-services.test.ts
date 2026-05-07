@@ -2424,7 +2424,7 @@ describe("gym platform services", () => {
     );
   });
 
-  it("runs a public member signup flow with direct checkout, waiver signing and onboarding", async () => {
+  it("runs a public member signup flow with direct SEPA mandate, waiver signing and onboarding", async () => {
     process.env.MOLLIE_API_KEY = "test_mollie_live_key";
     process.env.APP_BASE_URL = "https://gym.example";
     const paymentRequests: Array<{
@@ -2438,14 +2438,18 @@ describe("gym platform services", () => {
       readonly email?: string;
       readonly name?: string;
     }> = [];
+    const mandateRequests: Array<{
+      readonly consumerAccount?: string;
+      readonly consumerEmail?: string;
+      readonly consumerName?: string;
+      readonly method?: string;
+    }> = [];
     const subscriptionRequests: Array<{
       readonly amount?: { readonly value?: string };
       readonly interval?: string;
       readonly method?: string;
       readonly metadata?: Record<string, string>;
     }> = [];
-    let checkoutInvoiceId = "";
-    let tenantContextId = "";
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
 
@@ -2461,20 +2465,16 @@ describe("gym platform services", () => {
       }
 
       if (
-        target.endsWith("/customers/cst_signup_checkout_1/payments") &&
+        target.endsWith("/customers/cst_signup_checkout_1/mandates") &&
         init?.method === "POST"
       ) {
-        paymentRequests.push(JSON.parse(String(init.body)));
+        mandateRequests.push(JSON.parse(String(init.body)));
 
         return new Response(
           JSON.stringify({
-            id: "tr_signup_checkout_1",
-            status: "open",
-            _links: {
-              checkout: {
-                href: "https://pay.mollie.com/p/signup-checkout",
-              },
-            },
+            id: "mdt_signup_checkout_1",
+            status: "valid",
+            method: "directdebit",
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
@@ -2495,30 +2495,10 @@ describe("gym platform services", () => {
         );
       }
 
-      if (
-        target.includes("/payments/tr_signup_checkout_1") &&
-        (!init?.method || init.method === "GET")
-      ) {
-        return new Response(
-          JSON.stringify({
-            id: "tr_signup_checkout_1",
-            status: "paid",
-            customerId: "cst_signup_checkout_1",
-            sequenceType: "first",
-            metadata: {
-              invoiceId: checkoutInvoiceId,
-              tenantId: tenantContextId,
-            },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-
       throw new Error(`Unhandled Mollie request: ${target}`);
     }) as typeof fetch;
 
     const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
-    tenantContextId = tenantContext.tenantId;
 
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -2566,52 +2546,12 @@ describe("gym platform services", () => {
       membershipPlanId: plan.id,
       preferredLocationId: location.id,
       paymentMethod: "direct_debit",
+      iban: "nl91 abna 0417 1643 00",
+      sepaMandateAccepted: true,
       contractAccepted: true,
       waiverAccepted: true,
       portalPassword: "jade-member-123",
       notes: "Start het liefst volgende week.",
-    });
-    checkoutInvoiceId = checkout.invoice.id;
-    const prePaymentSnapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
-    const prePaymentAuthenticated = await authenticateLocalAccount(
-      "jade@northside.test",
-      "jade-member-123",
-    );
-
-    expect(checkout.signup.status).toBe("pending_review");
-    expect(checkout.signup.approvedMemberId).toBeUndefined();
-    expect(checkout.member).toBeNull();
-    expect(checkout.contract).toBeNull();
-    expect(checkout.invoice).toMatchObject({
-      memberId: undefined,
-      memberName: "Jade Vermeer",
-      amountCents: 11900,
-      status: "open",
-      source: "signup_checkout",
-      externalReference: "tr_signup_checkout_1",
-    });
-    expect(prePaymentSnapshot.members.some((member) => member.email === "jade@northside.test")).toBe(false);
-    expect(prePaymentSnapshot.memberSignups).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: checkout.signup.id,
-          status: "pending_review",
-          approvedMemberId: undefined,
-        }),
-      ]),
-    );
-    expect(prePaymentSnapshot.mobileSelfService.contracts).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          memberName: "Jade Vermeer",
-        }),
-      ]),
-    );
-    expect(prePaymentAuthenticated).toBeNull();
-
-    await services.syncMollieBillingWebhook({
-      tenantId: tenantContext.tenantId,
-      paymentId: checkout.providerPaymentId!,
     });
     const snapshot = await services.getDashboardSnapshot(ownerActor, tenantContext);
     const approvedMember = snapshot.members.find((member) => member.email === "jade@northside.test");
@@ -2620,17 +2560,32 @@ describe("gym platform services", () => {
       "jade-member-123",
     );
 
+    if (!approvedMember) {
+      throw new Error("Expected SEPA mandate signup to activate Jade Vermeer as a member.");
+    }
+
+    expect(checkout.signup.status).toBe("approved");
+    expect(checkout.signup.approvedMemberId).toBe(approvedMember.id);
+    expect(checkout.member?.id).toBe(approvedMember.id);
+    expect(checkout.contract?.memberId).toBe(approvedMember.id);
+    expect(checkout.invoice).toMatchObject({
+      memberId: approvedMember.id,
+      memberName: "Jade Vermeer",
+      amountCents: 11900,
+      status: "open",
+      source: "signup_checkout",
+      externalReference: "sub_signup_checkout_1",
+      checkoutUrl: undefined,
+    });
+
     expect(publicSnapshot.membershipPlans.map((item) => item.id)).toContain(plan.id);
     expect(publicSnapshot.billingReady).toBe(true);
     expect(publicSnapshot.legalReady).toBe(true);
-    expect(publicSnapshot.billingMessage).toContain("veilige checkout");
+    expect(publicSnapshot.billingMessage).toContain("veilig betalen");
     expect(publicSnapshot.legalMessage).toContain("contract en voorwaarden zijn klaar");
     expect(`${publicSnapshot.billingMessage} ${publicSnapshot.legalMessage}`).not.toMatch(
       /Mollie-account|publieke betaal-url|Mollie-toegang|SEPA creditor ID|contract-PDF template|waiver-opslag|self-signup/i,
     );
-    if (!approvedMember) {
-      throw new Error("Expected paid signup webhook to activate Jade Vermeer as a member.");
-    }
     expect(snapshot.memberSignups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2641,27 +2596,23 @@ describe("gym platform services", () => {
       ]),
     );
     expect(checkout.signup.waiverAcceptedAt).toBeTruthy();
-    expect(checkout.checkoutUrl).toBe("https://pay.mollie.com/p/signup-checkout");
-    expect(checkout.providerPaymentId).toBe("tr_signup_checkout_1");
+    expect(checkout.checkoutUrl).toBeUndefined();
+    expect(checkout.providerPaymentId).toBeUndefined();
+    expect(checkout.providerMandateId).toBe("mdt_signup_checkout_1");
+    expect(checkout.providerSubscriptionId).toBe("sub_signup_checkout_1");
+    expect(checkout.providerStatus).toBe("active");
     expect(approvedMember.email).toBe("jade@northside.test");
     expect(customerRequests[0]).toMatchObject({
       name: "Jade Vermeer",
       email: "jade@northside.test",
     });
-    const signupPaymentRequest = paymentRequests[0]!;
-    expect(signupPaymentRequest.sequenceType).toBe("first");
-    expect(signupPaymentRequest.redirectUrl).toContain("/join?");
-    expect(signupPaymentRequest.redirectUrl).toContain("payment=return");
-    expect(signupPaymentRequest.redirectUrl).toContain(`invoice=${checkout.invoice.id}`);
-    expect(signupPaymentRequest.webhookUrl).toContain("/api/platform/billing/mollie/webhook");
-    expect(signupPaymentRequest.metadata).toMatchObject({
-      tenantId: tenantContext.tenantId,
-      invoiceId: checkout.invoice.id,
-      signupRequestId: checkout.signup.id,
-      source: "signup_checkout",
+    expect(paymentRequests).toHaveLength(0);
+    expect(mandateRequests[0]).toMatchObject({
+      method: "directdebit",
+      consumerName: "Jade Vermeer",
+      consumerAccount: "NL91ABNA0417164300",
+      consumerEmail: "jade@northside.test",
     });
-    expect(signupPaymentRequest.metadata).not.toHaveProperty("memberId");
-    expect(signupPaymentRequest.method).toBeUndefined();
     expect(subscriptionRequests[0]).toMatchObject({
       amount: { value: "119.00" },
       interval: "1 month",
@@ -2679,9 +2630,9 @@ describe("gym platform services", () => {
           memberId: approvedMember.id,
           memberName: "Jade Vermeer",
           amountCents: 11900,
-          status: "paid",
+          status: "open",
           source: "signup_checkout",
-          externalReference: "tr_signup_checkout_1",
+          externalReference: "sub_signup_checkout_1",
           lastWebhookEventType: "subscription.created",
         }),
       ]),
@@ -2915,6 +2866,7 @@ describe("gym platform services", () => {
       name: "Annual Unlimited",
       priceMonthly: 100,
       billingCycle: "annual",
+      fullPaymentDiscountPercent: 10,
       perks: ["12 maanden toegang"],
     });
     await services.updateLegalSettings(ownerActor, tenantContext, {
@@ -2951,10 +2903,10 @@ describe("gym platform services", () => {
       portalPassword: "jade-member-123",
     });
 
-    expect(checkout.invoice.amountCents).toBe(120000);
+    expect(checkout.invoice.amountCents).toBe(108000);
     expect(paymentRequests[0]).toMatchObject({
       amount: {
-        value: "1200.00",
+        value: "1080.00",
       },
     });
     expect(paymentRequests[0]?.method).toBeUndefined();

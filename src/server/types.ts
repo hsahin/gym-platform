@@ -69,6 +69,7 @@ export interface GymLocation extends TenantOwnedEntity {
 export interface MembershipPlan extends TenantOwnedEntity {
   readonly name: string;
   readonly priceMonthly: number;
+  readonly fullPaymentDiscountPercent: number;
   readonly currency: string;
   readonly billingCycle: "monthly" | "semiannual" | "annual";
   readonly perks: ReadonlyArray<string>;
@@ -202,8 +203,10 @@ export interface PublicMembershipSignupResult {
   readonly member: GymMember | null;
   readonly invoice: BillingInvoice;
   readonly contract: MemberContractRecord | null;
-  readonly checkoutUrl: string;
-  readonly providerPaymentId: string;
+  readonly checkoutUrl?: string;
+  readonly providerPaymentId?: string;
+  readonly providerMandateId?: string;
+  readonly providerSubscriptionId?: string;
   readonly providerStatus: string;
 }
 
@@ -788,8 +791,10 @@ export interface PublicMembershipSignupSnapshot {
     readonly id: string;
     readonly name: string;
     readonly priceMonthly: number;
+    readonly fullPaymentDiscountPercent: number;
     readonly billingCycle: MembershipPlan["billingCycle"];
   }>;
+  readonly paymentMethods: ReadonlyArray<Extract<BillingPaymentMethod, "direct_debit" | "one_time">>;
   readonly locations: ReadonlyArray<{
     readonly id: string;
     readonly name: string;

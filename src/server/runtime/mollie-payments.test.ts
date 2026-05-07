@@ -302,6 +302,64 @@ describe("mollie payment provider", () => {
     });
   });
 
+  it("creates a direct SEPA mandate without a checkout link", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+
+      if (target === "https://api.mollie.com/v2/customers") {
+        expect(init?.method).toBe("POST");
+        expect(body).toMatchObject({
+          name: "Jade Vermeer",
+          email: "jade@northside.test",
+          testmode: true,
+        });
+
+        return jsonResponse({ id: "cst_direct_debit_1" });
+      }
+
+      expect(target).toBe(
+        "https://api.mollie.com/v2/customers/cst_direct_debit_1/mandates",
+      );
+      expect(init?.method).toBe("POST");
+      expect(body).toMatchObject({
+        method: "directdebit",
+        consumerName: "Jade Vermeer",
+        consumerAccount: "NL91ABNA0417164300",
+        consumerEmail: "jade@northside.test",
+        testmode: true,
+      });
+
+      return jsonResponse({
+        id: "mdt_direct_debit_1",
+        status: "valid",
+        method: "directdebit",
+      });
+    });
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+    const customer = await provider.createCustomer({
+      name: "Jade Vermeer",
+      email: "jade@northside.test",
+    });
+
+    await expect(
+      provider.createDirectDebitMandate({
+        customerId: customer.providerCustomerId,
+        consumerName: "Jade Vermeer",
+        consumerAccount: "nl91 abna 0417 1643 00",
+        consumerEmail: "jade@northside.test",
+      }),
+    ).resolves.toEqual({
+      providerMandateId: "mdt_direct_debit_1",
+      method: "directdebit",
+      status: "valid",
+    });
+  });
+
   it("reads Mollie payment status and creates refunds through the API", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
@@ -432,7 +490,7 @@ describe("mollie payment provider", () => {
     });
   });
 
-  it("rejects incomplete Mollie customer, payment, subscription and refund responses", async () => {
+  it("rejects incomplete Mollie customer, mandate, payment, subscription and refund responses", async () => {
     const customerProvider = createMolliePaymentProvider({
       accessToken: "access_123",
       fetchImpl: vi.fn(async (url: string | URL | Request) => {
@@ -465,6 +523,24 @@ describe("mollie payment provider", () => {
     ).rejects.toMatchObject({
       code: "INVALID_INPUT",
       message: "Mollie gaf geen geldige klantreferentie terug.",
+    });
+
+    const mandateProvider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async () => jsonResponse({ status: "invalid" })),
+      testMode: true,
+    });
+
+    await expect(
+      mandateProvider.createDirectDebitMandate({
+        customerId: "cst_1",
+        consumerName: "Jade Vermeer",
+        consumerAccount: "NL91ABNA0417164300",
+        consumerEmail: "jade@northside.test",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: "Mollie gaf geen geldige incassomachtiging terug.",
     });
 
     const paymentProvider = createMolliePaymentProvider({

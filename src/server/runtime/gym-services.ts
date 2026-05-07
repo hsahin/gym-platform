@@ -40,8 +40,9 @@ import {
   type StoredBillingSettings,
 } from "@/lib/billing";
 import {
+  getMembershipFullPaymentAmountCents,
   getMembershipBillingCycleLabel,
-  getMembershipBillingCycleMonths,
+  getMembershipMonthlyAmountCents,
 } from "@/lib/memberships";
 import {
   createMolliePaymentProvider,
@@ -1906,7 +1907,7 @@ function getPublicSignupBillingMessage(
   }
 
   if (isBillingReady(billing)) {
-    return "Je betaling wordt direct als veilige checkout gestart.";
+    return "Je kunt veilig betalen via automatische incasso of volledige contractbetaling.";
   }
 
   if (options?.testMode && billing.profileId.trim()) {
@@ -1944,10 +1945,25 @@ function buildSignedContractDocumentUrl(
 
 function getMembershipCheckoutAmountCents(
   membershipPlan: GymDashboardSnapshot["membershipPlans"][number],
+  paymentMethod: BillingPaymentMethod,
 ) {
-  return Math.round(
-    membershipPlan.priceMonthly * getMembershipBillingCycleMonths(membershipPlan.billingCycle) * 100,
-  );
+  if (paymentMethod === "direct_debit") {
+    return getMembershipMonthlyAmountCents(membershipPlan);
+  }
+
+  return getMembershipFullPaymentAmountCents(membershipPlan);
+}
+
+function normalizeSignupIban(value: string | undefined) {
+  const normalized = (value ?? "").replace(/\s+/g, "").toUpperCase();
+
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(normalized)) {
+    throw new AppError("Vul een geldig IBAN in voor automatische incasso.", {
+      code: "INVALID_INPUT",
+    });
+  }
+
+  return normalized;
 }
 
 function buildMollieOauthState(tenantId: string, purpose: string) {
@@ -2891,6 +2907,8 @@ export interface GymPlatformServices {
     readonly membershipPlanId: string;
     readonly preferredLocationId: string;
     readonly paymentMethod: GymDashboardSnapshot["memberSignups"][number]["paymentMethod"];
+    readonly iban?: string;
+    readonly sepaMandateAccepted?: boolean;
     readonly contractAccepted: boolean;
     readonly waiverAccepted: boolean;
     readonly portalPassword: string;
@@ -4616,6 +4634,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     readonly location: GymDashboardSnapshot["locations"][number];
     readonly memberStatus: CreateMemberInput["status"];
     readonly portalPassword?: string;
+    readonly iban?: string;
     readonly ownerNotes?: string;
     readonly actorId: string;
     readonly prerequisites?: Awaited<ReturnType<typeof loadSignupCheckoutPrerequisites>>;
@@ -4633,11 +4652,150 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
       invoice = await createLocalTenantBillingInvoice(input.tenantContext.tenantId, {
         memberName: input.signup.fullName,
         description: `Membership checkout · ${input.membershipPlan.name}`,
-        amountCents: getMembershipCheckoutAmountCents(input.membershipPlan),
+        amountCents: getMembershipCheckoutAmountCents(
+          input.membershipPlan,
+          input.signup.paymentMethod,
+        ),
         dueAt: new Date().toISOString(),
         source: "signup_checkout",
         externalReference: input.signup.id,
       });
+
+      if (input.signup.paymentMethod === "direct_debit") {
+        const provider = prerequisites.provider;
+
+        if (!provider) {
+          throw new AppError("Betaalgegevens zijn nog niet klaar voor automatische incasso.", {
+            code: "INVALID_INPUT",
+          });
+        }
+
+        const normalizedIban = normalizeSignupIban(input.iban);
+        const customer = await provider.createCustomer({
+          name: input.signup.fullName,
+          email: input.signup.email,
+        });
+        const mandate = await provider.createDirectDebitMandate({
+          customerId: customer.providerCustomerId,
+          consumerName: input.signup.fullName,
+          consumerAccount: normalizedIban,
+          consumerEmail: input.signup.email,
+        });
+        const mandateStatus = mandate.status.toLowerCase();
+
+        if (mandateStatus !== "valid" && mandateStatus !== "pending") {
+          throw new AppError("Mollie kon de SEPA-machtiging niet accepteren.", {
+            code: "INVALID_INPUT",
+            details: {
+              mandateStatus: mandate.status,
+            },
+          });
+        }
+
+        let member: GymDashboardSnapshot["members"][number] | undefined;
+
+        try {
+          member = await runtime.store.createMember(input.tenantContext, {
+            fullName: input.signup.fullName,
+            email: input.signup.email,
+            phone: input.signup.phone,
+            phoneCountry: input.signup.phoneCountry,
+            membershipPlanId: input.membershipPlan.id,
+            homeLocationId: input.location.id,
+            status: input.memberStatus,
+            tags: ["self-signup"],
+            waiverStatus: "complete",
+            waiverStorageKey: prerequisites.legal.waiverStorageKey,
+          });
+
+          if (input.portalPassword) {
+            await upsertLocalMemberPortalAccount(input.tenantContext.tenantId, {
+              memberId: member.id,
+              displayName: member.fullName,
+              email: member.email,
+              password: input.portalPassword,
+            });
+          }
+
+          const approvedSignup = await reviewLocalTenantMemberSignup(
+            input.tenantContext.tenantId,
+            {
+              id: input.signup.id,
+              status: "approved",
+              ownerNotes: input.ownerNotes,
+              approvedMemberId: member.id,
+            },
+          );
+          const contract = await ensureMemberContractRecord(input.tenantContext, member);
+          const subscription = await provider.createSubscription({
+            customerId: customer.providerCustomerId,
+            amountCents: getMembershipMonthlyAmountCents(input.membershipPlan),
+            currency: invoice.currency,
+            interval: "1 month",
+            description: `Maandelijkse incasso · ${member.fullName}`,
+            webhookUrl: buildMollieWebhookUrl(input.tenantContext),
+            startDate: formatMollieSubscriptionStartDate(),
+            metadata: {
+              tenantId: input.tenantContext.tenantId,
+              invoiceId: invoice.id,
+              memberId: member.id,
+              source: invoice.source,
+              signupRequestId: input.signup.id,
+            },
+          });
+          const linkedInvoice = await updateLocalTenantBillingInvoice(
+            input.tenantContext.tenantId,
+            {
+              id: invoice.id,
+              status: "open",
+              memberId: member.id,
+              memberName: member.fullName,
+              externalReference: subscription.providerSubscriptionId,
+              lastWebhookEventType: "subscription.created",
+            },
+          );
+
+          await runtime.auditLogger.write({
+            action: "member_signup.direct_debit_activated",
+            category: "members",
+            actorId: input.actorId,
+            tenantId: input.tenantContext.tenantId,
+            metadata: {
+              signupRequestId: input.signup.id,
+              memberId: member.id,
+              invoiceId: linkedInvoice.id,
+              providerMandateId: mandate.providerMandateId,
+              providerSubscriptionId: subscription.providerSubscriptionId,
+            },
+          });
+
+          return toClientPlain({
+            signup: approvedSignup,
+            member,
+            invoice: linkedInvoice,
+            contract,
+            providerMandateId: mandate.providerMandateId,
+            providerSubscriptionId: subscription.providerSubscriptionId,
+            providerStatus: subscription.status,
+          } satisfies PublicMembershipSignupResult);
+        } catch (error) {
+          if (member) {
+            await deleteLocalMemberPortalAccountByMemberId(
+              input.tenantContext.tenantId,
+              member.id,
+            ).catch(() => undefined);
+            await runtime.store
+              .deleteMember(input.tenantContext, {
+                id: member.id,
+                expectedVersion: member.version,
+              })
+              .catch(() => undefined);
+          }
+
+          throw error;
+        }
+      }
+
       const { invoice: processedInvoice, intent } = await attachMolliePaymentToInvoice(
         input.tenantContext,
         prerequisites.billing,
@@ -4646,15 +4804,6 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           paymentMethod: input.signup.paymentMethod,
           description: `Membership checkout · ${input.membershipPlan.name}`,
           eventLabel: "payment.signup_checkout_created",
-          sequenceType:
-            input.signup.paymentMethod === "direct_debit" ? "first" : undefined,
-          customer:
-            input.signup.paymentMethod === "direct_debit"
-              ? {
-                  name: input.signup.fullName,
-                  email: input.signup.email,
-                }
-              : undefined,
           provider: prerequisites.provider ?? undefined,
           redirectUrl: buildMemberSignupPaymentRedirectUrl(
             input.tenantContext.tenantId,
@@ -5090,6 +5239,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
           tenantSlug: null,
           availableGyms: toPublicGymOptions(publicTenants),
           membershipPlans: [],
+          paymentMethods: [],
           locations: [],
           legal: {
             termsUrl: "",
@@ -5144,8 +5294,13 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
             id: plan.id,
             name: plan.name,
             priceMonthly: plan.priceMonthly,
+            fullPaymentDiscountPercent: plan.fullPaymentDiscountPercent,
             billingCycle: plan.billingCycle,
           })),
+        paymentMethods: (billing?.paymentMethods ?? []).filter(
+          (method): method is Extract<BillingPaymentMethod, "direct_debit" | "one_time"> =>
+            method === "direct_debit" || method === "one_time",
+        ),
         locations: locations
           .filter((location) => location.status === "active")
           .map((location) => ({
@@ -5185,6 +5340,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
 
       if (!input.contractAccepted || !input.waiverAccepted) {
         throw new AppError("Contract en waiver moeten akkoord zijn voordat iemand zich aanmeldt.", {
+          code: "INVALID_INPUT",
+        });
+      }
+
+      if (input.paymentMethod === "payment_request") {
+        throw new AppError("Online aanmelden ondersteunt alleen incasso of volledige contractbetaling.", {
           code: "INVALID_INPUT",
         });
       }
@@ -5242,6 +5403,13 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         tenantContext,
         input.paymentMethod,
       );
+
+      if (input.paymentMethod === "direct_debit" && !input.sepaMandateAccepted) {
+        throw new AppError("Geef akkoord op de SEPA-machtiging voordat je automatische incasso activeert.", {
+          code: "INVALID_INPUT",
+        });
+      }
+
       const signup = await createLocalTenantMemberSignup(tenantContext.tenantId, {
         fullName: input.fullName,
         email: input.email,
@@ -5262,6 +5430,7 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         location: activeLocation,
         memberStatus: "trial",
         portalPassword: input.portalPassword,
+        iban: input.iban,
         actorId: `public:${normalizeEmailValue(input.email)}`,
         prerequisites,
       });

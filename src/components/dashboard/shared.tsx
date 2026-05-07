@@ -47,19 +47,49 @@ export function statusChip(status: string) {
   return { color: "accent" as const, variant: "tertiary" as const };
 }
 
+function slugifySectionId(value: string) {
+  return (
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "sectie"
+  );
+}
+
 export function PageSection({
   title,
   description,
   actions,
   children,
+  excludeFromToc = false,
+  id,
+  tocLabel,
+  tocLevel = 1,
 }: {
   readonly title: string;
   readonly description?: string;
   readonly actions?: ReactNode;
   readonly children: ReactNode;
+  readonly excludeFromToc?: boolean;
+  readonly id?: string;
+  readonly tocLabel?: string;
+  readonly tocLevel?: 1 | 2 | 3;
 }) {
+  const sectionLabel = tocLabel ?? title;
+  const sectionId =
+    id ?? (excludeFromToc ? undefined : `dashboard-section-${slugifySectionId(sectionLabel)}`);
+
   return (
-    <section className="grid min-w-0 max-w-full content-start gap-4 overflow-x-clip">
+    <section
+      id={sectionId}
+      className="grid min-w-0 max-w-full scroll-mt-28 content-start gap-4 overflow-x-clip"
+      data-dashboard-toc-label={excludeFromToc ? undefined : sectionLabel}
+      data-dashboard-toc-level={excludeFromToc ? undefined : tocLevel}
+      data-dashboard-toc-section={excludeFromToc ? undefined : ""}
+    >
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 space-y-1.5">
           <h2 className="text-xl font-semibold leading-tight">{title}</h2>

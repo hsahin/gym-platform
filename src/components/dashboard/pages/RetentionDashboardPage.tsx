@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Award, MessageSquareHeart, ShieldAlert, Users } from "lucide-react";
 import { Card, Input, Label } from "@heroui/react";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
@@ -318,11 +319,19 @@ export function RetentionDashboardPage({ snapshot }: DashboardPageProps) {
                 </div>
                 <div className="field-stack">
                   <Label>Start</Label>
-                  <Input fullWidth value={challengeStartsAt} onChange={(event) => setChallengeStartsAt(event.target.value)} />
+                  <CalendarDatePicker
+                    ariaLabel="Uitdaging startdatum"
+                    value={challengeStartsAt}
+                    onChange={setChallengeStartsAt}
+                  />
                 </div>
                 <div className="field-stack">
                   <Label>Einde</Label>
-                  <Input fullWidth value={challengeEndsAt} onChange={(event) => setChallengeEndsAt(event.target.value)} />
+                  <CalendarDatePicker
+                    ariaLabel="Uitdaging einddatum"
+                    value={challengeEndsAt}
+                    onChange={setChallengeEndsAt}
+                  />
                 </div>
                 <div className="field-stack md:col-span-2">
                   <Label>Deelnemers (lid-ID&apos;s)</Label>

@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Chip, Input, Label } from "@heroui/react";
 import { toast } from "sonner";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { DashboardEntityDataGrid } from "@/components/dashboard/DashboardEntityDataGrid";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";
@@ -88,6 +89,21 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
         <Chip size="sm" variant="soft">
           {getMembershipBillingCycleLabel(plan.billingCycle)}
         </Chip>
+      ),
+    },
+    {
+      id: "fullPaymentDiscountPercent",
+      header: "Korting ineens",
+      accessorKey: "fullPaymentDiscountPercent",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 140,
+      cell: (plan) => (
+        <span className="tabular-nums">
+          {plan.fullPaymentDiscountPercent > 0
+            ? `${plan.fullPaymentDiscountPercent}%`
+            : "Geen"}
+        </span>
       ),
     },
     {
@@ -244,6 +260,12 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
                   ],
                 },
                 {
+                  name: "fullPaymentDiscountPercent",
+                  label: "Korting bij volledige contractbetaling (%)",
+                  defaultValue: plan.fullPaymentDiscountPercent,
+                  type: "number",
+                },
+                {
                   name: "status",
                   label: "Status",
                   defaultValue: plan.status,
@@ -397,11 +419,10 @@ export function ContractsDashboardPage({ snapshot }: DashboardPageProps) {
             </div>
             <div className="field-stack md:col-span-2">
               <Label>Geldig tot</Label>
-              <Input
-                fullWidth
-                type="date"
+              <CalendarDatePicker
+                ariaLabel="Strippenkaart geldig tot"
                 value={packValidUntil}
-                onChange={(event) => setPackValidUntil(event.target.value)}
+                onChange={setPackValidUntil}
               />
             </div>
           </Card.Content>

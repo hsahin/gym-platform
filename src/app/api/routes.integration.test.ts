@@ -247,7 +247,7 @@ describe("api route integrations", () => {
     expect(state.tenant.name).toBe("Northside Athletics");
   });
 
-  it("supports the public signup flow through direct checkout and onboarding", async () => {
+  it("supports the public signup flow through SEPA mandate and onboarding", async () => {
     const { state, ownerActor, services, tenantContext } = await bootstrapOwnerPlatform();
     const location = await services.createLocation(ownerActor, tenantContext, {
       name: "Northside East",
@@ -297,18 +297,27 @@ describe("api route integrations", () => {
       }
 
       if (
-        target.endsWith("/customers/cst_route_signup_1/payments") &&
+        target.endsWith("/customers/cst_route_signup_1/mandates") &&
         init?.method === "POST"
       ) {
         return new Response(
           JSON.stringify({
-            id: "tr_route_signup_1",
-            status: "open",
-            _links: {
-              checkout: {
-                href: "https://pay.mollie.com/p/route-signup",
-              },
-            },
+            id: "mdt_route_signup_1",
+            status: "valid",
+            method: "directdebit",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (
+        target.endsWith("/customers/cst_route_signup_1/subscriptions") &&
+        init?.method === "POST"
+      ) {
+        return new Response(
+          JSON.stringify({
+            id: "sub_route_signup_1",
+            status: "active",
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
@@ -327,6 +336,8 @@ describe("api route integrations", () => {
         membershipPlanId: membershipPlan.id,
         preferredLocationId: location.id,
         paymentMethod: "direct_debit",
+        iban: "NL91 ABNA 0417 1643 00",
+        sepaMandateAccepted: true,
         contractAccepted: true,
         waiverAccepted: true,
         portalPassword: "trial-pass-123",
@@ -349,20 +360,24 @@ describe("api route integrations", () => {
           memberId?: string;
           externalReference?: string;
         };
-        checkoutUrl: string;
-        providerPaymentId: string;
+        checkoutUrl?: string;
+        providerPaymentId?: string;
+        providerMandateId?: string;
+        providerSubscriptionId?: string;
       };
     };
 
     expect(signupResponse.status).toBe(201);
     expect(signupPayload.ok).toBe(true);
-    expect(signupPayload.data.signup.status).toBe("pending_review");
-    expect(signupPayload.data.signup.approvedMemberId).toBeUndefined();
-    expect(signupPayload.data.member).toBeNull();
-    expect(signupPayload.data.invoice.memberId).toBeUndefined();
-    expect(signupPayload.data.invoice.externalReference).toBe("tr_route_signup_1");
-    expect(signupPayload.data.checkoutUrl).toBe("https://pay.mollie.com/p/route-signup");
-    expect(signupPayload.data.providerPaymentId).toBe("tr_route_signup_1");
+    expect(signupPayload.data.signup.status).toBe("approved");
+    expect(signupPayload.data.signup.approvedMemberId).toBeTruthy();
+    expect(signupPayload.data.member?.email).toBe("lena@northside.test");
+    expect(signupPayload.data.invoice.memberId).toBe(signupPayload.data.member?.id);
+    expect(signupPayload.data.invoice.externalReference).toBe("sub_route_signup_1");
+    expect(signupPayload.data.checkoutUrl).toBeUndefined();
+    expect(signupPayload.data.providerPaymentId).toBeUndefined();
+    expect(signupPayload.data.providerMandateId).toBe("mdt_route_signup_1");
+    expect(signupPayload.data.providerSubscriptionId).toBe("sub_route_signup_1");
 
     const refreshedServices = await getGymPlatformServices();
     const refreshedTenantContext = refreshedServices.createRequestTenantContext(
@@ -374,13 +389,13 @@ describe("api route integrations", () => {
       refreshedTenantContext,
     );
     expect(dashboard.memberSignups).toHaveLength(1);
-    expect(dashboard.memberSignups[0]?.status).toBe("pending_review");
-    expect(dashboard.members.some((member) => member.email === "lena@northside.test")).toBe(false);
+    expect(dashboard.memberSignups[0]?.status).toBe("approved");
+    expect(dashboard.members.some((member) => member.email === "lena@northside.test")).toBe(true);
     expect(dashboard.billingBackoffice.invoices).toHaveLength(1);
     expect(dashboard.billingBackoffice.invoices[0]?.amountCents).toBe(11_900);
     expect(dashboard.billingBackoffice.invoices[0]?.source).toBe("signup_checkout");
-    expect(dashboard.billingBackoffice.invoices[0]?.externalReference).toBe("tr_route_signup_1");
-    expect(dashboard.waivers).toHaveLength(0);
+    expect(dashboard.billingBackoffice.invoices[0]?.externalReference).toBe("sub_route_signup_1");
+    expect(dashboard.waivers).toHaveLength(1);
   });
 
   it("creates reservations for authenticated members through the public route", async () => {

@@ -278,8 +278,9 @@ describe("dashboard shell copy", () => {
     expect(classesSource).toContain('title="Lessen en reserveringen"');
     expect(classesSource).toContain('title="Geen lessen gevonden"');
     expect(classSchedulerSource).toContain("Geen lessen gepland");
-    expect(classesSource).toContain('title="Boekingsinstellingen"');
-    expect(classesSource).toContain('title="Boekingsregels"');
+    expect(classesSource).toContain('title="Boekingsbeheer"');
+    expect(classesSource).toContain('<Segment.Item id="settings">Boekingsinstellingen</Segment.Item>');
+    expect(classesSource).toContain('<Segment.Item id="rules">Boekingsregels</Segment.Item>');
     expect(classesSource).toContain("Proefleslink");
     expect(classesSource).toContain("Standaard strippenkaart");
     expect(classesSource).toContain("Annuleringskosten (€)");

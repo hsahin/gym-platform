@@ -53,6 +53,7 @@ export interface UpdateLocationInput extends CreateLocationInput {
 export interface CreateMembershipPlanInput {
   readonly name: string;
   readonly priceMonthly: number;
+  readonly fullPaymentDiscountPercent?: number;
   readonly billingCycle: MembershipPlan["billingCycle"];
   readonly perks: ReadonlyArray<string>;
 }

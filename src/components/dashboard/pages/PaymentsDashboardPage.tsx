@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Chip, Input, Label, Tooltip } from "@heroui/react";
-import { FloatingToc } from "@heroui-pro/react";
 import { DataGrid, type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
@@ -33,14 +32,6 @@ import {
   getPointOfSaleModeLabel,
 } from "@/lib/ui-labels";
 import { formatEuroFromCents, parseEuroInputToCents } from "@/lib/currency";
-
-const pageSections = [
-  { id: "revenue-setup", label: "Omzet" },
-  { id: "collections-queue", label: "Opvolging" },
-  { id: "mollie-account", label: "Mollie" },
-  { id: "billing-backoffice", label: "Facturen" },
-  { id: "payment-modules", label: "Modules" },
-] as const;
 
 const billingWorkbenchTabs = [
   { id: "invoice-draft", label: "Factuur klaarzetten" },
@@ -119,9 +110,6 @@ function InfoCard({
 export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [activeSectionId, setActiveSectionId] = useState<(typeof pageSections)[number]["id"]>(
-    pageSections[0].id,
-  );
   const [billingWorkbenchTab, setBillingWorkbenchTab] =
     useState<BillingWorkbenchTab>("invoice-draft");
   const paymentFeatures = snapshot.featureFlags.filter(
@@ -200,38 +188,6 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
     setInvoiceMemberName(snapshot.members[0]?.fullName ?? "");
     setSelectedInvoiceId(snapshot.billingBackoffice.invoices[0]?.id ?? "");
   }, [snapshot.billingBackoffice.invoices, snapshot.members, snapshot.revenueWorkspace]);
-
-  useEffect(() => {
-    const targets = pageSections
-      .map((section) => document.getElementById(section.id))
-      .filter((section): section is HTMLElement => Boolean(section));
-
-    if (targets.length === 0) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const nextVisible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-
-        if (nextVisible?.target.id) {
-          setActiveSectionId(nextVisible.target.id as (typeof pageSections)[number]["id"]);
-        }
-      },
-      {
-        rootMargin: "-18% 0px -58% 0px",
-        threshold: [0.2, 0.45, 0.7],
-      },
-    );
-
-    for (const section of targets) {
-      observer.observe(section);
-    }
-
-    return () => observer.disconnect();
-  }, []);
 
   const missingPaymentUpdateFields = [
     selectedInvoiceId ? null : "factuur",
@@ -398,14 +354,8 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
     },
   ];
 
-  function scrollToSection(id: (typeof pageSections)[number]["id"]) {
-    setActiveSectionId(id);
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   return (
-    <div className="min-w-0 xl:grid xl:grid-cols-[minmax(0,1fr)_72px] xl:gap-8">
-      <div className="section-stack min-w-0 max-w-full overflow-x-clip">
+    <div className="section-stack min-w-0 max-w-full overflow-x-clip">
         <div id="revenue-setup" className="scroll-mt-28">
           <PageSection
             title="Omzetinstellingen"
@@ -1232,33 +1182,6 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
             />
           </PageSection>
         </div>
-      </div>
-
-      <div className="hidden xl:block">
-        <div className="sticky top-28 flex justify-end">
-          <FloatingToc placement="left" triggerMode="press">
-            <FloatingToc.Trigger aria-label="Inhoud betalingen">
-              {pageSections.map((section) => (
-                <FloatingToc.Bar
-                  key={section.id}
-                  active={section.id === activeSectionId}
-                />
-              ))}
-            </FloatingToc.Trigger>
-            <FloatingToc.Content>
-              {pageSections.map((section) => (
-                <FloatingToc.Item
-                  key={section.id}
-                  active={section.id === activeSectionId}
-                  onClick={() => scrollToSection(section.id)}
-                >
-                  {section.label}
-                </FloatingToc.Item>
-              ))}
-            </FloatingToc.Content>
-          </FloatingToc>
-        </div>
-      </div>
     </div>
   );
 }

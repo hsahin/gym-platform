@@ -16,6 +16,7 @@ import {
   Switch,
   TextArea,
 } from "@heroui/react";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { CheckboxButtonGroup } from "@heroui-pro/react/checkbox-button-group";
 import { Kanban } from "@heroui-pro/react/kanban";
@@ -1141,13 +1142,10 @@ export function PlatformWorkbench({
 
                           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                             <Field label="Herhaal t/m">
-                              <Input
-                                fullWidth
-                                type="date"
+                              <CalendarDatePicker
+                                ariaLabel="Herhaal tot en met"
                                 value={classRecurringUntil}
-                                onChange={(event) =>
-                                  setClassRecurringUntil(event.target.value)
-                                }
+                                onChange={setClassRecurringUntil}
                               />
                             </Field>
                             {classCreateCount > 0 ? (
@@ -2065,7 +2063,11 @@ export function PlatformWorkbench({
                       </Field>
                       <div className="md:col-span-2">
                         <Field label="Oprichtingsdatum">
-                          <Input fullWidth placeholder="YYYY-MM-DD" value={mollieClientIncorporationDate} onChange={(event) => setMollieClientIncorporationDate(event.target.value)} />
+                          <CalendarDatePicker
+                            ariaLabel="Oprichtingsdatum"
+                            value={mollieClientIncorporationDate}
+                            onChange={setMollieClientIncorporationDate}
+                          />
                         </Field>
                       </div>
                     </Card.Content>

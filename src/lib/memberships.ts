@@ -48,6 +48,38 @@ export function getMembershipBillingCycleMonths(
   }
 }
 
+export function normalizeFullPaymentDiscountPercent(value: number | undefined) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((value ?? 0) * 100) / 100));
+}
+
+export function getMembershipMonthlyAmountCents(
+  membershipPlan: Pick<MembershipPlan, "priceMonthly">,
+) {
+  return Math.round(membershipPlan.priceMonthly * 100);
+}
+
+export function getMembershipFullPaymentAmountCents(
+  membershipPlan: Pick<
+    MembershipPlan,
+    "billingCycle" | "fullPaymentDiscountPercent" | "priceMonthly"
+  >,
+) {
+  const grossAmountCents = Math.round(
+    membershipPlan.priceMonthly *
+      getMembershipBillingCycleMonths(membershipPlan.billingCycle) *
+      100,
+  );
+  const discountMultiplier =
+    (100 - normalizeFullPaymentDiscountPercent(membershipPlan.fullPaymentDiscountPercent)) /
+    100;
+
+  return Math.max(0, Math.round(grossAmountCents * discountMultiplier));
+}
+
 export function normalizeMembershipBillingCycleInput(
   input: string,
 ): MembershipPlan["billingCycle"] | null {

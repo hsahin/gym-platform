@@ -73,11 +73,11 @@ export function FunctionalitySearch({
   }, []);
 
   return (
-    <div className="w-full min-w-0 max-w-xl md:min-w-[14rem] md:w-[min(38vw,34rem)]">
+    <div className="w-full min-w-0 max-w-[22rem] max-[520px]:max-w-none sm:max-w-[20rem] md:w-[clamp(12rem,24vw,22rem)] lg:max-w-[22rem]">
       <Button
         fullWidth
         aria-label={ariaLabel}
-        className="h-10 justify-start rounded-xl px-3 text-muted"
+        className="h-9 justify-start rounded-xl px-2.5 text-sm text-muted"
         type="button"
         variant="outline"
         onPress={() => setIsOpen(true)}
@@ -87,7 +87,7 @@ export function FunctionalitySearch({
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 truncate text-left">{placeholder}</span>
-        <Kbd className="hidden shrink-0 text-xs sm:inline-flex">
+        <Kbd className="hidden shrink-0 text-xs xl:inline-flex">
           <Kbd.Abbr keyValue="command" />
           <Kbd.Content>K</Kbd.Content>
         </Kbd>

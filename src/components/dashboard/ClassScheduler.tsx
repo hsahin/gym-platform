@@ -10,8 +10,9 @@ import {
   MapPin,
   Users,
 } from "lucide-react";
-import { Card, Chip, Input, Label } from "@heroui/react";
+import { Card, Chip, Label } from "@heroui/react";
 import { Widget } from "@heroui-pro/react";
+import { CalendarDatePicker } from "@/components/CalendarDatePicker";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
 import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";
 import { Segment } from "@/components/dashboard/HydrationSafeSegment";
@@ -29,6 +30,7 @@ interface ClassSchedulerProps {
   readonly locations: ReadonlyArray<GymLocation>;
   readonly trainers: ReadonlyArray<GymTrainer>;
   readonly selectedSessionId?: string | null;
+  readonly onPlanClass?: (dateValue: string) => void;
   readonly onSelectSession?: (sessionId: string) => void;
 }
 
@@ -137,6 +139,7 @@ export function ClassScheduler({
   locations,
   trainers,
   selectedSessionId,
+  onPlanClass,
   onSelectSession,
 }: ClassSchedulerProps) {
   const [mode, setMode] = useState<SchedulerMode>("week");
@@ -180,6 +183,10 @@ export function ClassScheduler({
 
   function jumpToToday() {
     setDateValue(formatDateInput(new Date()));
+  }
+
+  function handlePlanClass(day: Date) {
+    onPlanClass?.(formatDateInput(day));
   }
 
   return (
@@ -241,12 +248,10 @@ export function ClassScheduler({
             </div>
             <div className="field-stack">
               <Label>Datum</Label>
-              <Input
-                fullWidth
-                aria-label="Datum"
-                type="date"
+              <CalendarDatePicker
+                ariaLabel="Datum"
                 value={dateValue}
-                onChange={(event) => setDateValue(event.target.value)}
+                onChange={setDateValue}
               />
             </div>
             <Button type="button" variant="secondary" onPress={jumpToToday}>
@@ -300,14 +305,13 @@ export function ClassScheduler({
           </p>
         </div>
 
-        {visibleSessions.length > 0 ? (
-          <div
-            className={
-              mode === "week"
-                ? "grid gap-3 lg:grid-cols-7"
-                : "grid gap-3 md:grid-cols-2"
-            }
-          >
+        <div
+          className={
+            mode === "week"
+              ? "grid gap-3 lg:grid-cols-7"
+              : "grid gap-3 md:grid-cols-2"
+          }
+        >
             {visibleDays.map((day) => {
               const daySessions = filteredSessions.filter((session) =>
                 isSameLocalDay(new Date(session.startsAt), day),
@@ -325,11 +329,23 @@ export function ClassScheduler({
                         {compactCount(daySessions.length, "les", "lessen")}
                       </Card.Description>
                     </div>
-                    {isSameLocalDay(day, new Date()) ? (
-                      <Chip size="sm" variant="soft">
-                        Vandaag
-                      </Chip>
-                    ) : null}
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      {isSameLocalDay(day, new Date()) ? (
+                        <Chip size="sm" variant="soft">
+                          Vandaag
+                        </Chip>
+                      ) : null}
+                      {onPlanClass ? (
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onPress={() => handlePlanClass(day)}
+                        >
+                          Les inplannen
+                        </Button>
+                      ) : null}
+                    </div>
                   </Card.Header>
                   <Card.Content className="grid gap-2">
                     {daySessions.length > 0 ? (
@@ -411,24 +427,25 @@ export function ClassScheduler({
                         );
                       })
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-border bg-surface px-3 py-6 text-center">
-                        <p className="text-sm font-medium">Geen lessen gepland</p>
-                        <p className="text-muted mt-1 text-xs">Deze dag is nog vrij.</p>
-                      </div>
+                      <Button
+                        className="h-auto w-full justify-center rounded-2xl border border-dashed border-border bg-surface px-3 py-6 text-center"
+                        type="button"
+                        variant="ghost"
+                        onPress={() => handlePlanClass(day)}
+                      >
+                        <span className="grid gap-1">
+                          <span className="text-sm font-medium">Geen lessen gepland</span>
+                          <span className="text-muted text-xs">
+                            Druk om op deze dag een les in te plannen.
+                          </span>
+                        </span>
+                      </Button>
                     )}
                   </Card.Content>
                 </Card>
               );
             })}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-border bg-surface-secondary px-4 py-8 text-center">
-            <p className="text-sm font-semibold">Geen lessen gepland</p>
-            <p className="text-muted mt-1 text-sm">
-              Pas de datum of filters aan, of plan een nieuwe les hieronder.
-            </p>
-          </div>
-        )}
+        </div>
       </Widget.Content>
     </Widget>
   );

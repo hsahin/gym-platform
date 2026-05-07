@@ -30,6 +30,12 @@ interface MollieCustomerResponse {
   readonly id?: string;
 }
 
+interface MollieMandateResponse {
+  readonly id?: string;
+  readonly method?: string;
+  readonly status?: string;
+}
+
 interface MollieSubscriptionResponse {
   readonly id?: string;
   readonly status?: string;
@@ -38,6 +44,23 @@ interface MollieSubscriptionResponse {
 export interface CreateMollieCustomerInput {
   readonly name: string;
   readonly email: string;
+}
+
+export interface MollieCustomerReceipt {
+  readonly providerCustomerId: string;
+}
+
+export interface CreateMollieDirectDebitMandateInput {
+  readonly customerId: string;
+  readonly consumerName: string;
+  readonly consumerAccount: string;
+  readonly consumerEmail?: string;
+}
+
+export interface MollieDirectDebitMandateReceipt {
+  readonly providerMandateId: string;
+  readonly method: string;
+  readonly status: string;
 }
 
 export interface CreateMolliePaymentIntentInput {
@@ -98,6 +121,10 @@ export interface MollieSubscriptionReceipt {
 }
 
 export interface MolliePaymentProvider {
+  createCustomer(input: CreateMollieCustomerInput): Promise<MollieCustomerReceipt>;
+  createDirectDebitMandate(
+    input: CreateMollieDirectDebitMandateInput,
+  ): Promise<MollieDirectDebitMandateReceipt>;
   createPaymentIntent(input: CreateMolliePaymentIntentInput): Promise<MolliePaymentIntent>;
   getPayment(paymentId: string): Promise<MolliePaymentStatus>;
   createSubscription(input: CreateMollieSubscriptionInput): Promise<MollieSubscriptionReceipt>;
@@ -120,6 +147,10 @@ export function toMolliePaymentMethod(paymentMethod: BillingPaymentMethod) {
 
 function formatMollieAmount(amountCents: number) {
   return (amountCents / 100).toFixed(2);
+}
+
+function normalizeIbanForMollie(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase();
 }
 
 function compactMetadata(
@@ -307,26 +338,70 @@ export function createMolliePaymentProvider(options?: {
   }
 
   return {
+    async createCustomer(input) {
+      const customerResponse = await request<MollieCustomerResponse>(
+        "/customers",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: input.name,
+            email: input.email,
+            ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
+          }),
+        },
+        { testModeInBody: true },
+      );
+      const providerCustomerId = customerResponse.id?.trim();
+
+      if (!providerCustomerId) {
+        throw new AppError("Mollie gaf geen geldige klantreferentie terug.", {
+          code: "INVALID_INPUT",
+          details: customerResponse,
+        });
+      }
+
+      return { providerCustomerId };
+    },
+    async createDirectDebitMandate(input) {
+      const response = await request<MollieMandateResponse>(
+        `/customers/${encodeURIComponent(input.customerId)}/mandates`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            method: "directdebit",
+            consumerName: input.consumerName,
+            consumerAccount: normalizeIbanForMollie(input.consumerAccount),
+            ...(input.consumerEmail ? { consumerEmail: input.consumerEmail } : {}),
+            ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
+          }),
+        },
+        { testModeInBody: true },
+      );
+      const providerMandateId = response.id?.trim();
+
+      if (!providerMandateId) {
+        throw new AppError("Mollie gaf geen geldige incassomachtiging terug.", {
+          code: "INVALID_INPUT",
+          details: response,
+        });
+      }
+
+      return {
+        providerMandateId,
+        method: response.method?.trim() || "directdebit",
+        status: response.status?.trim() || "pending",
+      };
+    },
     async createPaymentIntent(input) {
       let providerCustomerId: string | undefined;
 
       if (input.sequenceType === "first" && input.customer) {
-        const customerResponse = await request<MollieCustomerResponse>("/customers", {
-          method: "POST",
-          body: JSON.stringify({
+        providerCustomerId = (
+          await this.createCustomer({
             name: input.customer.name,
             email: input.customer.email,
-            ...(supportsExplicitTestMode && testMode ? { testmode: true } : {}),
-          }),
-        }, { testModeInBody: true });
-        providerCustomerId = customerResponse.id?.trim();
-
-        if (!providerCustomerId) {
-          throw new AppError("Mollie gaf geen geldige klantreferentie terug.", {
-            code: "INVALID_INPUT",
-            details: customerResponse,
-          });
-        }
+          })
+        ).providerCustomerId;
       }
 
       const method =

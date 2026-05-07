@@ -13,9 +13,11 @@ describe("public membership signup view model", () => {
           id: "plan_1",
           name: "Membership",
           priceMonthly: 80,
+          fullPaymentDiscountPercent: 0,
           billingCycle: "monthly",
         },
       ],
+      paymentMethods: ["direct_debit", "one_time"],
       locations: [{ id: "loc_1", name: "Homegym", city: "Den Haag" }],
       legal: {
         termsUrl: "https://home-gym.nl/algemene-voorwaarden",

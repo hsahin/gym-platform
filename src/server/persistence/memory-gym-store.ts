@@ -1,6 +1,10 @@
 import { AppError, createPrefixedIdGenerator } from "@claimtech/core";
 import type { TenantContext } from "@claimtech/tenant";
-import { addMonthsToIsoDate, getMembershipBillingCycleMonths } from "@/lib/memberships";
+import {
+  addMonthsToIsoDate,
+  getMembershipBillingCycleMonths,
+  normalizeFullPaymentDiscountPercent,
+} from "@/lib/memberships";
 import type {
   CancelBookingResult,
   BookingMutationResult,
@@ -94,6 +98,9 @@ export function normalizeGymStoreState(state: MemoryGymStoreState): MemoryGymSto
     })),
     membershipPlans: state.membershipPlans.map((plan) => ({
       ...plan,
+      fullPaymentDiscountPercent: normalizeFullPaymentDiscountPercent(
+        plan.fullPaymentDiscountPercent,
+      ),
       status: plan.status ?? "active",
     })),
     members: state.members.map((member) => ({
@@ -427,6 +434,9 @@ export function createMemoryGymStore(
         updatedAt: now,
         name: input.name,
         priceMonthly: input.priceMonthly,
+        fullPaymentDiscountPercent: normalizeFullPaymentDiscountPercent(
+          input.fullPaymentDiscountPercent,
+        ),
         currency: "EUR",
         billingCycle: input.billingCycle,
         perks: [...input.perks],
@@ -460,6 +470,9 @@ export function createMemoryGymStore(
         updatedAt: new Date().toISOString(),
         name: input.name,
         priceMonthly: input.priceMonthly,
+        fullPaymentDiscountPercent: normalizeFullPaymentDiscountPercent(
+          input.fullPaymentDiscountPercent,
+        ),
         billingCycle: input.billingCycle,
         perks: [...input.perks],
         status: input.status,

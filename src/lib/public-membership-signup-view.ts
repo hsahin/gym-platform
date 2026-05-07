@@ -12,8 +12,10 @@ export interface PublicMembershipSignupPortalSnapshot {
     readonly id: string;
     readonly name: string;
     readonly priceMonthly: number;
+    readonly fullPaymentDiscountPercent: number;
     readonly billingCycle: PublicMembershipSignupSnapshot["membershipPlans"][number]["billingCycle"];
   }>;
+  readonly paymentMethods: PublicMembershipSignupSnapshot["paymentMethods"];
   readonly locations: ReadonlyArray<{
     readonly id: string;
     readonly name: string;
@@ -22,6 +24,7 @@ export interface PublicMembershipSignupPortalSnapshot {
   readonly legal: {
     readonly termsUrl: string;
     readonly privacyUrl: string;
+    readonly sepaMandateText: string;
   };
   readonly checkoutAvailable: boolean;
 }
@@ -38,10 +41,14 @@ export function toPublicMembershipSignupPortalSnapshot(
     tenantSlug: snapshot.tenantSlug ?? null,
     availableGyms: snapshot.availableGyms ?? [],
     membershipPlans,
+    paymentMethods: (snapshot.paymentMethods ?? []).filter(
+      (method) => method === "direct_debit" || method === "one_time",
+    ),
     locations,
     legal: {
       termsUrl: legal?.termsUrl ?? "",
       privacyUrl: legal?.privacyUrl ?? "",
+      sepaMandateText: legal?.sepaMandateText ?? "",
     },
     checkoutAvailable: Boolean(
       snapshot.tenantSlug &&
