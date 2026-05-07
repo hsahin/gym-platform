@@ -13,7 +13,7 @@ function readProjectSource(...segments: string[]) {
 }
 
 describe("dashboard management UI wiring", () => {
-  it("wires reusable edit archive delete actions into every operational dashboard list", () => {
+  it("wires reusable edit archive delete actions into every operational dashboard surface", () => {
     const members = readSource("dashboard/pages/MembersDashboardPage.tsx");
     const contracts = readSource("dashboard/pages/ContractsDashboardPage.tsx");
     const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
@@ -29,7 +29,8 @@ describe("dashboard management UI wiring", () => {
     expect(contracts).toContain("planSearch");
     expect(contracts).toContain("planStatusFilter");
 
-    expect(classes).toContain("DashboardEntityDataGrid");
+    expect(classes).toContain("ClassScheduler");
+    expect(classes).toContain("DashboardEntityActions");
     expect(classes).toContain('endpoint: "/api/platform/classes"');
     expect(classes).toContain("classSearch");
     expect(classes).toContain("classStatusFilter");
@@ -53,7 +54,7 @@ describe("dashboard management UI wiring", () => {
     expect(settings).toContain("settingsStatusFilter");
   });
 
-  it("uses HeroUI Pro DataGrid for editable operational lists instead of expandable cards", () => {
+  it("uses HeroUI Pro DataGrid for editable lists and a scheduler for lessons", () => {
     const members = readSource("dashboard/pages/MembersDashboardPage.tsx");
     const contracts = readSource("dashboard/pages/ContractsDashboardPage.tsx");
     const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
@@ -61,9 +62,13 @@ describe("dashboard management UI wiring", () => {
     const entityGrid = readSource("dashboard/DashboardEntityDataGrid.tsx");
     const entityActions = readSource("DashboardEntityActions.tsx");
 
-    for (const source of [members, contracts, classes, settings]) {
+    for (const source of [members, contracts, settings]) {
       expect(source).toContain("DashboardEntityDataGrid");
     }
+    expect(classes).toContain("ClassScheduler");
+    expect(classes).toContain('selectedKey={classesView}');
+    expect(classes).toContain('<Segment.Item id="calendar">Kalender</Segment.Item>');
+    expect(classes).not.toContain('<Segment.Item id="schedule">Rooster</Segment.Item>');
 
     expect(entityGrid).toContain('@/components/dashboard/HydrationSafeDataGrid');
     expect(entityGrid).toContain("allowsColumnResize");
@@ -379,16 +384,39 @@ describe("dashboard management UI wiring", () => {
   it("shows every class field after planning including location and trainer context", () => {
     const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
 
+    expect(classes).toContain("ClassScheduler");
     expect(classes).toContain("locationNameById");
     expect(classes).toContain("trainerNameById");
     expect(classes).toContain("Vestiging ontbreekt");
     expect(classes).toContain("Trainer ontbreekt");
     expect(classes).toContain("buildLocationFieldOptions");
     expect(classes).toContain("buildTrainerFieldOptions");
-    expect(classes).toContain('header: "Vestiging"');
-    expect(classes).toContain('header: "Trainer"');
+    expect(classes).toContain("locations={snapshot.locations}");
+    expect(classes).toContain("trainers={snapshot.trainers}");
     expect(classes).toContain('label: "Duur minuten"');
     expect(classes).toContain('label: "Capaciteit"');
+  });
+
+  it("renders classes in a responsive HeroUI Pro scheduler instead of a roster list", () => {
+    const scheduler = readSource("dashboard/ClassScheduler.tsx");
+    const classes = readSource("dashboard/pages/ClassesDashboardPage.tsx");
+
+    expect(scheduler).toContain('import { Widget } from "@heroui-pro/react";');
+    expect(scheduler).toContain(
+      'import { NativeSelect } from "@/components/dashboard/HydrationSafeNativeSelect";',
+    );
+    expect(scheduler).toContain('import { Segment } from "@/components/dashboard/HydrationSafeSegment";');
+    expect(scheduler).toContain("Leskalender");
+    expect(scheduler).toContain("Week");
+    expect(scheduler).toContain("Dag");
+    expect(scheduler).toContain("Vandaag");
+    expect(scheduler).toContain("Geen lessen gepland");
+    expect(scheduler).toContain("lg:grid-cols-7");
+    expect(scheduler).toContain("md:grid-cols-2");
+    expect(scheduler).not.toContain("react-big-calendar");
+    expect(scheduler).not.toContain("fullcalendar");
+    expect(classes).toContain('useState<"calendar" | "bookings">("calendar")');
+    expect(classes).not.toContain('useState<"schedule" | "bookings">("schedule")');
   });
 
   it("uses the HeroUI Pro KPI group for overview facts", () => {

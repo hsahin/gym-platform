@@ -260,6 +260,7 @@ describe("dashboard shell copy", () => {
     const classesSource = readComponentSource(
       "dashboard/pages/ClassesDashboardPage.tsx",
     );
+    const classSchedulerSource = readComponentSource("dashboard/ClassScheduler.tsx");
     const membersSource = readComponentSource(
       "dashboard/pages/MembersDashboardPage.tsx",
     );
@@ -275,7 +276,8 @@ describe("dashboard shell copy", () => {
     expect(contractsSource).not.toContain("Commercial plans and imported member data.");
 
     expect(classesSource).toContain('title="Lessen en reserveringen"');
-    expect(classesSource).toContain('title="Nog geen lessen"');
+    expect(classesSource).toContain('title="Geen lessen gevonden"');
+    expect(classSchedulerSource).toContain("Geen lessen gepland");
     expect(classesSource).toContain('title="Boekingsinstellingen"');
     expect(classesSource).toContain('title="Boekingsregels"');
     expect(classesSource).toContain("Proefleslink");

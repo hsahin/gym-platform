@@ -9,9 +9,12 @@ import { toast } from "sonner";
 import { AttendanceButton } from "@/components/AttendanceButton";
 import { BookingDialog } from "@/components/BookingDialog";
 import { CancelBookingButton } from "@/components/CancelBookingButton";
-import { DashboardEntityDataGrid } from "@/components/dashboard/DashboardEntityDataGrid";
+import {
+  DashboardEntityActions,
+  type DashboardEntityActionsProps,
+} from "@/components/DashboardEntityActions";
+import { ClassScheduler } from "@/components/dashboard/ClassScheduler";
 import { Button } from "@/components/dashboard/HydrationSafeButton";
-import { type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";
 import { submitDashboardMutation } from "@/components/dashboard/dashboard-client-helpers";
 import { FeatureModuleBoard } from "@/components/dashboard/FeatureModuleBoard";
 import {
@@ -133,9 +136,10 @@ function buildTrainerFieldOptions(
 export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [classesView, setClassesView] = useState<"schedule" | "bookings">("schedule");
+  const [classesView, setClassesView] = useState<"calendar" | "bookings">("calendar");
   const [classSearch, setClassSearch] = useState("");
   const [classStatusFilter, setClassStatusFilter] = useState("all");
+  const [selectedClassSessionId, setSelectedClassSessionId] = useState<string | null>(null);
   const [selectedClassTypeKey, setSelectedClassTypeKey] = useState("hiit");
   const [classStartsAt, setClassStartsAt] = useState(defaultClassStartValue);
   const [classRepeatsWeekly, setClassRepeatsWeekly] = useState(false);
@@ -205,106 +209,6 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
   const trainerNameById = new Map(
     snapshot.trainers.map((trainer) => [trainer.id, trainer.fullName]),
   );
-  type ClassSessionRow = (typeof snapshot.classSessions)[number];
-  const classSessionColumns: DataGridColumn<ClassSessionRow>[] = [
-    {
-      id: "title",
-      header: "Les",
-      accessorKey: "title",
-      allowsSorting: true,
-      isRowHeader: true,
-      minWidth: 240,
-      pinned: "start",
-      cell: (session) => (
-        <span className="grid min-w-0 gap-1">
-          <span className="truncate font-medium">{session.title}</span>
-          <span className="text-muted truncate text-xs">
-            {getBookingKindLabel(session.bookingKind ?? "class")} · {session.focus}
-          </span>
-        </span>
-      ),
-    },
-    {
-      id: "startsAt",
-      header: "Start",
-      accessorKey: "startsAt",
-      allowsSorting: true,
-      minWidth: 190,
-      cell: (session) => formatDateTime(session.startsAt),
-    },
-    {
-      id: "locationId",
-      header: "Vestiging",
-      accessorKey: "locationId",
-      allowsSorting: true,
-      minWidth: 160,
-      cell: (session) =>
-        locationNameById.get(session.locationId) ??
-        (session.locationId ? `Onbekende vestiging (${session.locationId})` : "Vestiging ontbreekt"),
-    },
-    {
-      id: "trainerId",
-      header: "Trainer",
-      accessorKey: "trainerId",
-      allowsSorting: true,
-      minWidth: 170,
-      cell: (session) =>
-        (session.bookingKind ?? "class") === "open_gym"
-          ? "Geen trainer nodig"
-          : trainerNameById.get(session.trainerId) ??
-            (session.trainerId ? `Onbekende trainer (${session.trainerId})` : "Trainer ontbreekt"),
-    },
-    {
-      id: "capacity",
-      header: "Bezetting",
-      align: "end",
-      allowsSorting: true,
-      minWidth: 120,
-      sortFn: (left, right) => left.bookedCount / left.capacity - right.bookedCount / right.capacity,
-      cell: (session) => (
-        <span className="tabular-nums">
-          {session.bookedCount}/{session.capacity}
-        </span>
-      ),
-    },
-    {
-      id: "level",
-      header: "Niveau",
-      accessorKey: "level",
-      allowsSorting: true,
-      minWidth: 130,
-      cell: (session) => (
-        <Chip size="sm" variant="tertiary">
-          {getClassLevelLabel(session.level)}
-        </Chip>
-      ),
-    },
-    {
-      id: "status",
-      header: "Status",
-      accessorKey: "status",
-      allowsSorting: true,
-      minWidth: 130,
-      cell: (session) => (
-        <Chip size="sm" variant="tertiary">
-          {getEntityStatusLabel(session.status)}
-        </Chip>
-      ),
-    },
-    {
-      id: "series",
-      header: "Serie",
-      minWidth: 100,
-      cell: (session) =>
-        session.seriesId ? (
-          <Chip size="sm" variant="soft">
-            Ja
-          </Chip>
-        ) : (
-          <span className="text-muted text-sm">Nee</span>
-        ),
-    },
-  ];
   const typeFilteredBookings =
     selectedClassTypeKey === ALL_CLASS_TYPE_KEY
       ? recentBookings
@@ -341,6 +245,130 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
     : classStartsAt
       ? 1
       : 0;
+  const selectedClassSession =
+    filteredClassSessions.find((session) => session.id === selectedClassSessionId) ??
+    filteredClassSessions[0] ??
+    null;
+  const selectedClassLocationName = selectedClassSession
+    ? locationNameById.get(selectedClassSession.locationId) ??
+      (selectedClassSession.locationId
+        ? `Onbekende vestiging (${selectedClassSession.locationId})`
+        : "Vestiging ontbreekt")
+    : null;
+  const selectedClassTrainerName = selectedClassSession
+    ? (selectedClassSession.bookingKind ?? "class") === "open_gym"
+      ? "Geen trainer nodig"
+      : trainerNameById.get(selectedClassSession.trainerId) ??
+        (selectedClassSession.trainerId
+          ? `Onbekende trainer (${selectedClassSession.trainerId})`
+          : "Trainer ontbreekt")
+    : null;
+
+  function buildClassSessionActionProps(
+    session: (typeof snapshot.classSessions)[number],
+  ): DashboardEntityActionsProps {
+    const bookingKind = session.bookingKind ?? "class";
+
+    return {
+      endpoint: "/api/platform/classes",
+      entityLabel: `Les ${session.title}`,
+      updatePayloadBase: {
+        id: session.id,
+        expectedVersion: session.version,
+      },
+      archivePayload: {
+        id: session.id,
+        expectedVersion: session.version,
+      },
+      deletePayload: {
+        id: session.id,
+        expectedVersion: session.version,
+      },
+      extraActions: session.seriesId
+        ? [
+            {
+              label: "Verwijder serie",
+              method: "DELETE",
+              payload: {
+                operation: "delete_series",
+                id: session.id,
+                expectedVersion: session.version,
+              },
+              successMessage: `Serie ${session.title} verwijderd.`,
+              tone: "danger",
+            },
+          ]
+        : [],
+      fields: [
+        { name: "title", label: "Lesnaam", defaultValue: session.title },
+        {
+          name: "bookingKind",
+          label: "Boekingstype",
+          defaultValue: bookingKind,
+          type: "select",
+          options: [
+            { value: "class", label: getBookingKindLabel("class") },
+            { value: "open_gym", label: getBookingKindLabel("open_gym") },
+          ],
+        },
+        {
+          name: "locationId",
+          label: "Vestiging",
+          defaultValue: session.locationId,
+          type: "select",
+          options: buildLocationFieldOptions(session.locationId, snapshot.locations),
+        },
+        {
+          name: "trainerId",
+          label: "Trainer",
+          defaultValue: session.trainerId,
+          type: "select",
+          options: buildTrainerFieldOptions(session.trainerId, bookingKind, snapshot.trainers),
+        },
+        {
+          name: "startsAt",
+          label: "Starttijd",
+          defaultValue: session.startsAt.slice(0, 16),
+          type: "datetime-local",
+        },
+        {
+          name: "durationMinutes",
+          label: "Duur minuten",
+          defaultValue: session.durationMinutes,
+          type: "number",
+        },
+        {
+          name: "capacity",
+          label: "Capaciteit",
+          defaultValue: session.capacity,
+          type: "number",
+        },
+        {
+          name: "level",
+          label: "Niveau",
+          defaultValue: session.level,
+          type: "select",
+          options: [
+            { value: "beginner", label: getClassLevelLabel("beginner") },
+            { value: "mixed", label: getClassLevelLabel("mixed") },
+            { value: "advanced", label: getClassLevelLabel("advanced") },
+          ],
+        },
+        { name: "focus", label: "Focus", defaultValue: session.focus },
+        {
+          name: "status",
+          label: "Status",
+          defaultValue: session.status,
+          type: "select",
+          options: [
+            { value: "active", label: getEntityStatusLabel("active") },
+            { value: "paused", label: getEntityStatusLabel("paused") },
+            { value: "archived", label: getEntityStatusLabel("archived") },
+          ],
+        },
+      ],
+    };
+  }
 
   function createTypedClassSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -659,7 +687,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
       <PageSection
         actions={<BookingDialog classSessions={typeFilteredClassSessions} members={snapshot.members} />}
         title="Lessen en reserveringen"
-        description="Schakel tussen roosterbeheer en reserveringsbeheer."
+        description="Bekijk lessen in een kalender en beheer reserveringen zonder zijpanelen."
       >
         <div className="grid content-start gap-3">
             <Segment
@@ -668,7 +696,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
               size="sm"
               onSelectionChange={(key) => setClassesView(String(key) as typeof classesView)}
             >
-              <Segment.Item id="schedule">Rooster</Segment.Item>
+              <Segment.Item id="calendar">Kalender</Segment.Item>
               <Segment.Item id="bookings">Reserveringen</Segment.Item>
             </Segment>
 
@@ -716,7 +744,7 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
               </Card.Content>
             </Card>
 
-            {classesView === "schedule" ? (
+            {classesView === "calendar" ? (
               <Card className="rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
                 <Card.Header className="items-start justify-between gap-4">
                   <div className="space-y-2">
@@ -934,9 +962,8 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
               </Card>
             ) : null}
 
-            {classesView === "schedule" ? (
-              upcomingSessions.length > 0 ? (
-                <>
+            {classesView === "calendar" ? (
+              <>
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                   <div className="field-stack">
                     <Label>Zoeken</Label>
@@ -961,135 +988,53 @@ export function ClassesDashboardPage({ snapshot }: DashboardPageProps) {
                     </select>
                   </label>
                 </div>
-                {filteredClassSessions.length > 0 ? (
-                <DashboardEntityDataGrid
-                  ariaLabel="Lessen"
-                  columns={classSessionColumns}
-                  contentClassName="min-w-[1180px]"
-                  data={filteredClassSessions}
-                  defaultSortDescriptor={{ column: "startsAt", direction: "ascending" }}
-                  getRowId={(session) => session.id}
-                  getActionsProps={(session) => {
-                    const bookingKind = session.bookingKind ?? "class";
 
-                    return {
-                      endpoint: "/api/platform/classes",
-                      entityLabel: `Les ${session.title}`,
-                      updatePayloadBase: {
-                        id: session.id,
-                        expectedVersion: session.version,
-                      },
-                      archivePayload: {
-                        id: session.id,
-                        expectedVersion: session.version,
-                      },
-                      deletePayload: {
-                        id: session.id,
-                        expectedVersion: session.version,
-                      },
-                      extraActions: session.seriesId
-                        ? [
-                            {
-                              label: "Verwijder serie",
-                              method: "DELETE",
-                              payload: {
-                                operation: "delete_series",
-                                id: session.id,
-                                expectedVersion: session.version,
-                              },
-                              successMessage: `Serie ${session.title} verwijderd.`,
-                              tone: "danger",
-                            },
-                          ]
-                        : [],
-                      fields: [
-                        { name: "title", label: "Lesnaam", defaultValue: session.title },
-                        {
-                          name: "bookingKind",
-                          label: "Boekingstype",
-                          defaultValue: bookingKind,
-                          type: "select",
-                          options: [
-                            { value: "class", label: "Les met trainer" },
-                            { value: "open_gym", label: "Boekbare gymplek" },
-                          ],
-                        },
-                        {
-                          name: "locationId",
-                          label: "Vestiging",
-                          defaultValue: session.locationId,
-                          type: "select",
-                          options: buildLocationFieldOptions(session.locationId, snapshot.locations),
-                        },
-                        {
-                          name: "trainerId",
-                          label: "Trainer",
-                          defaultValue: session.trainerId,
-                          type: "select",
-                          options: buildTrainerFieldOptions(
-                            session.trainerId,
-                            bookingKind,
-                            snapshot.trainers,
-                          ),
-                        },
-                        {
-                          name: "startsAt",
-                          label: "Starttijd",
-                          defaultValue: session.startsAt.slice(0, 16),
-                          type: "datetime-local",
-                        },
-                        {
-                          name: "durationMinutes",
-                          label: "Duur minuten",
-                          defaultValue: session.durationMinutes,
-                          type: "number",
-                        },
-                        {
-                          name: "capacity",
-                          label: "Capaciteit",
-                          defaultValue: session.capacity,
-                          type: "number",
-                        },
-                        {
-                          name: "level",
-                          label: "Niveau",
-                          defaultValue: session.level,
-                          type: "select",
-                          options: [
-                            { value: "beginner", label: "Beginner" },
-                            { value: "mixed", label: "Gemengd" },
-                            { value: "advanced", label: "Gevorderd" },
-                          ],
-                        },
-                        { name: "focus", label: "Focus", defaultValue: session.focus },
-                        {
-                          name: "status",
-                          label: "Status",
-                          defaultValue: session.status,
-                          type: "select",
-                          options: [
-                            { value: "active", label: "Actief" },
-                            { value: "paused", label: "Gepauzeerd" },
-                            { value: "archived", label: "Gearchiveerd" },
-                          ],
-                        },
-                      ],
-                    };
-                  }}
+                <ClassScheduler
+                  locations={snapshot.locations}
+                  selectedSessionId={selectedClassSession?.id ?? null}
+                  sessions={filteredClassSessions}
+                  trainers={snapshot.trainers}
+                  onSelectSession={setSelectedClassSessionId}
                 />
-                ) : (
+
+                {selectedClassSession ? (
+                  <div className="grid gap-3">
+                    <Card className="rounded-2xl border border-border/80 bg-surface-secondary shadow-none">
+                      <Card.Content className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold">{selectedClassSession.title}</p>
+                            <Chip size="sm" variant="tertiary">
+                              {getBookingKindLabel(selectedClassSession.bookingKind ?? "class")}
+                            </Chip>
+                            <Chip size="sm" variant="soft">
+                              {getClassLevelLabel(selectedClassSession.level)}
+                            </Chip>
+                            <Chip size="sm" variant="tertiary">
+                              {getEntityStatusLabel(selectedClassSession.status)}
+                            </Chip>
+                          </div>
+                          <p className="text-muted text-sm">
+                            {formatDateTime(selectedClassSession.startsAt)} ·{" "}
+                            {selectedClassLocationName} · {selectedClassTrainerName}
+                          </p>
+                        </div>
+                        <p className="text-muted text-sm tabular-nums">
+                          {selectedClassSession.bookedCount}/{selectedClassSession.capacity} plekken
+                        </p>
+                      </Card.Content>
+                    </Card>
+                    <DashboardEntityActions
+                      {...buildClassSessionActionProps(selectedClassSession)}
+                    />
+                  </div>
+                ) : filteredClassSessions.length === 0 ? (
                   <EmptyPanel
                     title="Geen lessen gevonden"
                     description="Pas je zoekterm of statusfilter aan om meer lessen te tonen."
                   />
-                )}
-                </>
-              ) : (
-                <EmptyPanel
-                  title="Nog geen lessen"
-                  description="Plan je eerste les via lesplanning."
-                />
-              )
+                ) : null}
+              </>
             ) : typeFilteredBookings.length > 0 ? (
               <div className="grid gap-3">
                 {typeFilteredBookings.map((booking) => {
