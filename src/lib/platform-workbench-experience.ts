@@ -110,6 +110,7 @@ export function getPlatformWorkbenchExperience(
   ];
 
   const currentStepIndex = coreSteps.findIndex((step) => step.count === 0);
+  const isLaunchMode = currentStepIndex !== -1;
 
   const steps: PlatformWorkbenchStepBase[] = coreSteps.map((step, index) => {
     if (step.count > 0) {
@@ -195,6 +196,7 @@ export function getPlatformWorkbenchExperience(
         };
 
   return {
+    isLaunchMode,
     steps: [...steps, memberStep, staffStep].map(attachStepTarget),
   };
 }

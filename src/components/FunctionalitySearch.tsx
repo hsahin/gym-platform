@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Search } from "lucide-react";
+import { Kbd } from "@heroui/react";
+import {Command} from "@heroui-pro/react";
+import { Button } from "@/components/dashboard/HydrationSafeButton";
 import {
   resolveFunctionalitySearchHref,
   searchFunctionality,
@@ -29,120 +32,142 @@ export function FunctionalitySearch({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [isFocused, setIsFocused] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
   const results = useMemo(
-    () => searchFunctionality(query, { entries, limit: 7 }),
+    () => searchFunctionality(query, { entries, limit: 9 }),
     [entries, query],
   );
+  const resultsByKey = useMemo(
+    () => new Map(results.map((entry) => [entry.key, entry])),
+    [results],
+  );
   const hasQuery = query.trim().length > 0;
-  const shouldShowResults = isFocused && hasQuery;
 
   function openEntry(entry: FunctionalitySearchEntry) {
     router.push(resolveFunctionalitySearchHref(entry, tenantId));
     setQuery("");
-    setActiveIndex(0);
-    setIsFocused(false);
+    setIsOpen(false);
   }
 
-  function moveActiveIndex(direction: 1 | -1) {
-    if (results.length === 0) {
+  function openEntryByKey(key: string) {
+    const entry = resultsByKey.get(key);
+
+    if (!entry) {
       return;
     }
 
-    setActiveIndex((current) => {
-      const next = current + direction;
-
-      if (next < 0) {
-        return results.length - 1;
-      }
-
-      if (next >= results.length) {
-        return 0;
-      }
-
-      return next;
-    });
+    openEntry(entry);
   }
 
+  useEffect(() => {
+    function openSearchWithShortcut(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsOpen(true);
+      }
+    }
+
+    window.addEventListener("keydown", openSearchWithShortcut);
+
+    return () => window.removeEventListener("keydown", openSearchWithShortcut);
+  }, []);
+
   return (
-    <div className="relative w-full min-w-0 max-w-xl md:min-w-[14rem] md:w-[min(38vw,34rem)]">
-      <div className="relative">
+    <div className="w-full min-w-0 max-w-xl md:min-w-[14rem] md:w-[min(38vw,34rem)]">
+      <Button
+        fullWidth
+        aria-label={ariaLabel}
+        className="h-10 justify-start rounded-xl px-3 text-muted"
+        type="button"
+        variant="outline"
+        onPress={() => setIsOpen(true)}
+      >
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+          className="h-4 w-4 shrink-0"
           aria-hidden="true"
         />
-        <input
-          aria-label={ariaLabel}
-          className="h-10 w-full rounded-xl border border-border bg-surface px-9 text-sm outline-none transition focus:border-foreground/30 focus:ring-2 focus:ring-foreground/10"
-          placeholder={placeholder}
-          type="search"
-          value={query}
-          onBlur={() => setIsFocused(false)}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setActiveIndex(0);
-          }}
-          onFocus={() => setIsFocused(true)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              moveActiveIndex(1);
-            }
+        <span className="min-w-0 flex-1 truncate text-left">{placeholder}</span>
+        <Kbd className="hidden shrink-0 text-xs sm:inline-flex">
+          <Kbd.Abbr keyValue="command" />
+          <Kbd.Content>K</Kbd.Content>
+        </Kbd>
+      </Button>
 
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              moveActiveIndex(-1);
-            }
-
-            if (event.key === "Enter" && results[activeIndex]) {
-              event.preventDefault();
-              openEntry(results[activeIndex]);
-            }
-
-            if (event.key === "Escape") {
-              setIsFocused(false);
+      <Command>
+        <Command.Backdrop
+          isOpen={isOpen}
+          variant="opaque"
+          onOpenChange={(open) => {
+            setIsOpen(open);
+            if (!open) {
+              setQuery("");
             }
           }}
-        />
-      </div>
-
-      {shouldShowResults ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
-          {results.length > 0 ? (
-            <ul role="listbox" aria-label="Zoekresultaten functionaliteit">
-              {results.map((entry, index) => (
-                <li key={entry.key} role="option" aria-selected={index === activeIndex}>
-                  <button
-                    type="button"
-                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left transition ${
-                      index === activeIndex
-                        ? "bg-foreground/[0.06]"
-                        : "hover:bg-foreground/[0.04]"
-                    }`}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                    }}
-                    onClick={() => openEntry(entry)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {entry.title}
-                      </span>
-                      <span className="text-muted block truncate text-xs">
-                        {kindLabels[entry.kind]} · {entry.description}
-                      </span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 text-muted" aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-muted px-3 py-3 text-sm">Geen functionaliteit gevonden.</p>
-          )}
-        </div>
-      ) : null}
+        >
+          <Command.Container size="lg">
+            <Command.Dialog
+              filter={() => true}
+              inputValue={query}
+              onInputChange={setQuery}
+            >
+              <Command.InputGroup>
+                <Command.InputGroup.Prefix>
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                </Command.InputGroup.Prefix>
+                <Command.InputGroup.Input
+                  aria-label={ariaLabel}
+                  placeholder={placeholder}
+                />
+                <Command.InputGroup.ClearButton />
+                <Command.InputGroup.Suffix>
+                  <Kbd className="text-xs">
+                    <Kbd.Content>Esc</Kbd.Content>
+                  </Kbd>
+                </Command.InputGroup.Suffix>
+              </Command.InputGroup>
+              <Command.List
+                renderEmptyState={() => (
+                  <div className="text-muted flex h-16 items-center justify-center px-4 text-center text-sm">
+                    {hasQuery
+                      ? "Geen functionaliteit gevonden."
+                      : "Typ om pagina's, acties en ledenroutes te vinden."}
+                  </div>
+                )}
+                onAction={(key) => openEntryByKey(String(key))}
+              >
+                {results.length > 0 ? (
+                  <Command.Group heading="Resultaten">
+                    {results.map((entry) => (
+                      <Command.Item
+                        key={entry.key}
+                        id={entry.key}
+                        textValue={`${entry.title} ${entry.description} ${entry.keywords.join(" ")}`}
+                      >
+                        <span className="grid min-w-0 flex-1 gap-0.5">
+                          <span className="truncate text-sm font-medium">{entry.title}</span>
+                          <span className="text-muted truncate text-xs">
+                            {kindLabels[entry.kind]} · {entry.description}
+                          </span>
+                        </span>
+                        <ArrowRight className="ms-auto h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                ) : null}
+              </Command.List>
+              <Command.Footer className="justify-between [&_kbd]:h-5 [&_kbd]:text-xs">
+                <span>Zoek door dashboard, acties en publieke routes.</span>
+                <span className="hidden items-center gap-2 sm:flex">
+                  <Kbd>
+                    <Kbd.Abbr keyValue="enter" />
+                  </Kbd>
+                  Openen
+                </span>
+              </Command.Footer>
+            </Command.Dialog>
+          </Command.Container>
+        </Command.Backdrop>
+      </Command>
     </div>
   );
 }

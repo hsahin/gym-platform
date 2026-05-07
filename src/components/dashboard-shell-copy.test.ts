@@ -122,9 +122,18 @@ describe("dashboard shell copy", () => {
     expect(source).toContain("getVisibleFunctionalitySearchEntries");
     expect(source).toContain('ariaLabel="Functionaliteit zoeken"');
     expect(source).toContain("Zoek functionaliteit");
+    expect(searchSource).toContain('import {Command} from "@heroui-pro/react"');
+    expect(searchSource).toContain("<Command.Backdrop");
+    expect(searchSource).toContain('variant="opaque"');
+    expect(searchSource).toContain("<Command.InputGroup");
+    expect(searchSource).toContain("<Command.List");
+    expect(searchSource).toContain("<Command.Item");
+    expect(searchSource).toContain("onAction={(key) => openEntryByKey(String(key))}");
     expect(searchSource).toContain("searchFunctionality");
     expect(searchSource).toContain("resolveFunctionalitySearchHref");
     expect(searchSource).toContain('aria-label={ariaLabel}');
+    expect(searchSource).not.toContain('type="search"');
+    expect(searchSource).not.toContain('role="listbox"');
     expect(source).toContain('title: "Overzicht"');
     expect(source).toContain('label: "Overzicht"');
     expect(source).toContain('label: "Lessen"');

@@ -672,6 +672,7 @@ export function PlatformWorkbench({
   const nextStep = workbenchExperience.steps.find(
     (step) => step.statusTone === "current" || step.statusTone === "upcoming",
   );
+  const shouldShowLaunchHeader = showLaunchHeader && workbenchExperience.isLaunchMode;
   const sectionGridClass = stackSections ? "grid min-w-0 max-w-full content-start gap-4" : "grid min-w-0 max-w-full gap-4";
   const launchStats = [
     { label: "Vestigingen", value: snapshot.locations.length },
@@ -751,7 +752,7 @@ export function PlatformWorkbench({
 
   return (
     <section className="section-stack min-w-0 max-w-full overflow-x-clip">
-      {showLaunchHeader ? (
+      {shouldShowLaunchHeader ? (
         <>
           <Card className="rounded-[32px] border-border/80">
             <Card.Header className="items-start justify-between gap-4">

@@ -188,6 +188,28 @@ describe("dashboard management UI wiring", () => {
     );
   });
 
+  it("groups billing work into tabs and uses HeroUI Pro DataGrid for payment requests", () => {
+    const payments = readSource("dashboard/pages/PaymentsDashboardPage.tsx");
+
+    expect(payments).toContain(
+      'import { DataGrid, type DataGridColumn } from "@/components/dashboard/HydrationSafeDataGrid";',
+    );
+    expect(payments).toContain(
+      'import { Segment } from "@/components/dashboard/HydrationSafeSegment";',
+    );
+    expect(payments).toContain("billingWorkbenchTabs");
+    expect(payments).toContain('label: "Factuur klaarzetten"');
+    expect(payments).toContain('label: "Lopende betaalverzoeken"');
+    expect(payments).toContain('label: "Ontvangsten"');
+    expect(payments).toContain('label: "Dagcontrole"');
+    expect(payments).toContain('aria-label="Betalingsbeheer onderdelen"');
+    expect(payments).toContain("paymentRequestColumns");
+    expect(payments).toContain("<DataGrid");
+    expect(payments).toContain('aria-label="Lopende betaalverzoeken"');
+    expect(payments).toContain("allowsColumnResize");
+    expect(payments).toContain("getRowId={(invoice) => invoice.id}");
+  });
+
   it("keeps technical payment controls behind advanced disclosure with concrete disabled reasons", () => {
     const payments = readSource("dashboard/pages/PaymentsDashboardPage.tsx");
     const workbench = readSource("PlatformWorkbench.tsx");
@@ -434,6 +456,10 @@ describe("dashboard management UI wiring", () => {
     const workbench = readSource("PlatformWorkbench.tsx");
 
     expect(workbench).toContain('from "@heroui-pro/react/kanban"');
+    expect(workbench).toContain(
+      "const shouldShowLaunchHeader = showLaunchHeader && workbenchExperience.isLaunchMode;",
+    );
+    expect(workbench).toContain("{shouldShowLaunchHeader ? (");
     expect(workbench).toContain("<Kanban");
     expect(workbench).toContain("<Kanban.Column");
     expect(workbench).toContain("<Kanban.CardList");

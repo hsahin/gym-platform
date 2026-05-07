@@ -2,6 +2,57 @@ import { describe, expect, it } from "vitest";
 import { getPlatformWorkbenchExperience } from "@/lib/platform-workbench-experience";
 
 describe("platform workbench experience", () => {
+  it("keeps the launch board active while the core gym setup is incomplete", () => {
+    const experience = getPlatformWorkbenchExperience({
+      locationsCount: 1,
+      membershipPlansCount: 1,
+      trainersCount: 0,
+      membersCount: 0,
+      classSessionsCount: 0,
+      staffCount: 1,
+      canManageStaff: true,
+    });
+
+    expect(experience.isLaunchMode).toBe(true);
+    expect(experience.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "trainers",
+          statusTone: "current",
+        }),
+      ]),
+    );
+  });
+
+  it("turns off the launch board once the core setup is live even when optional steps remain", () => {
+    const experience = getPlatformWorkbenchExperience({
+      locationsCount: 1,
+      membershipPlansCount: 1,
+      trainersCount: 1,
+      membersCount: 0,
+      classSessionsCount: 1,
+      staffCount: 1,
+      canManageStaff: true,
+    });
+
+    expect(experience.isLaunchMode).toBe(false);
+    expect(experience.steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "members",
+          statusLabel: "Later",
+          statusTone: "upcoming",
+        }),
+        expect.objectContaining({
+          key: "staff",
+          countLabel: "1 medewerkeraccount live",
+          statusLabel: "Optioneel",
+          statusTone: "current",
+        }),
+      ]),
+    );
+  });
+
   it("marks the first incomplete launch step as current for owners", () => {
     const experience = getPlatformWorkbenchExperience({
       locationsCount: 1,
