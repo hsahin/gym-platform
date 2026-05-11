@@ -3002,6 +3002,101 @@ describe("gym platform services", () => {
     expect(result.providerStatus).toBe("manual_review");
   });
 
+  it("lets the owner approve a Mollie-less signup end-to-end without crashing", async () => {
+    process.env.MOLLIE_TEST_MODE = "false";
+    delete process.env.MOLLIE_API_KEY;
+    process.env.APP_BASE_URL = "https://gym.example";
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+
+    // 1. Member submits the public signup. Billing isn't connected → queued
+    //    for manual review.
+    const submitted = await services.submitPublicMemberSignup({
+      tenantSlug: state.tenant.id,
+      fullName: "Jade Manual",
+      email: "jade-manual@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      preferredLocationId: location.id,
+      paymentMethod: "direct_debit",
+      contractAccepted: true,
+      waiverAccepted: true,
+      portalPassword: "jade-member-123",
+    });
+
+    expect(submitted.requiresOwnerReview).toBe(true);
+    expect(submitted.signup.status).toBe("pending_review");
+
+    // 2. Owner approves from the dashboard. The previous bug threw
+    //    "Online betalen is bijna klaar, maar nog niet beschikbaar bij deze
+    //    club." here. Now it should create the member + portal account and
+    //    mark the signup approved without ever talking to Mollie.
+    const approved = await services.reviewMemberSignupRequest(
+      ownerActor,
+      tenantContext,
+      {
+        signupRequestId: submitted.signup.id,
+        decision: "approved",
+        memberStatus: "trial",
+        ownerNotes: "Betaling wordt aan de balie geregeld.",
+        portalPassword: "owner-set-portal-123",
+      },
+    );
+
+    expect(approved.requiresOwnerReview).toBe(false);
+    expect(approved.providerStatus).toBe("manual_approval");
+    expect(approved.invoice).toBeNull();
+    expect(approved.signup.status).toBe("approved");
+    expect(approved.member).not.toBeNull();
+    expect(approved.member?.email).toBe("jade-manual@northside.test");
+    expect(approved.member?.fullName).toBe("Jade Manual");
+    expect(approved.member?.status).toBe("trial");
+    expect(approved.member?.tags).toContain("manual-payment");
+    expect(approved.contract).not.toBeNull();
+
+    // 3. Sanity: rejecting another signup still works when Mollie is absent.
+    const rejection = await services.submitPublicMemberSignup({
+      tenantSlug: state.tenant.id,
+      fullName: "Rejected Manual",
+      email: "rejected-manual@northside.test",
+      phone: "0612345679",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      preferredLocationId: location.id,
+      paymentMethod: "direct_debit",
+      contractAccepted: true,
+      waiverAccepted: true,
+      portalPassword: "reject-member-123",
+    });
+
+    const rejected = await services.reviewMemberSignupRequest(
+      ownerActor,
+      tenantContext,
+      {
+        signupRequestId: rejection.signup.id,
+        decision: "rejected",
+        memberStatus: "trial",
+        ownerNotes: "Geen capaciteit op locatie.",
+      },
+    );
+
+    expect(rejected.signup.status).toBe("rejected");
+  });
+
   it("manages billing invoices, retries, refunds, webhooks and reconciliation", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
     await enableTenantFeatures(services, ownerActor, tenantContext, ["billing.autocollect"]);

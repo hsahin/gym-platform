@@ -3015,10 +3015,7 @@ export interface GymPlatformServices {
       readonly memberStatus: CreateMemberInput["status"];
       readonly portalPassword?: string;
     },
-  ): Promise<{
-    readonly signup: GymDashboardSnapshot["memberSignups"][number];
-    readonly member?: GymDashboardSnapshot["members"][number] | null;
-  }>;
+  ): Promise<PublicMembershipSignupResult>;
   createBillingInvoice(
     actor: AuthActor,
     tenantContext: TenantContext,
@@ -4391,6 +4388,59 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     });
   }
 
+  async function completeManualMemberSignupApproval(input: {
+    readonly tenantContext: TenantContext;
+    readonly signup: GymDashboardSnapshot["memberSignups"][number];
+    readonly membershipPlan: GymDashboardSnapshot["membershipPlans"][number];
+    readonly location: GymDashboardSnapshot["locations"][number];
+    readonly memberStatus: CreateMemberInput["status"];
+    readonly portalPassword?: string;
+    readonly ownerNotes?: string;
+  }): Promise<PublicMembershipSignupResult> {
+    const legal = await buildLegalComplianceSummary(input.tenantContext);
+    const member = await runtime.store.createMember(input.tenantContext, {
+      fullName: input.signup.fullName,
+      email: input.signup.email,
+      phone: input.signup.phone,
+      phoneCountry: input.signup.phoneCountry,
+      membershipPlanId: input.membershipPlan.id,
+      homeLocationId: input.location.id,
+      status: input.memberStatus,
+      tags: ["self-signup", "manual-payment"],
+      waiverStatus: "complete",
+      waiverStorageKey: legal.waiverStorageKey,
+    });
+
+    if (input.portalPassword) {
+      await upsertLocalMemberPortalAccount(input.tenantContext.tenantId, {
+        memberId: member.id,
+        displayName: member.fullName,
+        email: member.email,
+        password: input.portalPassword,
+      });
+    }
+
+    const approvedSignup = await reviewLocalTenantMemberSignup(
+      input.tenantContext.tenantId,
+      {
+        id: input.signup.id,
+        status: "approved",
+        ownerNotes: input.ownerNotes,
+        approvedMemberId: member.id,
+      },
+    );
+    const contract = await ensureMemberContractRecord(input.tenantContext, member);
+
+    return {
+      signup: approvedSignup,
+      member,
+      invoice: null,
+      contract,
+      providerStatus: "manual_approval",
+      requiresOwnerReview: false,
+    } satisfies PublicMembershipSignupResult;
+  }
+
   async function loadSignupCheckoutPrerequisites(
     tenantContext: TenantContext,
     paymentMethod: GymDashboardSnapshot["memberSignups"][number]["paymentMethod"],
@@ -5672,10 +5722,12 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
         return {
           signup: rejectedSignup,
-        };
+          member: null,
+          invoice: null,
+          contract: null,
+          providerStatus: "rejected",
+        } satisfies PublicMembershipSignupResult;
       }
-
-      await assertBillingPaymentMethodEnabled(actor, tenantContext, signup.paymentMethod);
 
       const [membershipPlans, locations] = await Promise.all([
         runtime.store.listMembershipPlans(tenantContext),
@@ -5694,16 +5746,65 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         });
       }
 
-      const checkout = await completeMemberSignupCheckout({
-        tenantContext,
-        signup,
-        membershipPlan,
-        location,
-        memberStatus: input.memberStatus,
-        portalPassword: input.portalPassword,
-        ownerNotes: input.ownerNotes,
-        actorId: actor.subjectId,
-      });
+      // Try the Mollie-backed checkout first. If billing isn't ready at this
+      // gym, fall back to a manual approval that creates the member and the
+      // portal account without invoicing — the owner takes payment offline.
+      let prerequisites:
+        | Awaited<ReturnType<typeof loadSignupCheckoutPrerequisites>>
+        | null = null;
+
+      try {
+        await assertBillingPaymentMethodEnabled(actor, tenantContext, signup.paymentMethod);
+        prerequisites = await loadSignupCheckoutPrerequisites(
+          tenantContext,
+          signup.paymentMethod,
+        );
+      } catch (error) {
+        // FORBIDDEN means billing isn't connected / the payment-method feature
+        // is off at this gym. The owner clicked approve regardless, so we
+        // continue with the manual-approval path below. Other errors (legal
+        // missing → INVALID_INPUT, resource not found, etc.) still propagate.
+        if (!(error instanceof AppError) || error.code !== "FORBIDDEN") {
+          throw error;
+        }
+      }
+
+      let checkout: PublicMembershipSignupResult;
+
+      if (prerequisites) {
+        checkout = await completeMemberSignupCheckout({
+          tenantContext,
+          signup,
+          membershipPlan,
+          location,
+          memberStatus: input.memberStatus,
+          portalPassword: input.portalPassword,
+          ownerNotes: input.ownerNotes,
+          actorId: actor.subjectId,
+          prerequisites,
+        });
+      } else {
+        checkout = await completeManualMemberSignupApproval({
+          tenantContext,
+          signup,
+          membershipPlan,
+          location,
+          memberStatus: input.memberStatus,
+          portalPassword: input.portalPassword,
+          ownerNotes: input.ownerNotes,
+        });
+        await runtime.auditLogger.write({
+          action: "member_signup.approved_manual",
+          category: "members",
+          actorId: actor.subjectId,
+          tenantId: tenantContext.tenantId,
+          metadata: {
+            signupRequestId: signup.id,
+            memberId: checkout.member?.id,
+          },
+        });
+      }
+
       await createTenantAwareCache(runtime, tenantContext).delete("dashboard", actor.subjectId);
       return checkout;
     },
