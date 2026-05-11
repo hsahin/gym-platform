@@ -2,11 +2,24 @@ import { describe, expect, it } from "vitest";
 import { DASHBOARD_FEATURE_CATALOG } from "@/features/dashboard-feature-catalog";
 import { DASHBOARD_PAGE_KEYS } from "@/lib/dashboard-pages";
 import {
+  buildFunctionalitySearchSuggestions,
   FUNCTIONALITY_SEARCH_ENTRIES,
   getVisibleFunctionalitySearchEntries,
   resolveFunctionalitySearchHref,
   searchFunctionality,
 } from "@/lib/functionality-search";
+
+const fullySetUpSignals = {
+  hasLocations: true,
+  hasMembershipPlans: true,
+  hasTrainers: true,
+  hasMembers: true,
+  hasClassSessions: true,
+  hasOnlyOwnerStaff: false,
+  billingConfigured: true,
+  remoteAccessConfigured: true,
+  legalConfigured: true,
+} as const;
 
 const mixedVisibleSearchFragments = [
   "check-ins",
@@ -210,5 +223,77 @@ describe("functionality search", () => {
     expect(searchFunctionality("   ")).toEqual([]);
     expect(searchFunctionality("")).toEqual([]);
     expect(searchFunctionality(",,,,")).toEqual([]);
+  });
+});
+
+describe("functionality search — default suggestions", () => {
+  it("pins the five most-used dashboard pages regardless of setup state", () => {
+    const suggestions = buildFunctionalitySearchSuggestions(fullySetUpSignals);
+
+    expect(suggestions.pinned).toEqual([
+      "page.overview",
+      "page.classes",
+      "page.members",
+      "page.payments",
+      "page.settings",
+    ]);
+    expect(suggestions.attention).toEqual([]);
+  });
+
+  it("flags incomplete gym setup steps in the attention list ordered by priority", () => {
+    const suggestions = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      hasLocations: false,
+      hasMembershipPlans: false,
+      hasTrainers: false,
+      billingConfigured: false,
+    });
+
+    expect(suggestions.attention).toEqual([
+      "workflow.add-location",
+      "workflow.add-membership",
+      "workflow.add-trainer",
+      "workflow.connect-payments",
+    ]);
+  });
+
+  it("surfaces the staff invite suggestion when only the owner exists", () => {
+    const suggestions = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      hasOnlyOwnerStaff: true,
+    });
+
+    expect(suggestions.attention).toContain("workflow.invite-staff");
+  });
+
+  it("treats remote access and legal as separate setup steps", () => {
+    const suggestions = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      remoteAccessConfigured: false,
+      legalConfigured: false,
+    });
+
+    expect(suggestions.attention).toContain("workflow.legal-settings");
+    expect(suggestions.attention).toContain("workflow.connect-smart-door");
+  });
+
+  it("uses entries that actually exist in the master search catalog", () => {
+    const allKeys = new Set(FUNCTIONALITY_SEARCH_ENTRIES.map((entry) => entry.key));
+    const suggestions = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      hasLocations: false,
+      hasMembershipPlans: false,
+      hasTrainers: false,
+      hasMembers: false,
+      hasClassSessions: false,
+      hasOnlyOwnerStaff: true,
+      billingConfigured: false,
+      remoteAccessConfigured: false,
+      legalConfigured: false,
+    });
+
+    for (const key of [...suggestions.pinned, ...suggestions.attention]) {
+      expect(allKeys.has(key)).toBe(true);
+    }
   });
 });

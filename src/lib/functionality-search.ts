@@ -446,6 +446,78 @@ export function getVisibleFunctionalitySearchEntries(
   return entries.filter((entry) => !entry.requiresSuperadmin || canOpenSuperadmin);
 }
 
+const DEFAULT_PINNED_SEARCH_KEYS: ReadonlyArray<string> = [
+  "page.overview",
+  "page.classes",
+  "page.members",
+  "page.payments",
+  "page.settings",
+];
+
+export interface FunctionalitySearchSetupSignals {
+  readonly hasLocations: boolean;
+  readonly hasMembershipPlans: boolean;
+  readonly hasTrainers: boolean;
+  readonly hasMembers: boolean;
+  readonly hasClassSessions: boolean;
+  readonly hasOnlyOwnerStaff: boolean;
+  readonly billingConfigured: boolean;
+  readonly remoteAccessConfigured: boolean;
+  readonly legalConfigured: boolean;
+}
+
+export interface FunctionalitySearchSuggestions {
+  readonly pinned: ReadonlyArray<string>;
+  readonly attention: ReadonlyArray<string>;
+}
+
+export function buildFunctionalitySearchSuggestions(
+  signals: FunctionalitySearchSetupSignals,
+): FunctionalitySearchSuggestions {
+  const attention: string[] = [];
+
+  if (!signals.hasLocations) {
+    attention.push("workflow.add-location");
+  }
+
+  if (!signals.hasMembershipPlans) {
+    attention.push("workflow.add-membership");
+  }
+
+  if (!signals.hasTrainers) {
+    attention.push("workflow.add-trainer");
+  }
+
+  if (!signals.billingConfigured) {
+    attention.push("workflow.connect-payments");
+  }
+
+  if (!signals.legalConfigured) {
+    attention.push("workflow.legal-settings");
+  }
+
+  if (!signals.hasClassSessions) {
+    attention.push("workflow.plan-class");
+  }
+
+  if (!signals.hasMembers) {
+    attention.push("workflow.add-member");
+  }
+
+  if (signals.hasOnlyOwnerStaff) {
+    attention.push("workflow.invite-staff");
+  }
+
+  if (!signals.remoteAccessConfigured) {
+    attention.push("workflow.connect-smart-door");
+  }
+
+  return {
+    pinned: DEFAULT_PINNED_SEARCH_KEYS,
+    attention,
+  };
+}
+
 export function searchFunctionality(
   query: string,
   options?: {

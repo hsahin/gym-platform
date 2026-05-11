@@ -28,7 +28,10 @@ import { GymDashboard } from "@/components/GymDashboard";
 import { DashboardFloatingToc } from "@/components/DashboardFloatingToc";
 import { LazyThemeModeSwitch } from "@/components/theme/LazyThemeModeSwitch";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
-import { getVisibleFunctionalitySearchEntries } from "@/lib/functionality-search";
+import {
+  buildFunctionalitySearchSuggestions,
+  getVisibleFunctionalitySearchEntries,
+} from "@/lib/functionality-search";
 import type { GymDashboardSnapshot } from "@/server/types";
 
 const pageCopy: Record<
@@ -215,6 +218,20 @@ export function GymDashboardClientShell({
     canManageFeatureFlags: snapshot.uiCapabilities.canManageFeatureFlags,
     canManageOwnerAccounts: snapshot.uiCapabilities.canManageOwnerAccounts,
   });
+  const searchSuggestions = buildFunctionalitySearchSuggestions({
+    hasLocations: snapshot.locations.length > 0,
+    hasMembershipPlans: snapshot.membershipPlans.length > 0,
+    hasTrainers: snapshot.trainers.length > 0,
+    hasMembers: snapshot.members.length > 0,
+    hasClassSessions: snapshot.classSessions.length > 0,
+    hasOnlyOwnerStaff: snapshot.staff.length <= 1,
+    billingConfigured: snapshot.payments.connectionStatus === "configured",
+    remoteAccessConfigured:
+      snapshot.remoteAccess.connectionStatus === "configured",
+    legalConfigured:
+      snapshot.legal.termsUrl.trim().length > 0 &&
+      snapshot.legal.privacyUrl.trim().length > 0,
+  });
 
   return (
     <AppLayout
@@ -252,7 +269,9 @@ export function GymDashboardClientShell({
 
               <FunctionalitySearch
                 ariaLabel="Functionaliteit zoeken"
+                attentionSuggestionKeys={searchSuggestions.attention}
                 entries={visibleFunctionalitySearchEntries}
+                pinnedSuggestionKeys={searchSuggestions.pinned}
                 placeholder="Zoek functionaliteit"
                 tenantId={tenantId}
               />
