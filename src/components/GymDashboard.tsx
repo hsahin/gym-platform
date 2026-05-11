@@ -136,10 +136,12 @@ const pageComponents: Record<DashboardPageKey, ComponentType<DashboardPageProps>
 export function GymDashboard({
   snapshot,
   currentPage = "overview",
+  tenantId,
 }: {
   readonly snapshot: GymDashboardSnapshot;
   readonly currentPage?: DashboardPageKey;
+  readonly tenantId: string;
 }) {
   const PageComponent = pageComponents[currentPage] ?? OverviewDashboardPage;
-  return <PageComponent snapshot={snapshot} />;
+  return <PageComponent snapshot={snapshot} tenantId={tenantId} />;
 }

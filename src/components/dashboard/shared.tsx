@@ -5,6 +5,9 @@ import type { GymDashboardSnapshot } from "@/server/types";
 
 export type DashboardPageProps = {
   readonly snapshot: GymDashboardSnapshot;
+  /** Tenant the dashboard is currently scoped to. For a superadmin this can
+   *  differ from the actor's "home" tenant when viewing another gym. */
+  readonly tenantId: string;
 };
 
 export function formatDateTime(value: string) {

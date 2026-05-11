@@ -62,7 +62,7 @@ async function submitOwnerAccountMutation(
   }
 }
 
-export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
+export function SuperadminDashboardPage({ snapshot, tenantId }: DashboardPageProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -87,6 +87,19 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
       ]),
     ).values(),
   ];
+  const activeTenantName =
+    tenantOptions.find((tenant) => tenant.id === tenantId)?.name ?? snapshot.tenantName;
+
+  function switchScopedTenant(nextTenantId: string) {
+    const url = new URL(window.location.href);
+
+    if (!nextTenantId || nextTenantId === tenantId) {
+      return;
+    }
+
+    url.searchParams.set("asTenant", nextTenantId);
+    router.push(`${url.pathname}${url.search}`);
+  }
 
   function createOwnerAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -307,16 +320,49 @@ export function SuperadminDashboardPage({ snapshot }: DashboardPageProps) {
         </PageSection>
       ) : null}
 
+      <PageSection
+        title="Modules per gym"
+        description="Kies een gym om modules voor die club aan of uit te zetten. Wijzigingen gelden alleen voor de gekozen gym."
+      >
+        <Card className="rounded-2xl border border-border bg-surface shadow-none">
+          <Card.Content className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <label className="field-stack">
+              <span className="text-sm font-medium">Gym in beheer</span>
+              <select
+                aria-label="Gym kiezen om modules voor te beheren"
+                className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
+                value={tenantId}
+                onChange={(event) => switchScopedTenant(event.target.value)}
+              >
+                {tenantOptions.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-muted text-sm">
+              Modules op deze pagina horen bij{" "}
+              <span className="text-foreground font-semibold">
+                {activeTenantName}
+              </span>
+              .
+            </p>
+          </Card.Content>
+        </Card>
+      </PageSection>
+
       {groupedFeatures.map((group) => (
         <PageSection
           key={group.title}
-          title={group.title}
+          title={`${group.title} · ${activeTenantName}`}
           description="Schakel modules per club in of uit zonder verborgen configuraties."
         >
           <FeatureModuleBoard
             currentPage="superadmin"
             editable
             features={group.features}
+            scopedTenantId={tenantId}
             snapshot={snapshot}
           />
         </PageSection>

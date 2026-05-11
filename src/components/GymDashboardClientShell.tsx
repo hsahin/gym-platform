@@ -340,7 +340,7 @@ export function GymDashboardClientShell({
             </div>
           </div>
         </header>
-        <GymDashboard currentPage={currentPage} snapshot={snapshot} />
+        <GymDashboard currentPage={currentPage} snapshot={snapshot} tenantId={tenantId} />
         <DashboardFloatingToc pageKey={currentPage} />
       </div>
     </AppLayout>

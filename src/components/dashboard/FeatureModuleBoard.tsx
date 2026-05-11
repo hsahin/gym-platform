@@ -53,11 +53,15 @@ export function FeatureModuleBoard({
   editable = false,
   currentPage,
   snapshot,
+  scopedTenantId,
 }: {
   readonly features: ReadonlyArray<FeatureState>;
   readonly editable?: boolean;
   readonly currentPage?: DashboardPageKey;
   readonly snapshot?: GymDashboardSnapshot;
+  /** When set, the feature-flag mutation targets this tenant explicitly.
+   *  Only honoured server-side when the viewer is a superadmin. */
+  readonly scopedTenantId?: string;
 }) {
   const router = useRouter();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
@@ -182,6 +186,7 @@ export function FeatureModuleBoard({
                         await submitDashboardMutation("/api/platform/feature-flags", {
                           key: feature.key,
                           enabled: nextValue,
+                          tenantId: scopedTenantId,
                         });
 
                         toast.success(
