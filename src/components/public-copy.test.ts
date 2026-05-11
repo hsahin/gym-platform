@@ -63,7 +63,7 @@ describe("public surface copy", () => {
     expect(source).toContain("Betaling starten");
     expect(source).toContain("checkoutDisabledReason");
     expect(source).toContain("memberMissingFields");
-    expect(source).toContain("Online inschrijven is nog niet beschikbaar bij deze club.");
+    expect(source).toContain("Aanmelden is nog niet beschikbaar bij deze club.");
     expect(source).not.toContain("missingCheckoutFields");
     expect(source).not.toContain("snapshot.billingMissingFields");
     expect(source).not.toContain("snapshot.legalMissingFields");

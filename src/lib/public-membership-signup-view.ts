@@ -26,6 +26,9 @@ export interface PublicMembershipSignupPortalSnapshot {
     readonly privacyUrl: string;
     readonly sepaMandateText: string;
   };
+  /** True when the gym has plans + locations to register against. */
+  readonly signupAvailable: boolean;
+  /** True when the gym has Mollie billing ready for online checkout. */
   readonly checkoutAvailable: boolean;
 }
 
@@ -50,6 +53,9 @@ export function toPublicMembershipSignupPortalSnapshot(
       privacyUrl: legal?.privacyUrl ?? "",
       sepaMandateText: legal?.sepaMandateText ?? "",
     },
+    signupAvailable: Boolean(
+      snapshot.tenantSlug && membershipPlans.length > 0 && locations.length > 0,
+    ),
     checkoutAvailable: Boolean(
       snapshot.tenantSlug &&
         snapshot.billingReady &&

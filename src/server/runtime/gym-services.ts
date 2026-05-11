@@ -5399,12 +5399,27 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         });
       }
 
-      const prerequisites = await loadSignupCheckoutPrerequisites(
-        tenantContext,
-        input.paymentMethod,
-      );
+      let prerequisites:
+        | Awaited<ReturnType<typeof loadSignupCheckoutPrerequisites>>
+        | null = null;
 
-      if (input.paymentMethod === "direct_debit" && !input.sepaMandateAccepted) {
+      try {
+        prerequisites = await loadSignupCheckoutPrerequisites(
+          tenantContext,
+          input.paymentMethod,
+        );
+      } catch (error) {
+        // Billing/legal not ready — fall back to manual owner review below.
+        if (!(error instanceof AppError) || error.code !== "FORBIDDEN") {
+          throw error;
+        }
+      }
+
+      if (
+        prerequisites &&
+        input.paymentMethod === "direct_debit" &&
+        !input.sepaMandateAccepted
+      ) {
         throw new AppError("Geef akkoord op de SEPA-machtiging voordat je automatische incasso activeert.", {
           code: "INVALID_INPUT",
         });
@@ -5422,6 +5437,20 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
         waiverAcceptedAt: new Date().toISOString(),
         notes: input.notes,
       });
+
+      if (!prerequisites) {
+        // Mollie isn't connected at this gym — the signup waits in
+        // pending_review and the owner activates it manually from the
+        // dashboard. No invoice, no checkout URL.
+        return {
+          signup,
+          member: null,
+          invoice: null,
+          contract: null,
+          providerStatus: "manual_review",
+          requiresOwnerReview: true,
+        } satisfies PublicMembershipSignupResult;
+      }
 
       return completeMemberSignupCheckout({
         tenantContext,

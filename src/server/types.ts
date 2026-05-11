@@ -201,13 +201,15 @@ export interface MemberSignupRequest {
 export interface PublicMembershipSignupResult {
   readonly signup: MemberSignupRequest;
   readonly member: GymMember | null;
-  readonly invoice: BillingInvoice;
+  readonly invoice: BillingInvoice | null;
   readonly contract: MemberContractRecord | null;
   readonly checkoutUrl?: string;
   readonly providerPaymentId?: string;
   readonly providerMandateId?: string;
   readonly providerSubscriptionId?: string;
   readonly providerStatus: string;
+  /** When true, the signup was queued for owner review (no online checkout). */
+  readonly requiresOwnerReview?: boolean;
 }
 
 export interface BillingInvoice {

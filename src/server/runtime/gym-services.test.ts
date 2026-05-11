@@ -2619,7 +2619,7 @@ describe("gym platform services", () => {
       method: "directdebit",
       metadata: {
         tenantId: tenantContext.tenantId,
-        invoiceId: checkout.invoice.id,
+        invoiceId: checkout.invoice!.id,
         memberId: approvedMember.id,
         source: "signup_checkout",
       },
@@ -2748,7 +2748,7 @@ describe("gym platform services", () => {
     expect(paymentRequests[0]).toMatchObject({
       metadata: {
         tenantId: tenantContext.tenantId,
-        invoiceId: checkout.invoice.id,
+        invoiceId: checkout.invoice!.id,
         signupRequestId: checkout.signup.id,
         source: "signup_checkout",
       },
@@ -2903,7 +2903,7 @@ describe("gym platform services", () => {
       portalPassword: "jade-member-123",
     });
 
-    expect(checkout.invoice.amountCents).toBe(108000);
+    expect(checkout.invoice!.amountCents).toBe(108000);
     expect(paymentRequests[0]).toMatchObject({
       amount: {
         value: "1080.00",
@@ -2957,6 +2957,49 @@ describe("gym platform services", () => {
     ).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
+  });
+
+  it("queues a public signup for owner review when Mollie isn't connected at the gym", async () => {
+    process.env.MOLLIE_TEST_MODE = "false";
+    delete process.env.MOLLIE_API_KEY;
+    process.env.APP_BASE_URL = "https://gym.example";
+    const { services, ownerActor, tenantContext, state } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside East",
+      city: "Amsterdam",
+      neighborhood: "Oost",
+      capacity: 180,
+      managerName: "Saar de Jong",
+      amenities: ["Open gym"],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 119,
+      billingCycle: "monthly",
+      perks: ["Open gym"],
+    });
+
+    // Billing is intentionally not configured — Mollie was removed at the gym.
+    const result = await services.submitPublicMemberSignup({
+      tenantSlug: state.tenant.id,
+      fullName: "Jade Manual",
+      email: "jade-manual@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      preferredLocationId: location.id,
+      paymentMethod: "direct_debit",
+      contractAccepted: true,
+      waiverAccepted: true,
+      portalPassword: "jade-member-123",
+    });
+
+    expect(result.requiresOwnerReview).toBe(true);
+    expect(result.checkoutUrl).toBeUndefined();
+    expect(result.invoice).toBeNull();
+    expect(result.member).toBeNull();
+    expect(result.signup.status).toBe("pending_review");
+    expect(result.providerStatus).toBe("manual_review");
   });
 
   it("manages billing invoices, retries, refunds, webhooks and reconciliation", async () => {

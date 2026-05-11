@@ -111,7 +111,9 @@ export function PublicMembershipSignupPortal({
   } | null>(null);
   const termsUrl = snapshot.legal.termsUrl?.trim() ?? "";
   const privacyUrl = snapshot.legal.privacyUrl?.trim() ?? "";
-  const clubSignupAvailable = snapshot.checkoutAvailable;
+  const clubSignupAvailable = snapshot.signupAvailable;
+  const onlineCheckoutAvailable = snapshot.checkoutAvailable;
+  const manualReviewMode = clubSignupAvailable && !onlineCheckoutAvailable;
   const selectedPlan = snapshot.membershipPlans.find((plan) => plan.id === membershipPlanId);
   const availablePaymentMethodOptions = paymentMethodOptions.filter((option) =>
     snapshot.paymentMethods.includes(option.value),
@@ -120,7 +122,10 @@ export function PublicMembershipSignupPortal({
   const contractAccepted = signupAgreements.includes("contract");
   const waiverAccepted = signupAgreements.includes("waiver");
   const sepaMandateAccepted =
-    paymentMethod !== "direct_debit" || signupAgreements.includes("sepa");
+    manualReviewMode ||
+    paymentMethod !== "direct_debit" ||
+    signupAgreements.includes("sepa");
+  const requiresIban = !manualReviewMode && paymentMethod === "direct_debit";
   const memberMissingFields = [
     fullName.trim() ? null : "naam",
     email.trim() ? null : "e-mail",
@@ -128,21 +133,21 @@ export function PublicMembershipSignupPortal({
     snapshot.membershipPlans.length > 0 && !membershipPlanId ? "lidmaatschap" : null,
     snapshot.locations.length > 0 && !preferredLocationId ? "vestiging" : null,
     portalPassword.trim().length >= 8 ? null : "portal wachtwoord",
-    paymentMethod === "direct_debit" && !iban.trim() ? "IBAN" : null,
+    requiresIban && !iban.trim() ? "IBAN" : null,
     contractAccepted ? null : "contractakkoord",
     waiverAccepted ? null : "waiverakkoord",
     sepaMandateAccepted ? null : "SEPA machtiging",
   ].filter((field): field is string => Boolean(field));
   const memberFormReady = memberMissingFields.length === 0;
   const signupReady = Boolean(
-    clubSignupAvailable && availablePaymentMethodOptions.length > 0 && memberFormReady,
+    clubSignupAvailable &&
+      (manualReviewMode || availablePaymentMethodOptions.length > 0) &&
+      memberFormReady,
   );
   const checkoutDisabledReason = isPending
     ? "Even wachten: je aanmelding wordt verwerkt."
     : !clubSignupAvailable
-      ? "Online inschrijven is nog niet beschikbaar bij deze club. Probeer later opnieuw of neem contact op met de club."
-      : availablePaymentMethodOptions.length === 0
-        ? "Online inschrijven heeft nog geen betaalwijze. Neem contact op met de club."
+      ? "Aanmelden is nog niet beschikbaar bij deze club. Probeer later opnieuw of neem contact op met de club."
       : !memberFormReady
         ? "Vul je gegevens in en accepteer de voorwaarden voordat je doorgaat."
       : null;
@@ -183,7 +188,7 @@ export function PublicMembershipSignupPortal({
             membershipPlanId,
             preferredLocationId,
             paymentMethod,
-            iban: paymentMethod === "direct_debit" ? iban : undefined,
+            iban: requiresIban ? iban : undefined,
             sepaMandateAccepted,
             contractAccepted,
             waiverAccepted,
@@ -212,6 +217,16 @@ export function PublicMembershipSignupPortal({
           });
           toast.success("Betaling gestart. Je wordt doorgestuurd naar de betaling.");
           await openSignupCheckout(payload.data.checkoutUrl);
+          return;
+        }
+
+        if (payload.data?.requiresOwnerReview) {
+          setSignupOutcome({
+            title: "Je aanmelding staat in de wachtrij",
+            description:
+              "Deze club regelt de betaling nog niet online. We hebben je gegevens doorgegeven; de club neemt contact op om je lidmaatschap af te ronden.",
+          });
+          toast.success("Aanmelding doorgegeven aan de club.");
           return;
         }
 
@@ -435,55 +450,70 @@ export function PublicMembershipSignupPortal({
                 ))}
               </RadioButtonGroup>
 
-              <RadioButtonGroup
-                className="w-full grid-cols-1 md:grid-cols-3"
-                layout="grid"
-                name="paymentMethod"
-                value={paymentMethod}
-                variant="secondary"
-                onChange={(value) => setPaymentMethod(value as SignupPaymentMethod)}
-              >
-                <Label className="col-span-full">Betaalmethode</Label>
-                <Description className="col-span-full">
-                  Kies hoe je dit lidmaatschap wilt betalen.
-                </Description>
-                {availablePaymentMethodOptions.map((option) => (
-                  <RadioButtonGroup.Item key={option.value} value={option.value}>
-                    <RadioButtonGroup.Indicator />
-                    <RadioButtonGroup.ItemContent>
-                      <Label>{option.label}</Label>
-                      <Description>
-                        {option.value === "one_time" && selectedPlan
-                          ? `${option.description} Totaal: ${formatEuroFromCents(fullPaymentAmountCents)}.`
-                          : option.description}
-                      </Description>
-                    </RadioButtonGroup.ItemContent>
-                  </RadioButtonGroup.Item>
-                ))}
-              </RadioButtonGroup>
-
-              {paymentMethod === "direct_debit" ? (
-                <section className="grid gap-4 rounded-2xl border border-border bg-surface-secondary p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-                  <div className="field-stack">
-                    <Label>IBAN voor automatische incasso</Label>
-                    <Input
-                      autoComplete="off"
-                      fullWidth
-                      name="iban"
-                      placeholder="NL91 ABNA 0417 1643 00"
-                      value={iban}
-                      onChange={(event) => setIban(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    <p className="font-medium">SEPA machtiging</p>
-                    <p className="text-muted leading-6">
-                      {snapshot.legal.sepaMandateText ||
-                        "Je machtigt de club om je lidmaatschap maandelijks via SEPA-incasso te innen."}
-                    </p>
-                  </div>
+              {manualReviewMode ? (
+                <section className="grid gap-2 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm">
+                  <p className="font-medium text-foreground">
+                    Online betalen is bij deze club nog niet aan
+                  </p>
+                  <p className="text-muted leading-6">
+                    Je aanmelding gaat naar de club. Zij nemen contact met je op
+                    om de betaling persoonlijk te regelen — bijvoorbeeld met een
+                    SEPA-machtiging of bankoverschrijving.
+                  </p>
                 </section>
-              ) : null}
+              ) : (
+                <>
+                  <RadioButtonGroup
+                    className="w-full grid-cols-1 md:grid-cols-3"
+                    layout="grid"
+                    name="paymentMethod"
+                    value={paymentMethod}
+                    variant="secondary"
+                    onChange={(value) => setPaymentMethod(value as SignupPaymentMethod)}
+                  >
+                    <Label className="col-span-full">Betaalmethode</Label>
+                    <Description className="col-span-full">
+                      Kies hoe je dit lidmaatschap wilt betalen.
+                    </Description>
+                    {availablePaymentMethodOptions.map((option) => (
+                      <RadioButtonGroup.Item key={option.value} value={option.value}>
+                        <RadioButtonGroup.Indicator />
+                        <RadioButtonGroup.ItemContent>
+                          <Label>{option.label}</Label>
+                          <Description>
+                            {option.value === "one_time" && selectedPlan
+                              ? `${option.description} Totaal: ${formatEuroFromCents(fullPaymentAmountCents)}.`
+                              : option.description}
+                          </Description>
+                        </RadioButtonGroup.ItemContent>
+                      </RadioButtonGroup.Item>
+                    ))}
+                  </RadioButtonGroup>
+
+                  {paymentMethod === "direct_debit" ? (
+                    <section className="grid gap-4 rounded-2xl border border-border bg-surface-secondary p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+                      <div className="field-stack">
+                        <Label>IBAN voor automatische incasso</Label>
+                        <Input
+                          autoComplete="off"
+                          fullWidth
+                          name="iban"
+                          placeholder="NL91 ABNA 0417 1643 00"
+                          value={iban}
+                          onChange={(event) => setIban(event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <p className="font-medium">SEPA machtiging</p>
+                        <p className="text-muted leading-6">
+                          {snapshot.legal.sepaMandateText ||
+                            "Je machtigt de club om je lidmaatschap maandelijks via SEPA-incasso te innen."}
+                        </p>
+                      </div>
+                    </section>
+                  ) : null}
+                </>
+              )}
 
               <div className="field-stack">
                 <Label>Opmerking</Label>
@@ -498,7 +528,11 @@ export function PublicMembershipSignupPortal({
 
               <section className="space-y-4">
                 <CheckboxButtonGroup
-                  className={`w-full grid-cols-1 ${paymentMethod === "direct_debit" ? "md:grid-cols-3" : "md:grid-cols-2"}`}
+                  className={`w-full grid-cols-1 ${
+                    !manualReviewMode && paymentMethod === "direct_debit"
+                      ? "md:grid-cols-3"
+                      : "md:grid-cols-2"
+                  }`}
                   layout="grid"
                   name="signupAgreements"
                   value={signupAgreements}
@@ -527,7 +561,7 @@ export function PublicMembershipSignupPortal({
                       </Description>
                     </CheckboxButtonGroup.ItemContent>
                   </CheckboxButtonGroup.Item>
-                  {paymentMethod === "direct_debit" ? (
+                  {!manualReviewMode && paymentMethod === "direct_debit" ? (
                     <CheckboxButtonGroup.Item key="sepa" value="sepa">
                       <CheckboxButtonGroup.Indicator />
                       <CheckboxButtonGroup.ItemContent>
