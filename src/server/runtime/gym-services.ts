@@ -217,6 +217,7 @@ import type {
   PublicMembershipSignupSnapshot,
   PublicReservationSnapshot,
   RemoteAccessActionReceipt,
+  RemoteAccessConnectionStatus,
   RuntimeState,
   StaffSummary,
 } from "@/server/types";
@@ -1463,11 +1464,26 @@ async function buildStaffSummaries(
 }
 
 async function buildSuperadminSummary(): Promise<GymDashboardSnapshot["superadmin"]> {
-  const [tenants, accounts] = await Promise.all([
+  const [tenants, accounts, platformState] = await Promise.all([
     listLocalTenants(),
     listLocalPlatformAccounts(),
+    readLocalPlatformState(),
   ]);
   const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]));
+  const storeData = platformState?.data;
+  const ownersByTenant = new Map<string, string[]>();
+  for (const account of accounts) {
+    if (account.roleKey !== "owner" || account.status !== "active") {
+      continue;
+    }
+
+    const bucket = ownersByTenant.get(account.tenantId);
+    if (bucket) {
+      bucket.push(account.displayName || account.email);
+    } else {
+      ownersByTenant.set(account.tenantId, [account.displayName || account.email]);
+    }
+  }
   const ownerAccounts = accounts
     .filter((account) => account.roleKey === "owner")
     .map((account) => {
@@ -1490,11 +1506,107 @@ async function buildSuperadminSummary(): Promise<GymDashboardSnapshot["superadmi
         left.displayName.localeCompare(right.displayName, "nl"),
     );
 
+  const tenantOverviews = tenants.map((tenant) => {
+    const members = (storeData?.members ?? []).filter(
+      (member) => member.tenantId === tenant.id,
+    );
+    const memberCount = members.length;
+    const activeMemberCount = members.filter(
+      (member) => member.status === "active",
+    ).length;
+    const trialMemberCount = members.filter(
+      (member) => member.status === "trial",
+    ).length;
+    const plans = (storeData?.membershipPlans ?? []).filter(
+      (plan) => plan.tenantId === tenant.id,
+    );
+    const planById = new Map(plans.map((plan) => [plan.id, plan] as const));
+    const monthlyRevenueCents = members.reduce((total, member) => {
+      if (member.status !== "active") {
+        return total;
+      }
+      const plan = planById.get(member.membershipPlanId);
+      if (!plan) {
+        return total;
+      }
+      return total + Math.round(plan.priceMonthly * 100);
+    }, 0);
+    const locationCount = (storeData?.locations ?? []).filter(
+      (location) => location.tenantId === tenant.id,
+    ).length;
+    const classSessionCount = (storeData?.classSessions ?? []).filter(
+      (session) => session.tenantId === tenant.id,
+    ).length;
+    const billingStatus = getBillingConnectionStatus(tenant.billing);
+    const publicSignupReady =
+      isPublicSignupBillingReady(tenant.billing, { testMode: isMollieTestMode() }) &&
+      (tenant.legal.termsUrl?.trim().length ?? 0) > 0 &&
+      (tenant.legal.privacyUrl?.trim().length ?? 0) > 0;
+    const remoteAccessStatus: RemoteAccessConnectionStatus = tenant.remoteAccess
+      .enabled
+      ? "configured"
+      : "not_configured";
+
+    return {
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      tenantStatus: "active" as const,
+      memberCount,
+      activeMemberCount,
+      trialMemberCount,
+      monthlyRevenueCents,
+      locationCount,
+      membershipPlanCount: plans.length,
+      classSessionCount,
+      ownerNames: ownersByTenant.get(tenant.id) ?? [],
+      billingStatus,
+      billingEnabled: Boolean(tenant.billing?.enabled),
+      remoteAccessStatus,
+      publicSignupReady,
+      lastActivityAt: tenant.updatedAt,
+    };
+  });
+
+  tenantOverviews.sort((left, right) =>
+    left.tenantName.localeCompare(right.tenantName, "nl"),
+  );
+
+  const platformTotals = tenantOverviews.reduce(
+    (totals, tenant) => ({
+      memberCount: totals.memberCount + tenant.memberCount,
+      activeMemberCount: totals.activeMemberCount + tenant.activeMemberCount,
+      trialMemberCount: totals.trialMemberCount + tenant.trialMemberCount,
+      monthlyRevenueCents: totals.monthlyRevenueCents + tenant.monthlyRevenueCents,
+      locationCount: totals.locationCount + tenant.locationCount,
+      classSessionCount: totals.classSessionCount + tenant.classSessionCount,
+      publicSignupReadyCount:
+        totals.publicSignupReadyCount + (tenant.publicSignupReady ? 1 : 0),
+      billingConfiguredCount:
+        totals.billingConfiguredCount + (tenant.billingStatus === "configured" ? 1 : 0),
+      remoteAccessConfiguredCount:
+        totals.remoteAccessConfiguredCount +
+        (tenant.remoteAccessStatus === "configured" ? 1 : 0),
+    }),
+    {
+      memberCount: 0,
+      activeMemberCount: 0,
+      trialMemberCount: 0,
+      monthlyRevenueCents: 0,
+      locationCount: 0,
+      classSessionCount: 0,
+      publicSignupReadyCount: 0,
+      billingConfiguredCount: 0,
+      remoteAccessConfiguredCount: 0,
+    },
+  );
+
   return {
     tenantsCount: tenants.length,
     activeOwnerAccounts: ownerAccounts.filter((account) => account.status === "active").length,
     archivedOwnerAccounts: ownerAccounts.filter((account) => account.status === "archived").length,
     ownerAccounts,
+    tenants: tenantOverviews,
+    platformTotals,
   };
 }
 
@@ -2874,6 +2986,18 @@ function slimDashboardSnapshotForPage(
             activeOwnerAccounts: 0,
             archivedOwnerAccounts: 0,
             ownerAccounts: [],
+            tenants: [],
+            platformTotals: {
+              memberCount: 0,
+              activeMemberCount: 0,
+              trialMemberCount: 0,
+              monthlyRevenueCents: 0,
+              locationCount: 0,
+              classSessionCount: 0,
+              publicSignupReadyCount: 0,
+              billingConfiguredCount: 0,
+              remoteAccessConfiguredCount: 0,
+            },
           },
     auditEntries: page === "access" ? snapshot.auditEntries : [],
     notificationPreview:
@@ -4987,6 +5111,18 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
               activeOwnerAccounts: 0,
               archivedOwnerAccounts: 0,
               ownerAccounts: [],
+              tenants: [],
+              platformTotals: {
+                memberCount: 0,
+                activeMemberCount: 0,
+                trialMemberCount: 0,
+                monthlyRevenueCents: 0,
+                locationCount: 0,
+                classSessionCount: 0,
+                publicSignupReadyCount: 0,
+                billingConfiguredCount: 0,
+                remoteAccessConfiguredCount: 0,
+              },
             }),
       ]);
       const [

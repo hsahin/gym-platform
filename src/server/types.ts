@@ -551,11 +551,42 @@ export interface SuperadminOwnerAccountSummary {
   readonly updatedAt: string;
 }
 
+export interface SuperadminTenantOverview {
+  readonly tenantId: TenantId;
+  readonly tenantName: string;
+  readonly tenantStatus: "active" | "archived";
+  readonly memberCount: number;
+  readonly activeMemberCount: number;
+  readonly trialMemberCount: number;
+  readonly monthlyRevenueCents: number;
+  readonly locationCount: number;
+  readonly membershipPlanCount: number;
+  readonly classSessionCount: number;
+  readonly ownerNames: ReadonlyArray<string>;
+  readonly billingStatus: BillingConnectionStatus;
+  readonly billingEnabled: boolean;
+  readonly remoteAccessStatus: RemoteAccessConnectionStatus;
+  readonly publicSignupReady: boolean;
+  readonly lastActivityAt: string;
+}
+
 export interface SuperadminSummary {
   readonly tenantsCount: number;
   readonly activeOwnerAccounts: number;
   readonly archivedOwnerAccounts: number;
   readonly ownerAccounts: ReadonlyArray<SuperadminOwnerAccountSummary>;
+  readonly tenants: ReadonlyArray<SuperadminTenantOverview>;
+  readonly platformTotals: {
+    readonly memberCount: number;
+    readonly activeMemberCount: number;
+    readonly trialMemberCount: number;
+    readonly monthlyRevenueCents: number;
+    readonly locationCount: number;
+    readonly classSessionCount: number;
+    readonly publicSignupReadyCount: number;
+    readonly billingConfiguredCount: number;
+    readonly remoteAccessConfiguredCount: number;
+  };
 }
 
 export interface RuntimeState {
