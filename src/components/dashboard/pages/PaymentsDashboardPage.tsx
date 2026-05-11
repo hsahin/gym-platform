@@ -89,21 +89,198 @@ function ActionCluster({ children }: { readonly children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-2">{children}</div>;
 }
 
-function InfoCard({
-  label,
-  value,
-  children,
-}: {
-  readonly label: string;
-  readonly value?: string;
-  readonly children?: ReactNode;
-}) {
+type MollieStepStatus = "done" | "current" | "todo";
+
+function MollieStatusChip({ status }: { readonly status: MollieStepStatus }) {
+  if (status === "done") {
+    return (
+      <Chip color="success" size="sm" variant="soft">
+        Klaar
+      </Chip>
+    );
+  }
+  if (status === "current") {
+    return (
+      <Chip color="accent" size="sm" variant="soft">
+        Volgende stap
+      </Chip>
+    );
+  }
   return (
-    <div className="rounded-2xl border border-border/70 bg-surface px-4 py-4">
-      <p className="text-sm font-medium">{label}</p>
-      {value ? <p className="mt-1 text-sm leading-6">{value}</p> : null}
-      {children ? <div className="mt-3 flex flex-wrap gap-2">{children}</div> : null}
-    </div>
+    <Chip color="default" size="sm" variant="tertiary">
+      Nog te doen
+    </Chip>
+  );
+}
+
+function MollieSetupStepper({
+  snapshot,
+}: {
+  readonly snapshot: DashboardPageProps["snapshot"];
+}) {
+  const connected = snapshot.payments.mollieConnectConnected;
+  const routes = snapshot.payments.paymentMethods;
+  const supportFilled = snapshot.payments.supportEmail.trim().length > 0;
+  const settlementFilled = snapshot.payments.settlementLabel.trim().length > 0;
+  const profileReady = supportFilled && settlementFilled;
+  const liveReady = snapshot.payments.enabled;
+
+  const steps: Array<{
+    readonly title: string;
+    readonly description: string;
+    readonly status: MollieStepStatus;
+    readonly summary: ReactNode;
+  }> = [
+    {
+      title: "1. Mollie koppelen",
+      description:
+        "Veilig inloggen bij Mollie. GymOS krijgt alleen toegang om betalingen voor deze gym te verwerken.",
+      status: connected ? "done" : "current",
+      summary: connected ? (
+        <p className="text-muted text-sm leading-6">
+          Gekoppeld {snapshot.payments.mollieConnectTestMode ? "in testmodus" : "live"}
+          {snapshot.payments.profileLabel
+            ? ` op profiel ${snapshot.payments.profileLabel}`
+            : ""}
+          .
+        </p>
+      ) : (
+        <p className="text-muted text-sm leading-6">
+          Klik op <strong>Betaalgegevens veilig koppelen</strong> in de werkbank
+          hieronder. Daarna log je veilig in bij Mollie en kom je hier terug.
+        </p>
+      ),
+    },
+    {
+      title: "2. Betaalroutes kiezen",
+      description:
+        "Bepaal hoe leden mogen betalen: automatische incasso, eenmalige betaling of betaalverzoek.",
+      status: !connected
+        ? "todo"
+        : routes.length > 0
+          ? "done"
+          : "current",
+      summary:
+        routes.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {routes.map((method) => (
+              <Chip key={method} size="sm" variant="soft">
+                {getBillingPaymentMethodLabel(method)}
+              </Chip>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted text-sm leading-6">
+            Vink in de werkbank hieronder minstens één betaalroute aan. Zonder
+            route kan een lid online geen lidmaatschap afnemen.
+          </p>
+        ),
+    },
+    {
+      title: "3. Profielgegevens invullen",
+      description:
+        "Vul supportmail, uitbetalingslabel en eventueel een notitie zodat leden weten met wie ze te maken hebben.",
+      status: !connected || routes.length === 0
+        ? "todo"
+        : profileReady
+          ? "done"
+          : "current",
+      summary: profileReady ? (
+        <p className="text-muted text-sm leading-6">
+          Supportmail{" "}
+          <span className="text-foreground font-medium">
+            {snapshot.payments.supportEmail}
+          </span>{" "}
+          · Uitbetalingslabel{" "}
+          <span className="text-foreground font-medium">
+            {snapshot.payments.settlementLabel}
+          </span>
+          .
+        </p>
+      ) : (
+        <ul className="text-muted ml-4 list-disc text-sm leading-6">
+          {!supportFilled ? <li>Supportmail nog niet ingevuld.</li> : null}
+          {!settlementFilled ? <li>Uitbetalingslabel nog niet ingevuld.</li> : null}
+        </ul>
+      ),
+    },
+    {
+      title: "4. Betalingen activeren",
+      description:
+        "De finale knop. Pas hierna verwerken leden echt betalingen via Mollie.",
+      status:
+        !connected || routes.length === 0 || !profileReady
+          ? "todo"
+          : liveReady
+            ? "done"
+            : "current",
+      summary: liveReady ? (
+        <p className="text-muted text-sm leading-6">
+          Online betalingen staan <span className="text-success font-semibold">live</span>{" "}
+          voor deze gym.
+        </p>
+      ) : (
+        <p className="text-muted text-sm leading-6">
+          Zet de schakelaar <strong>Betalingen actief voor deze gym</strong> aan
+          in de werkbank zodra alle drie de stappen hierboven groen zijn.
+        </p>
+      ),
+    },
+  ];
+
+  const doneCount = steps.filter((step) => step.status === "done").length;
+
+  return (
+    <Card className="border-border/80 bg-surface rounded-2xl border shadow-none">
+      <Card.Header className="items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Card.Title>Mollie-status</Card.Title>
+            <Chip
+              color={
+                doneCount === steps.length
+                  ? "success"
+                  : doneCount === 0
+                    ? "default"
+                    : "accent"
+              }
+              size="sm"
+              variant="soft"
+            >
+              {doneCount} van {steps.length} klaar
+            </Chip>
+          </div>
+          <Card.Description>
+            {doneCount === steps.length
+              ? "Alles staat klaar. Leden kunnen via Mollie betalen."
+              : "Werk de stappen één voor één af. De werkbank onderaan opent precies de juiste actie."}
+          </Card.Description>
+        </div>
+      </Card.Header>
+      <Card.Content className="grid gap-3 md:grid-cols-2">
+        {steps.map((step) => (
+          <div
+            key={step.title}
+            className={`min-w-0 rounded-2xl border p-4 transition ${
+              step.status === "done"
+                ? "border-success/40 bg-success/5"
+                : step.status === "current"
+                  ? "border-accent/60 bg-accent/5 shadow-sm"
+                  : "border-border/60 bg-surface-secondary"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-foreground text-sm font-semibold">{step.title}</p>
+                <p className="text-muted mt-1 text-xs leading-5">{step.description}</p>
+              </div>
+              <MollieStatusChip status={step.status} />
+            </div>
+            <div className="mt-3 min-w-0">{step.summary}</div>
+          </div>
+        ))}
+      </Card.Content>
+    </Card>
   );
 }
 
@@ -704,7 +881,7 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   return (
     <div className="section-stack min-w-0 max-w-full overflow-x-clip">
         <PageSection
-          title="Betalingen overzicht"
+          title="Betalingen"
           description="Wat er nu binnenkomt, wat openstaat en welke betalingen je aandacht vragen."
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1200,50 +1377,10 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
 
         <div id="mollie-account" className="scroll-mt-28">
           <PageSection
-            title="Betalingen"
-            description="Hier regel je de Mollie-betaalrekening, de betaalroutes voor leden en de vertaling naar de dagelijkse operatie."
+            title="Mollie instellen"
+            description="Vier stappen om online betalingen via Mollie aan te zetten. Vink ze af zonder je zorgen te maken om de volgorde — de werkbank onderaan opent op de plek waar je nog actie moet doen."
           >
-            <Card className="min-w-0 rounded-[28px] border border-border/80 bg-surface-secondary shadow-none">
-              <Card.Header className="items-start gap-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    <Chip size="sm" variant="soft">
-                      Mollie
-                    </Chip>
-                    <Chip size="sm" variant="soft">
-                      {snapshot.payments.statusLabel}
-                    </Chip>
-                  </div>
-                  <Card.Title>
-                    {snapshot.payments.profileLabel || "Betaalrekening nog niet gekoppeld"}
-                  </Card.Title>
-                  <Card.Description>{snapshot.payments.helpText}</Card.Description>
-                </div>
-              </Card.Header>
-              <Card.Content className="grid gap-4 lg:grid-cols-3">
-                <InfoCard label="Betaalroutes voor leden">
-                  {snapshot.payments.paymentMethods.length > 0 ? (
-                    snapshot.payments.paymentMethods.map((method) => (
-                      <Chip key={method} size="sm" variant="tertiary">
-                        {getBillingPaymentMethodLabel(method)}
-                      </Chip>
-                    ))
-                  ) : (
-                    <Chip size="sm" variant="tertiary">
-                      Nog geen routes gekozen
-                    </Chip>
-                  )}
-                </InfoCard>
-                <InfoCard
-                  label="Contact voor betaalvragen"
-                  value={snapshot.payments.supportEmail || "Nog niet ingevuld"}
-                />
-                <InfoCard
-                  label="Omschrijving op uitbetalingen"
-                  value={snapshot.payments.settlementLabel || "Nog niet ingevuld"}
-                />
-              </Card.Content>
-            </Card>
+            <MollieSetupStepper snapshot={snapshot} />
 
             <LazyPlatformWorkbench
               sections={["payments"]}
