@@ -84,7 +84,9 @@ describe("public surface copy", () => {
     expect(source).toContain("openSignupCheckout");
     expect(source).toContain("window.Capacitor?.Plugins?.Browser");
     expect(source).toContain('presentationStyle: "fullscreen"');
-    expect(source).toContain("window.open(checkoutUrl,");
+    // Web checkout opens in the same tab so we don't double-launch (new tab + current tab both navigating).
+    expect(source).toContain("window.location.assign(checkoutUrl)");
+    expect(source).not.toContain('window.open(checkoutUrl, "_blank"');
     expect(source).not.toContain("Checkout staat nog niet live; deze club moet Mollie eerst activeren.");
     expect(source).not.toContain("window.location.assign(payload.data.checkoutUrl)");
     expect(source).not.toContain("nog niet ingevuld");

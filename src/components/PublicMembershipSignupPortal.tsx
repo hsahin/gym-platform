@@ -159,10 +159,8 @@ export function PublicMembershipSignupPortal({
       }
     }
 
-    const opened = window.open(checkoutUrl, "_blank", "noopener,noreferrer");
-    if (!opened) {
-      window.location.assign(checkoutUrl);
-    }
+    // Web: stay in the same tab so we don't double-launch the checkout.
+    window.location.assign(checkoutUrl);
   }
 
   function submitSignup() {
