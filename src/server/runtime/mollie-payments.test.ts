@@ -752,4 +752,92 @@ describe("mollie payment provider", () => {
       message: "Mollie weigerde de betaallink: Temporary Mollie outage",
     });
   });
+
+  it("falls back to a generic owner-readable message when Mollie returns no detail at all", async () => {
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async () => new Response("", { status: 502 })),
+      testMode: true,
+    });
+
+    await expect(
+      provider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Testbetaling",
+        paymentMethod: "one_time",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("Controleer het gekoppelde betaalprofiel"),
+    });
+  });
+
+  it("reads embedded Mollie errors when only the message field is present", async () => {
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          {
+            _embedded: {
+              errors: [
+                { message: "The profile id cannot be resolved." },
+              ],
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+      testMode: true,
+    });
+
+    await expect(
+      provider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Testbetaling",
+        paymentMethod: "one_time",
+        profileId: "pfl_invalid",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("gekoppelde betaalprofiel"),
+    });
+  });
+
+  it("returns no errors when Mollie body shape is unrecognised", async () => {
+    const provider = createMolliePaymentProvider({
+      accessToken: "access_123",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(
+          {
+            _embedded: {
+              errors: "not-an-array",
+            },
+            unrelated: true,
+          },
+          { status: 502 },
+        ),
+      ),
+      testMode: true,
+    });
+
+    await expect(
+      provider.createPaymentIntent({
+        amountCents: 1000,
+        currency: "EUR",
+        description: "Testbetaling",
+        paymentMethod: "one_time",
+        redirectUrl: "https://gym.example/dashboard/payments",
+        webhookUrl: "https://gym.example/api/platform/billing/mollie/webhook?tenantId=tenant_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("Controleer het gekoppelde betaalprofiel"),
+    });
+  });
 });

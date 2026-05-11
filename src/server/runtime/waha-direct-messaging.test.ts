@@ -51,6 +51,14 @@ describe("direct WAHA messaging", () => {
     expect(isWahaSessionHealthy({ status: "STOPPED" })).toBe(false);
   });
 
+  it("returns false for non-record session payloads", () => {
+    expect(isWahaSessionHealthy(null)).toBe(false);
+    expect(isWahaSessionHealthy(undefined)).toBe(false);
+    expect(isWahaSessionHealthy("string-not-object")).toBe(false);
+    expect(isWahaSessionHealthy(42)).toBe(false);
+    expect(isWahaSessionHealthy({})).toBe(false);
+  });
+
   it("checks recipient existence and sends the exact WAHA sendText payload", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);

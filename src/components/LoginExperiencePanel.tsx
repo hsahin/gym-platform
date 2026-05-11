@@ -14,34 +14,34 @@ export function LoginExperiencePanel({
   });
 
   return (
-    <div className="space-y-5">
-      <section className="stage-card space-y-5">
+    <div className="section-stack">
+      <section className="stage-card">
         <div className="space-y-2">
           <p className="eyebrow">
             {isSetupComplete ? "Launch actief" : "Eigenaarservaring"}
           </p>
-          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-slate-950">
+          <h2 className="text-foreground text-2xl font-semibold tracking-tight md:text-3xl">
             {content.heroTitle}
           </h2>
-          <p className="text-base leading-7 text-slate-600">
+          <p className="text-muted text-base leading-7">
             Deze ingang moet niet voelen als een adminscherm, maar als de start
             van een premium operatie die meteen vertrouwen geeft aan teams en leden.
           </p>
         </div>
 
-        <div className="grid gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="signal-card">
-            <p className="text-lg font-semibold text-slate-950">{content.ownerHighlights[0]}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <p className="text-foreground text-lg font-semibold">{content.ownerHighlights[0]}</p>
+            <p className="text-muted text-sm leading-6">
               Eigenaren zien direct een merkwaardige ervaring die verkoopt nog voordat
               er een gesprek plaatsvindt.
             </p>
           </div>
           <div className="signal-card">
-            <p className="text-lg font-semibold text-slate-950">
+            <p className="text-foreground text-lg font-semibold">
               {content.ownerHighlights[1]}
             </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <p className="text-muted text-sm leading-6">
               Planning, leden, reserveringen en medewerkeraccounts landen in één systeem
               dat er ook nog premium uitziet.
             </p>
@@ -49,26 +49,26 @@ export function LoginExperiencePanel({
         </div>
       </section>
 
-      <section className="stage-card space-y-4">
+      <section className="stage-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="eyebrow">
               {isSetupComplete ? "Live momentum" : "Na de inrichting"}
             </p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
+            <p className="text-foreground mt-2 text-2xl font-semibold">
               {content.momentumLabel}
             </p>
           </div>
-          <div className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700">
+          <div className="border-border bg-surface text-foreground rounded-full border px-4 py-2 text-sm font-medium">
             {isSetupComplete ? "Klaar voor teamgebruik" : "Schone start"}
           </div>
         </div>
 
-        <p className="text-sm leading-6 text-slate-600">
+        <p className="text-muted text-sm leading-6">
           {content.bookingPromise}
         </p>
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Link href="/reserve" className="cta-secondary">
             {content.reservationCta}
           </Link>

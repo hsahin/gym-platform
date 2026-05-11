@@ -50,6 +50,72 @@ describe("billing helpers", () => {
     });
   });
 
+  it("normalizes nested mollieConnect tokens by trimming whitespace and keeping testMode", () => {
+    const result = normalizeStoredBillingSettings({
+      mollieConnect: {
+        accessToken: "  access_token_value  ",
+        refreshToken: "  refresh_token_value  ",
+        expiresAt: "  2026-06-01T00:00:00.000Z  ",
+        scope: "  payments.read clients.write  ",
+        connectedAt: "  2026-05-01T00:00:00.000Z  ",
+        testMode: true,
+        state: "  state-uuid  ",
+        stateCreatedAt: "  2026-04-01T00:00:00.000Z  ",
+        clientLinkId: "  cl_test_123  ",
+        clientLinkUrl: "  https://example.com/link  ",
+        onboardingUrl: "  https://example.com/onboarding  ",
+        profileStatus: "  active  ",
+      },
+    });
+
+    expect(result.mollieConnect).toMatchObject({
+      accessToken: "access_token_value",
+      refreshToken: "refresh_token_value",
+      expiresAt: "2026-06-01T00:00:00.000Z",
+      scope: "payments.read clients.write",
+      connectedAt: "2026-05-01T00:00:00.000Z",
+      testMode: true,
+      state: "state-uuid",
+      stateCreatedAt: "2026-04-01T00:00:00.000Z",
+      clientLinkId: "cl_test_123",
+      clientLinkUrl: "https://example.com/link",
+      onboardingUrl: "https://example.com/onboarding",
+      profileStatus: "active",
+    });
+
+    const blank = normalizeStoredBillingSettings({
+      mollieConnect: {
+        accessToken: "   ",
+        refreshToken: "   ",
+        expiresAt: "   ",
+        scope: "   ",
+        connectedAt: "   ",
+        testMode: false,
+        state: "   ",
+        stateCreatedAt: "   ",
+        clientLinkId: "   ",
+        clientLinkUrl: "   ",
+        onboardingUrl: "   ",
+        profileStatus: "   ",
+      },
+    });
+
+    expect(blank.mollieConnect).toMatchObject({
+      accessToken: undefined,
+      refreshToken: undefined,
+      expiresAt: undefined,
+      scope: undefined,
+      connectedAt: undefined,
+      testMode: false,
+      state: undefined,
+      stateCreatedAt: undefined,
+      clientLinkId: undefined,
+      clientLinkUrl: undefined,
+      onboardingUrl: undefined,
+      profileStatus: undefined,
+    });
+  });
+
   it("reports not configured, attention and configured states", () => {
     const blank = createDefaultBillingSettings();
     const partial = normalizeStoredBillingSettings({

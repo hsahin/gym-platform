@@ -231,4 +231,144 @@ describe("mollie connect oauth", () => {
       },
     ]);
   });
+
+  it("refreshes an OAuth access token via the refresh-token grant", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.mollie.com/oauth2/tokens");
+      expect(init?.method).toBe("POST");
+      expect(init?.headers).toMatchObject({
+        authorization: "Basic YXBwXzEyMzpzZWNyZXQ=",
+      });
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        grant_type: "refresh_token",
+        refresh_token: "rt_old",
+        redirect_uri: "https://gym.example/api/mollie/redirect",
+      });
+
+      return jsonResponse({
+        access_token: "access_new",
+        refresh_token: "rt_new",
+        expires_in: 3600,
+        token_type: "bearer",
+        scope: "payments.read payments.write",
+      });
+    });
+    const client = createMollieConnectClient({
+      clientId: "app_123",
+      clientSecret: "secret",
+      redirectUri: "https://gym.example/api/mollie/redirect",
+      fetchImpl: fetchMock,
+    });
+
+    await expect(client.refreshAccessToken("rt_old")).resolves.toMatchObject({
+      accessToken: "access_new",
+      refreshToken: "rt_new",
+      scope: "payments.read payments.write",
+    });
+  });
+
+  it("throws an INVALID_INPUT error when the organization access token is missing", async () => {
+    const previousToken = process.env.MOLLIE_ORGANIZATION_ACCESS_TOKEN;
+    delete process.env.MOLLIE_ORGANIZATION_ACCESS_TOKEN;
+
+    const client = createMollieConnectClient({
+      clientId: "app_123",
+      clientSecret: "secret",
+      redirectUri: "https://gym.example/api/mollie/redirect",
+      fetchImpl: vi.fn(),
+    });
+
+    try {
+      await expect(
+        client.createClientLink({
+          owner: {
+            name: "Northside Athletics",
+            email: "owner@northside.test",
+            address: {
+              streetAndNumber: "Teststraat 1",
+              postalCode: "1011AA",
+              city: "Amsterdam",
+              country: "NL",
+            },
+            registrationNumber: "12345678",
+            vatNumber: null,
+            legalEntity: "limited-liability-company",
+            registrationOffice: "NL",
+            incorporationDate: null,
+          },
+          state: "tenant_1:client-link",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_INPUT",
+        message: expect.stringContaining("organization access token"),
+      });
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.MOLLIE_ORGANIZATION_ACCESS_TOKEN;
+      } else {
+        process.env.MOLLIE_ORGANIZATION_ACCESS_TOKEN = previousToken;
+      }
+    }
+  });
+
+  it("rejects malformed client-link responses with a clear error", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        {
+          id: "   ",
+          _links: { clientLink: { href: "" } },
+        },
+        { status: 201 },
+      ),
+    );
+    const client = createMollieConnectClient({
+      clientId: "app_123",
+      clientSecret: "secret",
+      organizationAccessToken: "org_token",
+      redirectUri: "https://gym.example/api/mollie/redirect",
+      fetchImpl: fetchMock,
+      testMode: true,
+    });
+
+    await expect(
+      client.createClientLink({
+        owner: {
+          name: "Northside Athletics",
+          email: "owner@northside.test",
+          address: {
+            streetAndNumber: "Teststraat 1",
+            postalCode: "1011AA",
+            city: "Amsterdam",
+            country: "NL",
+          },
+          registrationNumber: "12345678",
+          vatNumber: null,
+          legalEntity: "limited-liability-company",
+          registrationOffice: "NL",
+          incorporationDate: null,
+        },
+        state: "tenant_1:client-link",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("client link"),
+    });
+  });
+
+  it("surfaces a Mollie 400 from the token exchange as a domain error", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ detail: "Invalid authorization code." }, { status: 400 }),
+    );
+    const client = createMollieConnectClient({
+      clientId: "app_123",
+      clientSecret: "secret",
+      redirectUri: "https://gym.example/api/mollie/redirect",
+      fetchImpl: fetchMock,
+    });
+
+    await expect(client.exchangeAuthorizationCode("bad_code")).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("Mollie Connect"),
+    });
+  });
 });

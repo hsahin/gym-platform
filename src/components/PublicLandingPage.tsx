@@ -21,9 +21,9 @@ function MetricCard({
   readonly value: string;
 }) {
   return (
-    <article className="rounded-2xl border border-border/70 bg-surface px-5 py-4">
+    <article className="border-border/70 bg-surface rounded-2xl border px-5 py-4">
       <p className="text-muted text-sm">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
+      <p className="text-foreground mt-2 text-3xl font-semibold tabular-nums">{value}</p>
     </article>
   );
 }
@@ -36,10 +36,18 @@ function FeatureCard({
   readonly copy: string;
 }) {
   return (
-    <article className="rounded-2xl border border-border/80 bg-surface px-6 py-5">
-      <h2 className="text-lg font-semibold">{title}</h2>
+    <article className="border-border/80 bg-surface rounded-2xl border px-6 py-5">
+      <h2 className="text-foreground text-lg font-semibold">{title}</h2>
       <p className="text-muted mt-3 text-sm leading-6">{copy}</p>
     </article>
+  );
+}
+
+function PillTag({ children }: { readonly children: React.ReactNode }) {
+  return (
+    <span className="border-border/70 bg-surface-secondary text-foreground inline-flex rounded-full border px-3 py-1 text-xs font-medium">
+      {children}
+    </span>
   );
 }
 
@@ -61,7 +69,7 @@ export function PublicLandingPage({
     totalCapacity > 0 ? Math.round((bookedSpots / totalCapacity) * 100) : 0;
 
   return (
-    <main className="app-page section-stack py-8 md:py-10">
+    <main className="app-page section-stack py-6 md:py-10">
       <header className="app-header">
         <div className="app-header__brand">
           <div className="app-surface flex h-11 w-11 items-center justify-center rounded-2xl text-lg font-semibold">
@@ -78,28 +86,28 @@ export function PublicLandingPage({
             <Link
               href="/pricing"
               prefetch={false}
-              className="text-muted transition hover:text-foreground"
+              className="text-muted hover:text-foreground transition"
             >
               Prijzen
             </Link>
             <Link
               href="/reserve"
               prefetch={false}
-              className="text-muted transition hover:text-foreground"
+              className="text-muted hover:text-foreground transition"
             >
               Reserveren
             </Link>
             <Link
               href="/join"
               prefetch={false}
-              className="text-muted transition hover:text-foreground"
+              className="text-muted hover:text-foreground transition"
             >
               Lid worden
             </Link>
             <Link
               href="/login"
               prefetch={false}
-              className="text-muted transition hover:text-foreground"
+              className="text-muted hover:text-foreground transition"
             >
               Inloggen
             </Link>
@@ -108,19 +116,15 @@ export function PublicLandingPage({
         </div>
       </header>
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
-        <section className="subtle-grid rounded-[28px] border border-border/80 bg-background px-6 py-7 md:px-8 md:py-9">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)] lg:gap-6">
+        <section className="subtle-grid border-border/80 bg-background rounded-[28px] border px-5 py-6 sm:px-6 sm:py-7 md:px-8 md:py-9">
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
-              Meerdere clubs
-            </span>
-            <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
-              Live roosterdata
-            </span>
+            <PillTag>Meerdere clubs</PillTag>
+            <PillTag>Live roosterdata</PillTag>
           </div>
 
           <div className="mt-5 max-w-4xl space-y-3">
-            <h1 className="text-4xl leading-tight font-semibold md:text-5xl">
+            <h1 className="text-3xl leading-tight font-semibold sm:text-4xl md:text-5xl">
               Beheer reserveringen, leden, betalingen en toegang vanuit één rustig overzicht.
             </h1>
             <p className="text-muted max-w-3xl text-base leading-7">
@@ -130,49 +134,35 @@ export function PublicLandingPage({
             </p>
           </div>
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-3">
+          <div className="mt-7 grid gap-3 sm:grid-cols-3">
             <MetricCard label="Clubs" value={String(activeGymCount)} />
             <MetricCard label="Lessen live" value={String(snapshot.classSessions.length)} />
             <MetricCard label="Bezetting" value={`${occupancy}%`} />
           </div>
 
           <div className="mt-7 flex flex-wrap gap-3">
-            <Link
-              href="/login?mode=signup"
-              prefetch={false}
-              className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground"
-            >
+            <Link href="/login?mode=signup" prefetch={false} className="cta-primary">
               Nieuwe gym starten
             </Link>
-            <Link
-              href="/reserve"
-              prefetch={false}
-              className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
-            >
+            <Link href="/reserve" prefetch={false} className="cta-secondary">
               Lessen bekijken
             </Link>
-            <Link
-              href="/join"
-              prefetch={false}
-              className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
-            >
+            <Link href="/join" prefetch={false} className="cta-secondary">
               Lid aanmelden
             </Link>
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-border/80 bg-background px-6 py-7 md:px-8 md:py-9">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-lg font-semibold">Live vraag</p>
-              <p className="text-muted mt-1 text-sm leading-6">
+        <section className="border-border/80 bg-background rounded-[28px] border px-5 py-6 sm:px-6 sm:py-7 md:px-8 md:py-9">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-foreground text-lg font-semibold">Live vraag</p>
+              <p className="text-muted text-sm leading-6">
                 De publieke flow laat alleen zien wat echt boekbaar is, niet een
                 statische brochure.
               </p>
             </div>
-            <span className="inline-flex rounded-full border border-border/70 bg-surface-secondary px-3 py-1 text-xs font-medium">
-              {occupancy}% gevuld
-            </span>
+            <PillTag>{occupancy}% gevuld</PillTag>
           </div>
 
           <div className="mt-6 space-y-2">
@@ -182,9 +172,16 @@ export function PublicLandingPage({
                 {bookedSpots} / {totalCapacity || 0}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-surface-secondary">
+            <div
+              aria-label={`Bezetting ${occupancy}%`}
+              aria-valuemax={100}
+              aria-valuemin={0}
+              aria-valuenow={occupancy}
+              className="bg-surface-secondary h-2 overflow-hidden rounded-full"
+              role="progressbar"
+            >
               <div
-                className="h-full rounded-full bg-accent transition-[width]"
+                className="bg-accent h-full rounded-full transition-[width]"
                 style={{ width: `${occupancy}%` }}
               />
             </div>
@@ -194,11 +191,13 @@ export function PublicLandingPage({
             {snapshot.classSessions.slice(0, 4).map((classSession) => (
               <article
                 key={classSession.id}
-                className="rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4"
+                className="border-border/70 bg-surface-secondary rounded-2xl border px-4 py-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{classSession.title}</p>
-                  <span className="inline-flex rounded-full border border-border/70 bg-surface px-3 py-1 text-xs font-medium">
+                  <p className="text-foreground min-w-0 truncate font-medium">
+                    {classSession.title}
+                  </p>
+                  <span className="border-border/70 bg-surface inline-flex shrink-0 rounded-full border px-3 py-1 text-xs font-medium tabular-nums">
                     {classSession.bookedCount}/{classSession.capacity}
                   </span>
                 </div>
@@ -212,8 +211,8 @@ export function PublicLandingPage({
         </section>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-          <FeatureCard
+      <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
+        <FeatureCard
           title="Operatie eerst"
           copy="Pagina's zijn ingedeeld op werk: lessen, leden, contracten, toegang, betalingen en instellingen."
         />

@@ -269,10 +269,14 @@ export function PublicMembershipSignupPortal({
       </header>
 
       {!snapshot.tenantSlug ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
           {snapshot.availableGyms.map((gym) => (
-            <Link key={gym.id} href={`/join?gym=${gym.slug}`}>
-              <Card className="rounded-[28px] border-border/80">
+            <Link
+              key={gym.id}
+              href={`/join?gym=${gym.slug}`}
+              className="focus-visible:outline-accent rounded-[28px] focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <Card className="border-border/80 rounded-[28px] transition hover:border-foreground/30">
                 <Card.Header>
                   <Card.Title>{gym.name}</Card.Title>
                   <Card.Description>Open de aanmeldflow van deze club.</Card.Description>

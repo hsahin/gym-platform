@@ -642,16 +642,20 @@ export function PublicReservationPortal({
       {canBrowseClasses && bookingStep === "club" ? (
         <section className="section-stack">
           <div className="max-w-2xl space-y-3">
-            <h1 className="text-4xl font-semibold leading-tight">Kies je club</h1>
+            <h1 className="text-3xl font-semibold leading-tight sm:text-4xl">Kies je club</h1>
             <p className="text-muted text-base leading-7">
               Kies de sportschool waar je een les wilt boeken.
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {availableClubs.map((club) => (
-              <Link key={club.id} href={`/reserve?gym=${club.slug}`}>
-                <Card className="h-full rounded-[28px] border-border/80 transition hover:border-accent/30">
+              <Link
+                key={club.id}
+                href={`/reserve?gym=${club.slug}`}
+                className="focus-visible:outline-accent rounded-[28px] focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                <Card className="border-border/80 hover:border-accent/40 h-full rounded-[28px] transition">
                   <Card.Header>
                     <Card.Title>{club.name}</Card.Title>
                     <Card.Description>
@@ -772,12 +776,15 @@ export function PublicReservationPortal({
                     <button
                       key={classSession.id}
                       type="button"
-                      className="text-left"
+                      aria-pressed={isSelected}
+                      className="focus-visible:outline-accent rounded-[28px] text-left focus-visible:outline-2 focus-visible:outline-offset-2"
                       onClick={() => setSelectedClassSessionId(classSession.id)}
                     >
                       <Card
-                        className={`rounded-[28px] border-border/80 transition ${
-                          isSelected ? "ring-2 ring-accent/20" : ""
+                        className={`border-border/80 rounded-[28px] transition ${
+                          isSelected
+                            ? "ring-accent/60 border-accent/60 ring-2"
+                            : "hover:border-foreground/30"
                         }`}
                       >
                         <Card.Header className="items-start justify-between gap-4">
@@ -894,10 +901,7 @@ export function PublicReservationPortal({
                         {publicBookingAction.label}
                       </Button>
                       {publicBookingAccess?.trialEnabled ? (
-                        <Link
-                          href={membershipSignupUrl}
-                          className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
-                        >
+                        <Link href={membershipSignupUrl} className="cta-secondary">
                           Word lid
                         </Link>
                       ) : null}
@@ -931,29 +935,23 @@ export function PublicReservationPortal({
             </Card.Header>
             <Card.Content>
               <form className="section-stack" onSubmit={handleSubmit}>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="field-stack">
-                    <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                      Lid
-                    </p>
+                    <p className="eyebrow">Lid</p>
                     <p className="text-sm font-medium">
                       {isMemberFlow ? snapshot.memberDisplayName : ""}
                     </p>
                   </div>
                   <div className="field-stack">
-                    <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                      Account
-                    </p>
-                    <p className="text-sm font-medium">
+                    <p className="eyebrow">Account</p>
+                    <p className="break-all text-sm font-medium">
                       {isMemberFlow ? snapshot.memberEmail : ""}
                     </p>
                   </div>
                 </div>
 
                 <div className="field-stack">
-                  <p className="text-muted text-xs font-medium uppercase tracking-[0.08em]">
-                    Notities
-                  </p>
+                  <p className="eyebrow">Notities</p>
                   <TextArea
                     fullWidth
                     rows={4}
@@ -1042,10 +1040,7 @@ export function PublicReservationPortal({
             <Button onPress={() => setBookingStep("classes")}>
               Nog een les kiezen
             </Button>
-            <Link
-              href="/login"
-              className="rounded-full border border-border bg-surface px-5 py-2.5 text-sm font-medium"
-            >
+            <Link href="/login" className="cta-secondary">
               Inloggen
             </Link>
           </Card.Content>
@@ -1062,7 +1057,7 @@ export function PublicReservationPortal({
                 Je club ziet de aanvraag direct in het dashboard.
               </Card.Description>
             </Card.Header>
-            <Card.Content className="grid gap-6 md:grid-cols-2">
+            <Card.Content className="grid gap-6 lg:grid-cols-2">
               <form
                 className="section-stack"
                 onSubmit={(event) => {

@@ -69,4 +69,45 @@ describe("nuki remote access provider", () => {
       code: "INVALID_INPUT",
     });
   });
+
+  it("throws a configuration error when the Nuki API token is missing", () => {
+    const previousToken = process.env.NUKI_API_TOKEN;
+    delete process.env.NUKI_API_TOKEN;
+
+    try {
+      expect(() => createNukiRemoteAccessProvider()).toThrow("Nuki API-token ontbreekt.");
+      expect(() => createNukiRemoteAccessProvider({ apiToken: "   " })).toThrow(
+        "Nuki API-token ontbreekt.",
+      );
+    } finally {
+      if (previousToken === undefined) {
+        delete process.env.NUKI_API_TOKEN;
+      } else {
+        process.env.NUKI_API_TOKEN = previousToken;
+      }
+    }
+  });
+
+  it("rejects unlock requests when the smartlock id is empty or whitespace", async () => {
+    const provider = createNukiRemoteAccessProvider({
+      apiToken: "nuki-token",
+      fetchImpl: vi.fn(),
+    });
+
+    await expect(provider.unlock({ smartlockId: "   " })).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("smartlock-id"),
+    });
+  });
+
+  it("passes plain-text Nuki bodies through the error message parser", async () => {
+    const provider = createNukiRemoteAccessProvider({
+      apiToken: "nuki-token",
+      fetchImpl: vi.fn(async () => new Response("Service Unavailable", { status: 503 })),
+    });
+
+    await expect(provider.unlock({ smartlockId: "123456" })).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+  });
 });

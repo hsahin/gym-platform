@@ -119,4 +119,41 @@ describe("class recurrence", () => {
       }),
     ).toEqual([]);
   });
+
+  it("rejects opening or closing times that exceed the 24-hour clock", () => {
+    expect(
+      buildOpenGymCapacityLocalStarts({
+        anchorDate: "2026-05-08",
+        opensAt: "25:00",
+        closesAt: "26:00",
+        slotMinutes: 60,
+      }),
+    ).toEqual([]);
+
+    expect(
+      buildOpenGymCapacityLocalStarts({
+        anchorDate: "2026-05-08",
+        opensAt: "08:00",
+        closesAt: "12:99",
+        slotMinutes: 60,
+      }),
+    ).toEqual([]);
+  });
+
+  it("returns an empty list when the until date sits before the anchor date", () => {
+    expect(
+      buildOpenGymCapacityLocalStarts({
+        anchorDate: "2026-05-08",
+        untilDate: "2026-05-01",
+        opensAt: "08:00",
+        closesAt: "12:00",
+        slotMinutes: 60,
+      }),
+    ).toEqual([]);
+  });
+
+  it("returns null weekday for an unrecognised local datetime string shape", () => {
+    expect(getWeekdayKeyForLocalDateTime("not-a-datetime")).toBeNull();
+    expect(getWeekdayKeyForLocalDateTime("")).toBeNull();
+  });
 });

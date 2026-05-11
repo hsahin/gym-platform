@@ -152,6 +152,120 @@ p {
   padding: 1.25rem;
 }
 
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in oklch, var(--muted) 80%, var(--foreground));
+}
+
+.soft-card {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in oklch, var(--border) 86%, var(--background));
+  background: color-mix(in oklch, var(--surface) 92%, var(--background));
+  color: var(--foreground);
+}
+
+.stage-card {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  max-width: 100%;
+  gap: 1rem;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  border-radius: 1.5rem;
+  border: 1px solid color-mix(in oklch, var(--border) 80%, var(--background));
+  background:
+    radial-gradient(circle at top left, color-mix(in oklch, var(--accent) 9%, transparent), transparent 38%),
+    var(--surface);
+  box-shadow: var(--shadow-surface);
+}
+
+.signal-card {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 1rem;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in oklch, var(--border) 84%, var(--accent));
+  background: color-mix(in oklch, var(--surface-secondary) 92%, transparent);
+  color: var(--foreground);
+}
+
+.command-deck {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  max-width: 100%;
+  gap: 1rem;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  border-radius: 1.5rem;
+  border: 1px solid color-mix(in oklch, var(--border) 64%, var(--accent));
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--accent) 92%, black) 0%, color-mix(in oklch, var(--accent) 78%, var(--foreground)) 100%);
+  color: var(--accent-foreground);
+  box-shadow: var(--shadow-surface);
+}
+
+.command-deck .eyebrow,
+.command-deck h1,
+.command-deck h2,
+.command-deck h3,
+.command-deck p {
+  color: inherit;
+}
+
+.command-deck .eyebrow {
+  color: color-mix(in oklch, var(--accent-foreground) 80%, transparent);
+}
+
+.cta-primary,
+.cta-secondary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 999px;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.cta-primary {
+  border: 1px solid color-mix(in oklch, var(--accent) 70%, var(--border));
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.cta-primary:hover {
+  background: color-mix(in oklch, var(--accent) 88%, var(--foreground));
+}
+
+.cta-secondary {
+  border: 1px solid color-mix(in oklch, var(--border) 88%, var(--background));
+  background: color-mix(in oklch, var(--surface) 94%, transparent);
+  color: var(--foreground);
+}
+
+.cta-secondary:hover {
+  border-color: color-mix(in oklch, var(--accent) 60%, var(--border));
+  background: color-mix(in oklch, var(--surface) 88%, var(--accent));
+}
+
 @media (min-width: 768px) {
   .app-page {
     padding: 1.5rem;
@@ -602,6 +716,29 @@ p {
     margin-left: 0;
     padding-left: 0;
   }
+}
+
+.dashboard-floating-toc__trigger {
+  /* Increase bar dimensions for better visibility */
+  --floating-toc-bar-width: 22px;
+  --floating-toc-bar-active-width: 30px;
+  --floating-toc-bar-height: 3px;
+  --floating-toc-bar-active-height: 3px;
+  --floating-toc-bar-gap: 8px;
+}
+
+.dashboard-floating-toc__trigger .floating-toc__bar::after {
+  /* Lift inactive bar contrast from --border (near-invisible) to --muted */
+  background-color: color-mix(in oklch, var(--muted) 70%, var(--border));
+}
+
+.dashboard-floating-toc__trigger:hover .floating-toc__bar::after {
+  background-color: color-mix(in oklch, var(--foreground) 50%, var(--border));
+}
+
+.dashboard-floating-toc__trigger .floating-toc__bar[data-active="true"]::after {
+  background-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 18%, transparent);
 }
 
 .theme-mode-switch {

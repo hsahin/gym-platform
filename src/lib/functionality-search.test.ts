@@ -134,4 +134,81 @@ describe("functionality search", () => {
       "/reserve?gym=tenant-northside",
     );
   });
+
+  it("returns the dashboard href unchanged when there is no tenant context", () => {
+    const dashboardEntry = FUNCTIONALITY_SEARCH_ENTRIES.find(
+      (entry) => entry.kind === "page",
+    );
+
+    expect(dashboardEntry).toBeDefined();
+    // No tenantId means dashboard pages render as-is.
+    expect(resolveFunctionalitySearchHref(dashboardEntry!, undefined)).toBe(
+      dashboardEntry!.href,
+    );
+    // Non-public entries are never tenant-scoped, even with a tenantId.
+    expect(resolveFunctionalitySearchHref(dashboardEntry!, "tenant-x")).toBe(
+      dashboardEntry!.href,
+    );
+  });
+
+  it("ranks entries by exact title, prefix, substring, keyword, then description", () => {
+    const entries = [
+      {
+        key: "test.exact",
+        title: "Boekingen",
+        description: "Compleet beheer",
+        kind: "feature" as const,
+        href: "/dashboard/classes",
+        keywords: ["bookings"],
+      },
+      {
+        key: "test.prefix",
+        title: "Boekingen vandaag",
+        description: "Annuleringsvensters en wachtlijst",
+        kind: "feature" as const,
+        href: "/dashboard/classes",
+        keywords: [],
+      },
+      {
+        key: "test.substring",
+        title: "Live boekingen vandaag",
+        description: "Snel overzicht",
+        kind: "feature" as const,
+        href: "/dashboard/classes",
+        keywords: [],
+      },
+      {
+        key: "test.keyword",
+        title: "Cancellaties",
+        description: "Verlies aan plekken",
+        kind: "feature" as const,
+        href: "/dashboard/classes",
+        keywords: ["boekingen"],
+      },
+      {
+        key: "test.description",
+        title: "Capaciteitsplanning",
+        description: "Plan plekken voor boekingen",
+        kind: "feature" as const,
+        href: "/dashboard/classes",
+        keywords: [],
+      },
+    ];
+
+    const ranked = searchFunctionality("boekingen", { entries, limit: 5 });
+
+    expect(ranked.map((entry) => entry.key)).toEqual([
+      "test.exact",
+      "test.prefix",
+      "test.substring",
+      "test.keyword",
+      "test.description",
+    ]);
+  });
+
+  it("returns an empty list when the search query normalises to nothing", () => {
+    expect(searchFunctionality("   ")).toEqual([]);
+    expect(searchFunctionality("")).toEqual([]);
+    expect(searchFunctionality(",,,,")).toEqual([]);
+  });
 });

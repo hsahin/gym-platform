@@ -22,7 +22,7 @@ import type { FeatureState, GymDashboardSnapshot } from "@/server/types";
 function TruncatedTooltipText({
   text,
   className,
-  lines = 2,
+  lines = 1,
 }: {
   readonly text: string;
   readonly className?: string;
@@ -40,7 +40,7 @@ function TruncatedTooltipText({
           {text}
         </span>
       </Tooltip.Trigger>
-      <Tooltip.Content className="max-w-xs text-xs leading-5">
+      <Tooltip.Content className="bg-overlay text-foreground border-border max-w-xs rounded-lg border px-3 py-2 text-xs leading-5 shadow-overlay">
         <Tooltip.Arrow />
         {text}
       </Tooltip.Content>
@@ -82,8 +82,9 @@ export function FeatureModuleBoard({
   return (
     <ItemCardGroup
       columns={editable ? 2 : 3}
-      layout="grid"
-      className="mobile-feature-module-board min-w-0 max-w-full gap-2 rounded-[22px] border border-border/70 bg-surface-secondary/60 p-2"
+      layout={editable ? "grid" : "list"}
+      variant="outline"
+      className="mobile-feature-module-board min-w-0 max-w-full"
     >
       {normalizedFeatures.map((feature) => {
         const isSaving = isPending && pendingKey === feature.key;
@@ -94,125 +95,121 @@ export function FeatureModuleBoard({
         const presenceSummary = snapshot
           ? buildFeaturePresenceSummary(feature, snapshot)
           : null;
+        const stateLabel = getDashboardFeatureFlagStateLabel(feature.enabled);
+        const metadataLabel = [
+          getDashboardFeatureCategoryLabel(feature),
+          getDashboardFeatureStatusLabel(feature.statusLabel),
+          getDashboardFeatureReasonLabel(feature.reason),
+        ]
+          .filter(Boolean)
+          .join(" · ");
 
         return (
           <ItemCard
             key={feature.key}
-            variant="outline"
-            className={`min-h-0 min-w-0 max-w-full flex-wrap items-start gap-3 rounded-2xl bg-surface px-3 py-3 shadow-none ${
-              feature.enabled ? "" : "opacity-85"
+            className={`min-h-0 min-w-0 max-w-full flex-wrap items-center gap-3 ${
+              feature.enabled ? "" : "opacity-80"
             }`}
           >
             <ItemCard.Icon
+              aria-label={stateLabel}
               className={
                 feature.enabled
-                  ? "size-8 bg-success/10 text-success"
-                  : "size-8 bg-surface-secondary text-muted"
+                  ? "size-7 bg-success/15 text-success"
+                  : "bg-muted/15 text-muted size-7"
               }
             >
-              <span className="size-2 rounded-full bg-current" />
+              <span aria-hidden="true" className="size-2 rounded-full bg-current" />
             </ItemCard.Icon>
-            <ItemCard.Content className="min-w-0 gap-1">
-              <ItemCard.Title className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-sm">
+            <ItemCard.Content className="min-w-0 flex-1 gap-0.5">
+              <ItemCard.Title className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
                 <TruncatedTooltipText
-                  className="max-w-[12rem] font-semibold"
+                  className="max-w-full"
                   lines={1}
                   text={featureCopy.title}
                 />
-                <Chip
-                  size="sm"
-                  variant={feature.enabled ? "soft" : "tertiary"}
-                  color={feature.enabled ? "success" : "default"}
-                >
-                  {getDashboardFeatureFlagStateLabel(feature.enabled)}
-                </Chip>
                 {feature.badgeLabel ? (
-                  <Chip size="sm" color="accent" variant="soft">
+                  <Chip color="accent" size="sm" variant="soft">
                     {feature.badgeLabel}
                   </Chip>
                 ) : null}
               </ItemCard.Title>
-              <div className="text-muted max-w-none text-xs leading-5">
+              <div className="text-muted min-w-0 text-xs leading-5">
                 <TruncatedTooltipText text={featureCopy.description} />
               </div>
               {presenceSummary ? (
-                <div className="text-muted text-xs leading-5">
+                <div className="text-muted/80 min-w-0 text-[0.7rem] leading-4">
                   <TruncatedTooltipText text={presenceSummary} />
                 </div>
               ) : null}
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-                <Chip size="sm" variant="tertiary">
-                  {getDashboardFeatureCategoryLabel(feature)}
-                </Chip>
-                <Chip size="sm" variant="tertiary">
-                  {getDashboardFeatureReasonLabel(feature.reason)}
-                </Chip>
-                <Chip size="sm" variant="tertiary">
-                  {getDashboardFeatureStatusLabel(feature.statusLabel)}
-                </Chip>
-              </div>
+              {metadataLabel ? (
+                <div className="text-muted/70 min-w-0 text-[0.65rem] uppercase tracking-[0.08em]">
+                  <TruncatedTooltipText text={metadataLabel} />
+                </div>
+              ) : null}
             </ItemCard.Content>
-            {shouldShowOpenAction || editable ? (
-              <ItemCard.Action className="flex min-w-0 flex-row flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
-                {shouldShowOpenAction ? (
-                  <Link
-                    href={targetHref}
-                    prefetch={false}
-                    className="max-w-full rounded-full border border-border bg-surface px-3 py-1.5 text-center text-xs font-medium"
-                  >
-                    Module openen
-                  </Link>
-                ) : null}
+            <ItemCard.Action className="flex shrink-0 items-center gap-2">
+              <Chip
+                color={feature.enabled ? "success" : "default"}
+                size="sm"
+                variant={feature.enabled ? "soft" : "tertiary"}
+              >
+                {stateLabel}
+              </Chip>
+              {shouldShowOpenAction ? (
+                <Link
+                  href={targetHref}
+                  prefetch={false}
+                  className="border-border bg-surface text-foreground hover:border-accent hover:text-accent rounded-full border px-3 py-1 text-xs font-medium transition"
+                >
+                  Module openen
+                </Link>
+              ) : null}
+              {editable ? (
+                <Switch
+                  isDisabled={isSaving}
+                  isSelected={feature.enabled}
+                  onChange={(nextValue) => {
+                    const previousValue = feature.enabled;
+                    setLocalState((current) => ({
+                      ...current,
+                      [feature.key]: nextValue,
+                    }));
+                    setPendingKey(feature.key);
 
-                {editable ? (
-                  <Switch
-                    isDisabled={isSaving}
-                    isSelected={feature.enabled}
-                    onChange={(nextValue) => {
-                      const previousValue = feature.enabled;
-                      setLocalState((current) => ({
-                        ...current,
-                        [feature.key]: nextValue,
-                      }));
-                      setPendingKey(feature.key);
+                    startTransition(async () => {
+                      try {
+                        await submitDashboardMutation("/api/platform/feature-flags", {
+                          key: feature.key,
+                          enabled: nextValue,
+                        });
 
-                      startTransition(async () => {
-                        try {
-                          await submitDashboardMutation("/api/platform/feature-flags", {
-                            key: feature.key,
-                            enabled: nextValue,
-                          });
-
-                          toast.success(
-                            `${featureCopy.title} ${nextValue ? "ingeschakeld" : "uitgeschakeld"}.`,
-                          );
-                          router.refresh();
-                        } catch (error) {
-                          setLocalState((current) => ({
-                            ...current,
-                            [feature.key]: previousValue,
-                          }));
-                          toast.error(
-                            error instanceof Error
-                              ? error.message
-                              : "Feature flag kon niet worden bijgewerkt.",
-                          );
-                        } finally {
-                          setPendingKey(null);
-                        }
-                      });
-                    }}
-                  >
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                    <Switch.Content>
-                      {isSaving ? "Opslaan..." : feature.enabled ? "Aan" : "Uit"}
-                    </Switch.Content>
-                  </Switch>
-                ) : null}
-              </ItemCard.Action>
-            ) : null}
+                        toast.success(
+                          `${featureCopy.title} ${nextValue ? "ingeschakeld" : "uitgeschakeld"}.`,
+                        );
+                        router.refresh();
+                      } catch (error) {
+                        setLocalState((current) => ({
+                          ...current,
+                          [feature.key]: previousValue,
+                        }));
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Feature flag kon niet worden bijgewerkt.",
+                        );
+                      } finally {
+                        setPendingKey(null);
+                      }
+                    });
+                  }}
+                >
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                </Switch>
+              ) : null}
+            </ItemCard.Action>
           </ItemCard>
         );
       })}

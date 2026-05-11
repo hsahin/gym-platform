@@ -57,50 +57,46 @@ export function BookingManagementView({
   const cancelledCount = bookings.filter((booking) => booking.status === "cancelled").length;
 
   return (
-    <div className="space-y-5">
+    <div className="section-stack">
       <section className="command-deck">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-              Reserveringsbalie
-            </p>
-            <h3 className="text-3xl font-semibold tracking-tight text-white">
+            <p className="eyebrow">Reserveringsbalie</p>
+            <h3 className="text-2xl font-semibold tracking-tight md:text-3xl">
               Volledige grip op bevestigingen, wachtlijst en aanwezigheid.
             </h3>
-            <p className="text-sm leading-6 text-white/70">
+            <p className="text-sm leading-6 opacity-90">
               Dit scherm moet voelen als een sterke balieconsole: snel scanbaar,
               direct actiegericht en zonder ruis tussen status en opvolging.
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white/70">
-            <p className="text-xs uppercase tracking-[0.18em] text-white/50">
-              Totaal live
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">{bookings.length}</p>
-            <p className="mt-1">
+          <div className="rounded-2xl border border-current/20 bg-black/10 px-4 py-3 text-sm dark:bg-white/5">
+            <p className="eyebrow">Totaal live</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{bookings.length}</p>
+            <p className="mt-1 opacity-80">
               reservering{bookings.length === 1 ? "" : "en"} in deze tenant
             </p>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="soft-card">
-          <p className="text-sm font-medium text-slate-500">Bevestigd</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{confirmedCount}</p>
+          <p className="eyebrow">Bevestigd</p>
+          <p className="text-foreground text-2xl font-semibold tabular-nums">{confirmedCount}</p>
         </div>
         <div className="soft-card">
-          <p className="text-sm font-medium text-slate-500">Wachtlijst</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{waitlistedCount}</p>
+          <p className="eyebrow">Wachtlijst</p>
+          <p className="text-foreground text-2xl font-semibold tabular-nums">{waitlistedCount}</p>
         </div>
         <div className="soft-card">
-          <p className="text-sm font-medium text-slate-500">Ingecheckt</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{checkedInCount}</p>
+          <p className="eyebrow">Ingecheckt</p>
+          <p className="text-foreground text-2xl font-semibold tabular-nums">{checkedInCount}</p>
         </div>
         <div className="soft-card">
-          <p className="text-sm font-medium text-slate-500">Geannuleerd</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{cancelledCount}</p>
+          <p className="eyebrow">Geannuleerd</p>
+          <p className="text-foreground text-2xl font-semibold tabular-nums">{cancelledCount}</p>
         </div>
       </div>
 
@@ -113,12 +109,12 @@ export function BookingManagementView({
               : "Onbekende vestiging";
 
             return (
-              <Card key={booking.id} className="overflow-hidden border-white/70 bg-white/90 shadow-[0_22px_80px_-58px_rgba(16,24,38,0.5)]">
+              <Card key={booking.id} className="overflow-hidden">
                 <CardHeader className="space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
+                    <div className="min-w-0 space-y-1">
                       <CardTitle className="text-lg">{booking.memberName}</CardTitle>
-                      <p className="text-sm leading-6 text-slate-600">
+                      <p className="text-muted text-sm leading-6">
                         {classSession?.title ?? "Onbekende les"} ·{" "}
                         {classSession ? formatSessionMoment(classSession.startsAt) : "Tijd onbekend"} ·{" "}
                         {locationName}
@@ -135,24 +131,26 @@ export function BookingManagementView({
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                      <p className="font-medium text-slate-900">Contact</p>
-                      <p className="mt-2 break-all">{booking.phone}</p>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="soft-card">
+                      <p className="eyebrow">Contact</p>
+                      <p className="text-foreground break-all text-sm">{booking.phone}</p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                      <p className="font-medium text-slate-900">Lesfocus</p>
-                      <p className="mt-2">{classSession?.focus ?? "Niet beschikbaar"}</p>
+                    <div className="soft-card">
+                      <p className="eyebrow">Lesfocus</p>
+                      <p className="text-foreground text-sm">
+                        {classSession?.focus ?? "Niet beschikbaar"}
+                      </p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                      <p className="font-medium text-slate-900">Niveau</p>
-                      <p className="mt-2">
+                    <div className="soft-card">
+                      <p className="eyebrow">Niveau</p>
+                      <p className="text-foreground text-sm">
                         {classSession ? getClassLevelLabel(classSession.level) : "Niet beschikbaar"}
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50/80 p-4 text-sm text-slate-600">
-                      <p className="font-medium text-slate-900">Notitie</p>
-                      <p className="mt-2">{booking.notes ?? "Geen notitie"}</p>
+                    <div className="soft-card">
+                      <p className="eyebrow">Notitie</p>
+                      <p className="text-foreground text-sm">{booking.notes ?? "Geen notitie"}</p>
                     </div>
                   </div>
 
@@ -174,7 +172,7 @@ export function BookingManagementView({
                     ) : null}
 
                     {booking.status === "cancelled" ? (
-                      <p className="text-sm text-slate-500">
+                      <p className="text-muted text-sm">
                         Deze reservering is gesloten en telt niet meer mee in de bezetting.
                       </p>
                     ) : null}
@@ -185,11 +183,11 @@ export function BookingManagementView({
           })}
         </div>
       ) : (
-        <Card className="border-white/70 bg-white/90 shadow-[0_20px_70px_-52px_rgba(16,24,38,0.45)]">
-          <CardContent className="space-y-4 p-6 text-sm leading-6 text-slate-600">
+        <Card>
+          <CardContent className="text-muted space-y-4 p-6 text-sm leading-6">
             <div className="space-y-2">
               <p className="eyebrow">Nog leeg</p>
-              <p className="text-xl font-semibold text-slate-950">
+              <p className="text-foreground text-xl font-semibold">
                 Je eerste reservering verschijnt hier zodra de ledenroute live gaat.
               </p>
             </div>

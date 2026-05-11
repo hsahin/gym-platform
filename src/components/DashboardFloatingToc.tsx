@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ListTree } from "lucide-react";
+import { Tooltip } from "@heroui/react";
 import { FloatingToc } from "@heroui-pro/react";
 import type { DashboardPageKey } from "@/lib/dashboard-pages";
 
@@ -202,6 +204,40 @@ export function DashboardFloatingToc({
     };
   }, [items]);
 
+  const activeItem = items.find((item) => item.id === activeId);
+  const activeIndex = activeItem ? items.indexOf(activeItem) : -1;
+  const activeLabel = activeItem?.label ?? items[0]?.label ?? "Inhoud";
+  const activeLabelRef = useRef<HTMLSpanElement | null>(null);
+  const [isLabelTruncated, setIsLabelTruncated] = useState(false);
+
+  useEffect(() => {
+    const element = activeLabelRef.current;
+
+    if (!element) {
+      setIsLabelTruncated(false);
+      return undefined;
+    }
+
+    function measure() {
+      if (!element) {
+        return;
+      }
+
+      setIsLabelTruncated(element.scrollWidth > element.clientWidth + 1);
+    }
+
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [activeLabel]);
+
   if (items.length < 2) {
     return null;
   }
@@ -214,21 +250,78 @@ export function DashboardFloatingToc({
   return (
     <nav
       aria-label="Pagina-inhoud"
-      className="pointer-events-none fixed right-2 top-1/2 z-40 -translate-y-1/2 max-[520px]:bottom-[max(1rem,env(safe-area-inset-bottom))] max-[520px]:right-1.5 max-[520px]:top-auto max-[520px]:translate-y-0 md:right-4 xl:right-6"
+      className="pointer-events-none fixed right-3 top-1/2 z-40 -translate-y-1/2 max-[520px]:bottom-[max(1rem,env(safe-area-inset-bottom))] max-[520px]:right-2 max-[520px]:top-auto max-[520px]:translate-y-0 md:right-5 xl:right-8"
     >
       <div className="pointer-events-auto">
-        <FloatingToc placement="left" triggerMode="press" closeDelay={140} openDelay={0}>
-          <FloatingToc.Trigger aria-label="Pagina-inhoud">
-            {items.map((item) => (
-              <FloatingToc.Bar
-                key={item.id}
-                active={item.id === activeId}
-                level={item.level}
+        <FloatingToc
+          placement="left"
+          triggerMode="press"
+          closeDelay={200}
+          openDelay={0}
+        >
+          <FloatingToc.Trigger
+            aria-label={`Pagina-inhoud — ${activeLabel}`}
+            className="dashboard-floating-toc__trigger group bg-surface border-border/80 hover:border-accent/60 hover:bg-surface flex w-[10rem] flex-col items-stretch gap-2.5 rounded-2xl border px-3 py-3 shadow-surface backdrop-blur transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <span className="flex items-center gap-2">
+              <ListTree
+                aria-hidden="true"
+                className="text-foreground/80 group-hover:text-accent size-4 shrink-0 transition-colors"
               />
-            ))}
+              <span className="grid min-w-0 flex-1">
+                <span className="text-muted text-[0.6rem] font-semibold uppercase tracking-[0.18em]">
+                  Op deze pagina
+                </span>
+                {isLabelTruncated ? (
+                  <Tooltip delay={250}>
+                    <Tooltip.Trigger>
+                      <span
+                        ref={activeLabelRef}
+                        className="text-foreground group-hover:text-accent block min-w-0 truncate text-[0.8rem] font-semibold leading-tight transition-colors"
+                      >
+                        {activeLabel}
+                      </span>
+                    </Tooltip.Trigger>
+                    <Tooltip.Content
+                      className="bg-overlay text-foreground border-border max-w-xs rounded-lg border px-3 py-1.5 text-sm shadow-overlay"
+                      showArrow
+                    >
+                      {activeLabel}
+                    </Tooltip.Content>
+                  </Tooltip>
+                ) : (
+                  <span
+                    ref={activeLabelRef}
+                    className="text-foreground group-hover:text-accent block min-w-0 truncate text-[0.8rem] font-semibold leading-tight transition-colors"
+                  >
+                    {activeLabel}
+                  </span>
+                )}
+              </span>
+            </span>
+            <span aria-hidden="true" className="bg-border/70 h-px w-full" />
+            <span className="flex items-center justify-between gap-2">
+              <span className="flex flex-col items-end gap-2">
+                {items.map((item) => (
+                  <FloatingToc.Bar
+                    key={item.id}
+                    active={item.id === activeId}
+                    level={item.level}
+                  />
+                ))}
+              </span>
+              {items.length > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="text-muted tabular-nums text-[0.65rem] font-medium"
+                >
+                  {activeIndex >= 0 ? activeIndex + 1 : 1}/{items.length}
+                </span>
+              ) : null}
+            </span>
           </FloatingToc.Trigger>
           <FloatingToc.Content className="max-w-[min(18rem,calc(100vw-3rem))]">
-            <span className="text-muted mb-1 block px-3 py-1 text-[10px] font-semibold uppercase">
+            <span className="text-muted mb-1 block px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]">
               Op deze pagina
             </span>
             {items.map((item) => (

@@ -10,34 +10,30 @@ export function LocationView({ location }: { location: GymLocation }) {
   );
 
   return (
-    <Card className="overflow-hidden border-white/70 bg-white/90 shadow-[0_22px_80px_-58px_rgba(16,24,38,0.5)]">
+    <Card className="overflow-hidden">
       <CardHeader className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="eyebrow">Vestiging</p>
             <CardTitle className="text-lg">{location.name}</CardTitle>
           </div>
           <Badge variant="outline">{getEntityStatusLabel(location.status)}</Badge>
         </div>
-        <p className="text-sm text-slate-600">
+        <p className="text-muted text-sm">
           {location.neighborhood}, {location.city}
         </p>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm text-slate-600">
+      <CardContent className="text-muted space-y-4 text-sm">
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="soft-card p-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-              Capaciteit
-            </p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
+          <div className="soft-card">
+            <p className="eyebrow">Capaciteit</p>
+            <p className="text-foreground text-base font-semibold tabular-nums">
               {location.capacity}
             </p>
           </div>
-          <div className="soft-card p-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-              Manager
-            </p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
+          <div className="soft-card">
+            <p className="eyebrow">Manager</p>
+            <p className="text-foreground text-base font-semibold">
               {location.managerName}
             </p>
           </div>

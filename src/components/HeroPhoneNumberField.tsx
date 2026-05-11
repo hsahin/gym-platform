@@ -31,7 +31,7 @@ export function HeroPhoneNumberField({
   phoneLabel = "Mobiel nummer",
 }: HeroPhoneNumberFieldProps) {
   return (
-    <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+    <div className="grid gap-3 sm:grid-cols-[minmax(8rem,9.5rem)_minmax(0,1fr)] md:grid-cols-[minmax(9rem,11rem)_minmax(0,1fr)]">
       <div className="field-stack">
         <Label>{countryLabel}</Label>
         <NativeSelect fullWidth>

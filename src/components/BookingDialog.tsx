@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Card, Chip, Label, TextArea } from "@heroui/react";
@@ -26,7 +26,10 @@ export function BookingDialog({
 }: BookingDialogProps) {
   const canCreateBooking = members.length > 0 && classSessions.length > 0;
   const router = useRouter();
+  const titleId = useId();
+  const descriptionId = useId();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [memberId, setMemberId] = useState(members[0]?.id ?? "");
@@ -71,21 +74,44 @@ export function BookingDialog({
     setPhoneCountry(selectedMember.phoneCountry);
   }, [selectedMember]);
 
+  const closeDialog = useCallback(() => {
+    setOpen(false);
+    setNotes("");
+    if (selectedMember) {
+      setPhone(selectedMember.phone);
+      setPhoneCountry(selectedMember.phoneCountry);
+    }
+  }, [selectedMember]);
+
   useEffect(() => {
     if (!open) {
       return;
     }
 
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     requestAnimationFrame(() => {
       scrollContainerRef.current?.scrollTo({ top: 0 });
     });
 
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDialog();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      const previouslyFocused = previouslyFocusedRef.current;
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus({ preventScroll: true });
+      }
     };
-  }, [open]);
+  }, [open, closeDialog]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,8 +162,7 @@ export function BookingDialog({
             : `Boeking opgeslagen als ${bookingStatusLabel}.`,
         );
 
-        setOpen(false);
-        setNotes("");
+        closeDialog();
         router.refresh();
       } catch (error) {
         toast.error(
@@ -160,32 +185,42 @@ export function BookingDialog({
       {open && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm"
-              onClick={() => setOpen(false)}
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              role="presentation"
+              onClick={closeDialog}
             >
               <div
                 ref={scrollContainerRef}
-                className="flex min-h-[100dvh] items-center justify-center overflow-y-auto p-4"
+                className="flex min-h-[100dvh] items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-4"
               >
                 <Card
+                  aria-describedby={descriptionId}
+                  aria-labelledby={titleId}
+                  aria-modal="true"
                   className="w-full max-w-2xl rounded-3xl"
+                  role="dialog"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <Card.Header className="items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <Card.Title>Nieuwe reservering</Card.Title>
-                      <Card.Description>
+                  <Card.Header className="items-start justify-between gap-3 sm:gap-4">
+                    <div className="min-w-0 space-y-2">
+                      <Card.Title id={titleId}>Nieuwe reservering</Card.Title>
+                      <Card.Description id={descriptionId}>
                         Kies lid, les en contactgegevens. GymOS verwerkt de reservering direct.
                       </Card.Description>
                     </div>
-                    <Button size="sm" variant="ghost" onPress={() => setOpen(false)}>
+                    <Button
+                      aria-label="Sluit reserveringsdialoog"
+                      size="sm"
+                      variant="ghost"
+                      onPress={closeDialog}
+                    >
                       Sluit
                     </Button>
                   </Card.Header>
 
                   <Card.Content>
                     <form className="section-stack" onSubmit={handleSubmit}>
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div className="field-stack">
                           <Label>Lid</Label>
                           <NativeSelect fullWidth>
@@ -261,7 +296,7 @@ export function BookingDialog({
                         <Button
                           type="button"
                           variant="secondary"
-                          onPress={() => setOpen(false)}
+                          onPress={closeDialog}
                         >
                           Annuleer
                         </Button>
