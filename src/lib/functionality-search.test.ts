@@ -10,15 +10,13 @@ import {
 } from "@/lib/functionality-search";
 
 const fullySetUpSignals = {
-  hasLocations: true,
-  hasMembershipPlans: true,
-  hasTrainers: true,
-  hasMembers: true,
-  hasClassSessions: true,
-  hasOnlyOwnerStaff: false,
-  billingConfigured: true,
-  remoteAccessConfigured: true,
-  legalConfigured: true,
+  locationCount: 1,
+  membershipPlanCount: 2,
+  classSessionCount: 5,
+  trainerCount: 1,
+  memberCount: 12,
+  billingStatus: "configured",
+  legalGapForPublicSignup: false,
 } as const;
 
 const mixedVisibleSearchFragments = [
@@ -240,59 +238,104 @@ describe("functionality search — default suggestions", () => {
     expect(suggestions.attention).toEqual([]);
   });
 
-  it("flags incomplete gym setup steps in the attention list ordered by priority", () => {
+  it("flags only the critical missing entities when the gym has nothing yet", () => {
     const suggestions = buildFunctionalitySearchSuggestions({
       ...fullySetUpSignals,
-      hasLocations: false,
-      hasMembershipPlans: false,
-      hasTrainers: false,
-      billingConfigured: false,
+      locationCount: 0,
+      membershipPlanCount: 0,
+      classSessionCount: 0,
+      trainerCount: 0,
+      memberCount: 0,
+      billingStatus: "not_configured",
     });
 
+    // Class/trainer/member items are suppressed when there are no plans yet —
+    // adding a plan comes first.
     expect(suggestions.attention).toEqual([
       "workflow.add-location",
       "workflow.add-membership",
-      "workflow.add-trainer",
       "workflow.connect-payments",
     ]);
   });
 
-  it("surfaces the staff invite suggestion when only the owner exists", () => {
+  it("once the gym has plans, class + trainer + member gaps surface", () => {
     const suggestions = buildFunctionalitySearchSuggestions({
       ...fullySetUpSignals,
-      hasOnlyOwnerStaff: true,
+      classSessionCount: 0,
+      trainerCount: 0,
+      memberCount: 0,
     });
 
-    expect(suggestions.attention).toContain("workflow.invite-staff");
+    expect(suggestions.attention).toContain("workflow.plan-class");
+    expect(suggestions.attention).toContain("workflow.add-member");
+    // No classes yet → no point pushing a trainer (no session needs one).
+    expect(suggestions.attention).not.toContain("workflow.add-trainer");
   });
 
-  it("treats remote access and legal as separate setup steps", () => {
-    const suggestions = buildFunctionalitySearchSuggestions({
+  it("only nags about trainers once there are classes that would need one", () => {
+    const withClassesNoTrainers = buildFunctionalitySearchSuggestions({
       ...fullySetUpSignals,
-      remoteAccessConfigured: false,
-      legalConfigured: false,
+      classSessionCount: 4,
+      trainerCount: 0,
+    });
+    const withoutClassesOrTrainers = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      classSessionCount: 0,
+      trainerCount: 0,
     });
 
-    expect(suggestions.attention).toContain("workflow.legal-settings");
-    expect(suggestions.attention).toContain("workflow.connect-smart-door");
+    expect(withClassesNoTrainers.attention).toContain("workflow.add-trainer");
+    expect(withoutClassesOrTrainers.attention).not.toContain("workflow.add-trainer");
   });
 
-  it("uses entries that actually exist in the master search catalog", () => {
+  it("treats billing 'attention' as a setup gap, not just 'not_configured'", () => {
+    const notConfigured = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      billingStatus: "not_configured",
+    });
+    const attentionState = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      billingStatus: "attention",
+    });
+
+    expect(notConfigured.attention).toContain("workflow.connect-payments");
+    expect(attentionState.attention).toContain("workflow.connect-payments");
+  });
+
+  it("only nags about legal docs when the gym actually accepts public sign-ups", () => {
+    const withGap = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      legalGapForPublicSignup: true,
+    });
+    const noGap = buildFunctionalitySearchSuggestions({
+      ...fullySetUpSignals,
+      legalGapForPublicSignup: false,
+    });
+
+    expect(withGap.attention).toContain("workflow.legal-settings");
+    expect(noGap.attention).not.toContain("workflow.legal-settings");
+  });
+
+  it("returns an empty attention list when an operational gym has every essential ready", () => {
+    const suggestions = buildFunctionalitySearchSuggestions(fullySetUpSignals);
+
+    expect(suggestions.attention).toEqual([]);
+    expect(suggestions.pinned).toHaveLength(5);
+  });
+
+  it("never produces invented attention keys — every suggestion is in the catalog", () => {
     const allKeys = new Set(FUNCTIONALITY_SEARCH_ENTRIES.map((entry) => entry.key));
-    const suggestions = buildFunctionalitySearchSuggestions({
-      ...fullySetUpSignals,
-      hasLocations: false,
-      hasMembershipPlans: false,
-      hasTrainers: false,
-      hasMembers: false,
-      hasClassSessions: false,
-      hasOnlyOwnerStaff: true,
-      billingConfigured: false,
-      remoteAccessConfigured: false,
-      legalConfigured: false,
+    const everything = buildFunctionalitySearchSuggestions({
+      locationCount: 0,
+      membershipPlanCount: 0,
+      classSessionCount: 0,
+      trainerCount: 0,
+      memberCount: 0,
+      billingStatus: "not_configured",
+      legalGapForPublicSignup: true,
     });
 
-    for (const key of [...suggestions.pinned, ...suggestions.attention]) {
+    for (const key of [...everything.pinned, ...everything.attention]) {
       expect(allKeys.has(key)).toBe(true);
     }
   });

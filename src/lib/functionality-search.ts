@@ -454,16 +454,34 @@ const DEFAULT_PINNED_SEARCH_KEYS: ReadonlyArray<string> = [
   "page.settings",
 ];
 
+export type FunctionalitySearchSetupStatus =
+  | "not_configured"
+  | "attention"
+  | "configured";
+
 export interface FunctionalitySearchSetupSignals {
-  readonly hasLocations: boolean;
-  readonly hasMembershipPlans: boolean;
-  readonly hasTrainers: boolean;
-  readonly hasMembers: boolean;
-  readonly hasClassSessions: boolean;
-  readonly hasOnlyOwnerStaff: boolean;
-  readonly billingConfigured: boolean;
-  readonly remoteAccessConfigured: boolean;
-  readonly legalConfigured: boolean;
+  /** Number of gym locations stored against the tenant. */
+  readonly locationCount: number;
+  /** Number of active membership plans. */
+  readonly membershipPlanCount: number;
+  /** Number of scheduled class sessions (any time horizon). */
+  readonly classSessionCount: number;
+  /** Number of trainer profiles. */
+  readonly trainerCount: number;
+  /** Number of members (active or trial). */
+  readonly memberCount: number;
+  /**
+   * Billing connection status as reported by the snapshot. Only
+   * `"attention"` or `"not_configured"` show up as setup items;
+   * `"configured"` means the gym is good.
+   */
+  readonly billingStatus: FunctionalitySearchSetupStatus;
+  /**
+   * True when the gym wants to accept public sign-ups but has not
+   * uploaded the terms and privacy URLs yet. False otherwise (a gym
+   * that doesn't accept public sign-ups doesn't need legal docs here).
+   */
+  readonly legalGapForPublicSignup: boolean;
 }
 
 export interface FunctionalitySearchSuggestions {
@@ -476,40 +494,43 @@ export function buildFunctionalitySearchSuggestions(
 ): FunctionalitySearchSuggestions {
   const attention: string[] = [];
 
-  if (!signals.hasLocations) {
+  // Critical — the gym cannot operate without at least one of each.
+  if (signals.locationCount === 0) {
     attention.push("workflow.add-location");
   }
 
-  if (!signals.hasMembershipPlans) {
+  if (signals.membershipPlanCount === 0) {
     attention.push("workflow.add-membership");
   }
 
-  if (!signals.hasTrainers) {
-    attention.push("workflow.add-trainer");
-  }
-
-  if (!signals.billingConfigured) {
+  // Billing matters whenever the gym charges money. Surface both
+  // never-configured AND already-attention states.
+  if (signals.billingStatus !== "configured") {
     attention.push("workflow.connect-payments");
   }
 
-  if (!signals.legalConfigured) {
+  // A gym selling memberships through the public flow needs legal docs.
+  // Once the gym has chosen to not accept public sign-ups (or has
+  // already uploaded the URLs), this stays silent.
+  if (signals.legalGapForPublicSignup) {
     attention.push("workflow.legal-settings");
   }
 
-  if (!signals.hasClassSessions) {
-    attention.push("workflow.plan-class");
-  }
+  // Class operations: only complain about missing classes/trainers once
+  // the gym has membership plans (i.e., is actually open for business),
+  // otherwise the locations/plans signals already cover it.
+  if (signals.membershipPlanCount > 0) {
+    if (signals.classSessionCount === 0) {
+      attention.push("workflow.plan-class");
+    }
 
-  if (!signals.hasMembers) {
-    attention.push("workflow.add-member");
-  }
+    if (signals.classSessionCount > 0 && signals.trainerCount === 0) {
+      attention.push("workflow.add-trainer");
+    }
 
-  if (signals.hasOnlyOwnerStaff) {
-    attention.push("workflow.invite-staff");
-  }
-
-  if (!signals.remoteAccessConfigured) {
-    attention.push("workflow.connect-smart-door");
+    if (signals.memberCount === 0) {
+      attention.push("workflow.add-member");
+    }
   }
 
   return {

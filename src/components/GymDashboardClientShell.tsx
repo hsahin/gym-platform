@@ -218,19 +218,18 @@ export function GymDashboardClientShell({
     canManageFeatureFlags: snapshot.uiCapabilities.canManageFeatureFlags,
     canManageOwnerAccounts: snapshot.uiCapabilities.canManageOwnerAccounts,
   });
+  const acceptsPublicSignups = snapshot.payments.paymentMethods.length > 0;
+  const legalDocsMissing =
+    snapshot.legal.termsUrl.trim().length === 0 ||
+    snapshot.legal.privacyUrl.trim().length === 0;
   const searchSuggestions = buildFunctionalitySearchSuggestions({
-    hasLocations: snapshot.locations.length > 0,
-    hasMembershipPlans: snapshot.membershipPlans.length > 0,
-    hasTrainers: snapshot.trainers.length > 0,
-    hasMembers: snapshot.members.length > 0,
-    hasClassSessions: snapshot.classSessions.length > 0,
-    hasOnlyOwnerStaff: snapshot.staff.length <= 1,
-    billingConfigured: snapshot.payments.connectionStatus === "configured",
-    remoteAccessConfigured:
-      snapshot.remoteAccess.connectionStatus === "configured",
-    legalConfigured:
-      snapshot.legal.termsUrl.trim().length > 0 &&
-      snapshot.legal.privacyUrl.trim().length > 0,
+    locationCount: snapshot.locations.length,
+    membershipPlanCount: snapshot.membershipPlans.length,
+    classSessionCount: snapshot.classSessions.length,
+    trainerCount: snapshot.trainers.length,
+    memberCount: snapshot.members.length,
+    billingStatus: snapshot.payments.connectionStatus,
+    legalGapForPublicSignup: acceptsPublicSignups && legalDocsMissing,
   });
 
   return (
