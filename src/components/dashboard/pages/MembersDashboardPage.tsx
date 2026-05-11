@@ -37,7 +37,14 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
   const [memberSearch, setMemberSearch] = useState("");
   const [memberStatusFilter, setMemberStatusFilter] = useState("all");
   const [signupDrafts, setSignupDrafts] = useState<
-    Record<string, { ownerNotes: string; portalPassword: string }>
+    Record<
+      string,
+      {
+        ownerNotes: string;
+        portalPassword: string;
+        memberStatus: "active" | "trial";
+      }
+    >
   >({});
   const memberFeatures = snapshot.featureFlags.filter(
     (feature) => feature.dashboardPage === "members",
@@ -194,6 +201,7 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
       [signupId]: {
         ownerNotes: current[signupId]?.ownerNotes ?? "",
         portalPassword: current[signupId]?.portalPassword ?? "",
+        memberStatus: current[signupId]?.memberStatus ?? "active",
         ...patch,
       },
     }));
@@ -425,6 +433,26 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                           />
                         </div>
                       </div>
+                      <div className="field-stack">
+                        <Label>Lidstatus na goedkeuren</Label>
+                        <Segment
+                          aria-label="Lidstatus"
+                          className="w-fit"
+                          selectedKey={signupDrafts[signup.id]?.memberStatus ?? "active"}
+                          size="sm"
+                          onSelectionChange={(key) =>
+                            updateSignupDraft(signup.id, {
+                              memberStatus: String(key) as "active" | "trial",
+                            })
+                          }
+                        >
+                          <Segment.Item id="active">Actief lid</Segment.Item>
+                          <Segment.Item id="trial">Proeflid</Segment.Item>
+                        </Segment>
+                        <p className="text-muted text-xs">
+                          Actief = volwaardig lid. Proeflid = trialperiode voordat het lidmaatschap definitief wordt.
+                        </p>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                       <Button
                         isDisabled={isPending}
@@ -438,7 +466,8 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
                                 {
                                   signupRequestId: signup.id,
                                   decision: "approved",
-                                  memberStatus: "trial",
+                                  memberStatus:
+                                    signupDrafts[signup.id]?.memberStatus ?? "active",
                                   ownerNotes:
                                     signupDrafts[signup.id]?.ownerNotes || undefined,
                                   portalPassword:
