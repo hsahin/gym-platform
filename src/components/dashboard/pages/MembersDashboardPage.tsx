@@ -193,6 +193,22 @@ export function MembersDashboardPage({ snapshot }: DashboardPageProps) {
         );
       },
     },
+    {
+      id: "download",
+      header: "Document",
+      minWidth: 160,
+      cell: (waiver) => (
+        <a
+          aria-label={`Waiver van ${waiver.memberName} bekijken`}
+          className="border-border bg-surface text-foreground hover:border-accent hover:text-accent inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition"
+          href={`/dashboard/waivers/${waiver.memberId}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open waiver
+        </a>
+      ),
+    },
   ];
 
   function updateSignupDraft(signupId: string, patch: Partial<(typeof signupDrafts)[string]>) {

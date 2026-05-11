@@ -25,6 +25,7 @@ const runtime = vi.hoisted(() => ({
   getPublicReservationSnapshot: vi.fn(),
   getPublicMembershipSignupSnapshot: vi.fn(),
   getMemberReservationSnapshot: vi.fn(),
+  getDashboardSnapshot: vi.fn(),
   resolveViewerFromToken: vi.fn(),
   hasLocalPlatformSetup: vi.fn(),
   redirect: vi.fn((url: string) => {
@@ -112,6 +113,7 @@ vi.mock("@/server/runtime/gym-services", () => ({
     }
 
     return {
+      getDashboardSnapshot: runtime.getDashboardSnapshot,
       getMemberReservationSnapshot: runtime.getMemberReservationSnapshot,
       getPublicMembershipSignupSnapshot: runtime.getPublicMembershipSignupSnapshot,
       getPublicReservationSnapshot: runtime.getPublicReservationSnapshot,
@@ -157,6 +159,9 @@ const { default: JoinPage } = await import("@/app/join/page");
 const { default: ReservePage } = await import("@/app/reserve/page");
 const { default: DashboardIndexPage } = await import("@/app/dashboard/page");
 const { default: DashboardSectionPage } = await import("@/app/dashboard/[section]/page");
+const { default: WaiverDocumentPage } = await import(
+  "@/app/dashboard/waivers/[memberId]/page"
+);
 const { default: PricingPage } = await import("@/app/pricing/page");
 
 function expectComponent<TProps>(
@@ -416,6 +421,95 @@ describe("app page flow integrations", () => {
         params: Promise.resolve({ section: "missing" }),
       }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("renders the waiver document page for staff and refuses members or strangers", async () => {
+    runtime.cookieValue = undefined;
+    runtime.viewer = null;
+    await expect(
+      WaiverDocumentPage({ params: Promise.resolve({ memberId: "missing" }) }),
+    ).rejects.toThrow("NEXT_REDIRECT:/login");
+
+    runtime.cookieValue = "member-token";
+    runtime.viewer = {
+      actor: { subjectId: "member:nina" },
+      roleKey: "member",
+      roleLabel: "Lid",
+    };
+    await expect(
+      WaiverDocumentPage({ params: Promise.resolve({ memberId: "any" }) }),
+    ).rejects.toThrow("NEXT_REDIRECT:/reserve");
+
+    runtime.cookieValue = "owner-token";
+    runtime.viewer = {
+      actor: { subjectId: "owner:hsahin" },
+      roleKey: "owner",
+      roleLabel: "Eigenaar",
+    };
+    runtime.getDashboardSnapshot.mockResolvedValue({
+      tenantName: "Northside Athletics",
+      actorName: "Haluk Sahin",
+      members: [],
+      waivers: [],
+      membershipPlans: [],
+      locations: [],
+      legal: {
+        termsUrl: "",
+        privacyUrl: "",
+        sepaCreditorId: "",
+        sepaMandateText: "",
+        contractPdfTemplateKey: "",
+        waiverStorageKey: "",
+        waiverRetentionMonths: 84,
+      },
+    });
+    await expect(
+      WaiverDocumentPage({ params: Promise.resolve({ memberId: "unknown" }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+
+    runtime.getDashboardSnapshot.mockResolvedValue({
+      tenantName: "Northside Athletics",
+      actorName: "Haluk Sahin",
+      members: [
+        {
+          id: "member-1",
+          fullName: "Nina de Jong",
+          email: "nina@northside.test",
+          phone: "0612345678",
+          phoneCountry: "NL",
+          membershipPlanId: "plan-1",
+          homeLocationId: "loc-1",
+          status: "active",
+          createdAt: "2026-01-01T08:00:00.000Z",
+          updatedAt: "2026-04-01T08:00:00.000Z",
+          joinedAt: "2026-01-01T08:00:00.000Z",
+        },
+      ],
+      waivers: [
+        {
+          id: "waiver-1",
+          memberId: "member-1",
+          memberName: "Nina de Jong",
+          status: "signed",
+          uploadedAt: "2026-01-01T08:00:00.000Z",
+        },
+      ],
+      membershipPlans: [{ id: "plan-1", name: "Unlimited" }],
+      locations: [{ id: "loc-1", name: "Homegym Den Haag" }],
+      legal: {
+        termsUrl: "https://homegym.test/terms",
+        privacyUrl: "https://homegym.test/privacy",
+        sepaCreditorId: "",
+        sepaMandateText: "Sample mandate",
+        contractPdfTemplateKey: "",
+        waiverStorageKey: "",
+        waiverRetentionMonths: 84,
+      },
+    });
+    const rendered = await WaiverDocumentPage({
+      params: Promise.resolve({ memberId: "member-1" }),
+    });
+    expect(rendered).toBeTruthy();
   });
 
   it("keeps the pricing page wired to signup and reservation entry points", () => {

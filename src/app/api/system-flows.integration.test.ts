@@ -628,11 +628,32 @@ describe("system flow integrations", () => {
         201,
       ),
     );
+    // Hard delete now requires archive-first so the member can never be
+    // wiped while there's still live billing or active state.
+    const archivedScratchMember = asVersioned(
+      await expectOk(
+        patchMemberRoute(
+          createJsonRequest(
+            "http://localhost/api/platform/members",
+            {
+              id: scratchMember.id,
+              expectedVersion: scratchMember.version,
+              operation: "archive",
+            },
+            token,
+            "PATCH",
+          ),
+        ),
+      ),
+    );
     await expectOk(
       deleteMemberRoute(
         createJsonRequest(
           "http://localhost/api/platform/members",
-          { id: scratchMember.id, expectedVersion: scratchMember.version },
+          {
+            id: archivedScratchMember.id,
+            expectedVersion: archivedScratchMember.version,
+          },
           token,
           "DELETE",
         ),

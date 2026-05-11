@@ -3097,6 +3097,162 @@ describe("gym platform services", () => {
     expect(rejected.signup.status).toBe("rejected");
   });
 
+  it("blocks hard-deleting an active member until they have been archived first", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Centrum",
+      city: "Amsterdam",
+      neighborhood: "Centrum",
+      capacity: 80,
+      managerName: "Manager",
+      amenities: [],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 99,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Nina Delete",
+      email: "nina-delete@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+    });
+
+    await expect(
+      services.deleteMember(ownerActor, tenantContext, {
+        id: member.id,
+        expectedVersion: member.version,
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("Archiveer dit lid eerst"),
+    });
+  });
+
+  it("blocks hard-deleting an archived member with an open invoice", async () => {
+    process.env.MOLLIE_API_KEY = "test_mollie_live_key";
+    process.env.APP_BASE_URL = "https://gym.example";
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Centrum",
+      city: "Amsterdam",
+      neighborhood: "Centrum",
+      capacity: 80,
+      managerName: "Manager",
+      amenities: [],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 99,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Owen Owing",
+      email: "owen-owing@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+    });
+
+    await enableTenantFeatures(services, ownerActor, tenantContext, ["billing.processing"]);
+    await services.updateBillingSettings(ownerActor, tenantContext, {
+      enabled: true,
+      provider: "mollie",
+      profileLabel: "Northside Payments",
+      profileId: "pfl_live_123",
+      settlementLabel: "Northside",
+      supportEmail: "billing@northside.test",
+      paymentMethods: ["one_time"],
+    });
+
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          id: "tr_owen_open_1",
+          status: "open",
+          _links: { checkout: { href: "https://pay.mollie.com/owen" } },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await services.createBillingInvoice(ownerActor, tenantContext, {
+      memberId: member.id,
+      memberName: member.fullName,
+      description: "Lidmaatschap mei",
+      amountCents: 9_900,
+      dueAt: new Date().toISOString(),
+      source: "membership",
+    });
+
+    const archived = await services.archiveMember(ownerActor, tenantContext, {
+      id: member.id,
+      expectedVersion: member.version,
+    });
+
+    await expect(
+      services.deleteMember(ownerActor, tenantContext, {
+        id: archived.id,
+        expectedVersion: archived.version,
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+      message: expect.stringContaining("openstaande factu"),
+    });
+  });
+
+  it("lets the owner hard-delete an archived member with no open billing", async () => {
+    const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
+    const location = await services.createLocation(ownerActor, tenantContext, {
+      name: "Northside Centrum",
+      city: "Amsterdam",
+      neighborhood: "Centrum",
+      capacity: 80,
+      managerName: "Manager",
+      amenities: [],
+    });
+    const plan = await services.createMembershipPlan(ownerActor, tenantContext, {
+      name: "Unlimited",
+      priceMonthly: 99,
+      billingCycle: "monthly",
+      perks: [],
+    });
+    const member = await services.createMember(ownerActor, tenantContext, {
+      fullName: "Clean Slate",
+      email: "clean-slate@northside.test",
+      phone: "0612345678",
+      phoneCountry: "NL",
+      membershipPlanId: plan.id,
+      homeLocationId: location.id,
+      status: "active",
+      tags: [],
+      waiverStatus: "complete",
+    });
+    const archived = await services.archiveMember(ownerActor, tenantContext, {
+      id: member.id,
+      expectedVersion: member.version,
+    });
+
+    await expect(
+      services.deleteMember(ownerActor, tenantContext, {
+        id: archived.id,
+        expectedVersion: archived.version,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it("manages billing invoices, retries, refunds, webhooks and reconciliation", async () => {
     const { services, ownerActor, tenantContext } = await bootstrapOwnerPlatform();
     await enableTenantFeatures(services, ownerActor, tenantContext, ["billing.autocollect"]);

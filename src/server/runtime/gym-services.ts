@@ -6770,6 +6770,60 @@ export async function createGymPlatformServices(): Promise<GymPlatformServices> 
     async deleteMember(actor, tenantContext, input) {
       assertAccess(runtime, actor, tenantContext, ["operations.manage"]);
       await assertFeatureEnabled(actor, tenantContext, "membership.management");
+
+      const member = await runtime.store.getMember(tenantContext, input.id);
+
+      if (!member) {
+        throw new AppError("Lid kon niet gevonden worden.", {
+          code: "RESOURCE_NOT_FOUND",
+          details: { memberId: input.id },
+        });
+      }
+
+      // Guard 1: archive-first. Hard delete is destructive and bypasses
+      // history, so force the owner to archive the member before they can
+      // remove every trace.
+      if (member.status !== "archived") {
+        throw new AppError(
+          "Archiveer dit lid eerst voordat je het definitief verwijdert. Archiveren bewaart de geschiedenis; verwijderen gooit alles weg.",
+          {
+            code: "INVALID_INPUT",
+            details: {
+              memberStatus: member.status,
+              hint: "Klik eerst Archiveer; pas daarna verschijnt Verwijder als veilige actie.",
+            },
+          },
+        );
+      }
+
+      // Guard 2: open billing. Removing a member that still owes money (or
+      // has a pending refund) would orphan the invoice in the Mollie /
+      // backoffice flow.
+      const tenantProfile = await getLocalTenantProfile(tenantContext.tenantId);
+      const openInvoices =
+        tenantProfile?.moduleData.billingBackoffice.invoices.filter(
+          (invoice) =>
+            invoice.memberId === member.id &&
+            (invoice.status === "open" ||
+              invoice.status === "draft" ||
+              invoice.status === "failed"),
+        ) ?? [];
+
+      if (openInvoices.length > 0) {
+        throw new AppError(
+          `Dit lid heeft nog ${openInvoices.length} openstaande factu${
+            openInvoices.length === 1 ? "ur" : "ren"
+          }. Sluit of restitueer die eerst, daarna kun je het lid verwijderen.`,
+          {
+            code: "INVALID_INPUT",
+            details: {
+              openInvoiceCount: openInvoices.length,
+              invoiceIds: openInvoices.map((invoice) => invoice.id),
+            },
+          },
+        );
+      }
+
       await runtime.store.deleteMember(tenantContext, input);
       await deleteLocalMemberPortalAccountByMemberId(tenantContext.tenantId, input.id);
       await runtime.auditLogger.write({

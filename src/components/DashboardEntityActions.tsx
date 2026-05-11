@@ -212,12 +212,25 @@ export function DashboardEntityActions({
             size="sm"
             type="button"
             variant="danger-soft"
-            onPress={() =>
+            onPress={() => {
+              const confirmation = window.prompt(
+                `Verwijderen kan niet ongedaan worden gemaakt. Typ "${entityLabel}" om te bevestigen:`,
+              );
+
+              if (confirmation === null) {
+                return;
+              }
+
+              if (confirmation.trim().toLowerCase() !== entityLabel.trim().toLowerCase()) {
+                toast.error("Bevestiging klopt niet. Verwijderen is geannuleerd.");
+                return;
+              }
+
               run(
                 () => submitEntityMutation(endpoint, "DELETE", deletePayload),
                 `${entityLabel} verwijderd.`,
-              )
-            }
+              );
+            }}
           >
             Verwijder
           </Button>
