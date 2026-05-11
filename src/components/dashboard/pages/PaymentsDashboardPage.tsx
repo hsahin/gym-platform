@@ -176,6 +176,353 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
   const invoiceAmountCents = parseEuroInputToCents(invoiceAmountInput);
   const refundAmountCents = parseEuroInputToCents(refundAmountInput);
 
+  // ------------------------------------------------------------------
+  // Derived data for the overview hero: cash KPIs, per-member instalment
+  // tracker, action queue and activity feed. Computed locally so we don't
+  // need a new snapshot field — everything is already in the snapshot.
+  // ------------------------------------------------------------------
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const planById = new Map(
+    snapshot.membershipPlans.map((plan) => [plan.id, plan] as const),
+  );
+  const invoicesByMember = new Map<
+    string,
+    Array<(typeof snapshot.billingBackoffice.invoices)[number]>
+  >();
+  for (const invoice of snapshot.billingBackoffice.invoices) {
+    if (!invoice.memberId) {
+      continue;
+    }
+    const bucket = invoicesByMember.get(invoice.memberId);
+    if (bucket) {
+      bucket.push(invoice);
+    } else {
+      invoicesByMember.set(invoice.memberId, [invoice]);
+    }
+  }
+  const activeMembers = snapshot.members.filter(
+    (member) => member.status === "active",
+  );
+  const trialMembers = snapshot.members.filter(
+    (member) => member.status === "trial",
+  );
+  const monthlyRecurringRevenueCents = activeMembers.reduce((total, member) => {
+    const plan = planById.get(member.membershipPlanId);
+    if (!plan) {
+      return total;
+    }
+    return total + Math.round(plan.priceMonthly * 100);
+  }, 0);
+  const receivedThisMonthCents = snapshot.billingBackoffice.invoices.reduce(
+    (total, invoice) => {
+      if (invoice.status !== "paid" || !invoice.paidAt) {
+        return total;
+      }
+      const paidAt = new Date(invoice.paidAt);
+      if (paidAt < monthStart || paidAt > now) {
+        return total;
+      }
+      return total + invoice.amountCents;
+    },
+    0,
+  );
+  const outstandingInvoices = snapshot.billingBackoffice.invoices.filter(
+    (invoice) => invoice.status === "open" || invoice.status === "draft",
+  );
+  const outstandingCents = outstandingInvoices.reduce(
+    (total, invoice) => total + invoice.amountCents,
+    0,
+  );
+  const failedInvoices = snapshot.billingBackoffice.invoices.filter(
+    (invoice) => invoice.status === "failed",
+  );
+  const failedCents = failedInvoices.reduce(
+    (total, invoice) => total + invoice.amountCents,
+    0,
+  );
+  const refundedThisMonthCents = snapshot.billingBackoffice.refunds.reduce(
+    (total, refund) => {
+      const ts = refund.processedAt ?? refund.requestedAt;
+      const at = new Date(ts);
+      if (at < monthStart || at > now) {
+        return total;
+      }
+      return total + refund.amountCents;
+    },
+    0,
+  );
+
+  const billingCycleLabel: Record<string, string> = {
+    monthly: "Maandelijks",
+    semiannual: "Halfjaarlijks",
+    annual: "Jaarcontract",
+  };
+
+  type MemberInstalment = {
+    readonly memberId: string;
+    readonly memberName: string;
+    readonly planName: string;
+    readonly cycleLabel: string;
+    readonly monthlyPriceCents: number;
+    readonly status: string;
+    readonly joinedAt: string;
+    readonly nextRenewalAt: string;
+    readonly paidCount: number;
+    readonly openCount: number;
+    readonly failedCount: number;
+    readonly paidCents: number;
+    readonly outstandingCents: number;
+    readonly lastInvoiceAt: string | null;
+    readonly needsAttention: boolean;
+  };
+
+  const memberInstalments: MemberInstalment[] = snapshot.members
+    .filter((member) => member.status === "active" || member.status === "trial")
+    .map((member) => {
+      const plan = planById.get(member.membershipPlanId);
+      const invoices = invoicesByMember.get(member.id) ?? [];
+      const paid = invoices.filter((invoice) => invoice.status === "paid");
+      const open = invoices.filter(
+        (invoice) => invoice.status === "open" || invoice.status === "draft",
+      );
+      const failed = invoices.filter((invoice) => invoice.status === "failed");
+      const lastInvoiceAt =
+        invoices.length > 0
+          ? invoices
+              .map((invoice) => invoice.issuedAt)
+              .sort((a, b) => b.localeCompare(a))[0]!
+          : null;
+
+      return {
+        memberId: member.id,
+        memberName: member.fullName,
+        planName: plan?.name ?? "Onbekend plan",
+        cycleLabel: plan ? billingCycleLabel[plan.billingCycle] ?? plan.billingCycle : "—",
+        monthlyPriceCents: plan ? Math.round(plan.priceMonthly * 100) : 0,
+        status: member.status,
+        joinedAt: member.joinedAt,
+        nextRenewalAt: member.nextRenewalAt,
+        paidCount: paid.length,
+        openCount: open.length,
+        failedCount: failed.length,
+        paidCents: paid.reduce((total, invoice) => total + invoice.amountCents, 0),
+        outstandingCents: open.reduce(
+          (total, invoice) => total + invoice.amountCents,
+          0,
+        ),
+        lastInvoiceAt,
+        needsAttention: failed.length > 0 || open.length > 0,
+      };
+    })
+    .sort((left, right) => {
+      if (left.needsAttention !== right.needsAttention) {
+        return left.needsAttention ? -1 : 1;
+      }
+      return left.memberName.localeCompare(right.memberName, "nl");
+    });
+
+  const memberInstalmentColumns: DataGridColumn<MemberInstalment>[] = [
+    {
+      id: "memberName",
+      header: "Lid",
+      accessorKey: "memberName",
+      allowsSorting: true,
+      isRowHeader: true,
+      minWidth: 220,
+      pinned: "start",
+      cell: (row) => (
+        <span className="grid min-w-0 gap-1">
+          <span className="truncate font-medium">{row.memberName}</span>
+          <span className="text-muted truncate text-xs">
+            {row.planName} · {row.cycleLabel}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      allowsSorting: true,
+      minWidth: 120,
+      cell: (row) => (
+        <Chip
+          color={
+            row.needsAttention
+              ? "warning"
+              : row.status === "active"
+                ? "success"
+                : "default"
+          }
+          size="sm"
+          variant="soft"
+        >
+          {row.needsAttention
+            ? `${row.failedCount + row.openCount} open`
+            : row.status === "active"
+              ? "Loopt"
+              : "Proef"}
+        </Chip>
+      ),
+    },
+    {
+      id: "paidCount",
+      header: "Betaalde termijnen",
+      accessorKey: "paidCount",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 150,
+      cell: (row) => (
+        <span className="grid min-w-0 gap-0.5">
+          <span className="text-foreground tabular-nums font-medium">
+            {row.paidCount} voldaan
+          </span>
+          <span className="text-muted text-xs">
+            {row.openCount > 0
+              ? `${row.openCount} open`
+              : row.failedCount > 0
+                ? `${row.failedCount} mislukt`
+                : "Op koers"}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "paidCents",
+      header: "Totaal betaald",
+      accessorKey: "paidCents",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (row) => (
+        <span className="tabular-nums">{formatEuroFromCents(row.paidCents)}</span>
+      ),
+    },
+    {
+      id: "outstandingCents",
+      header: "Openstaand",
+      accessorKey: "outstandingCents",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 130,
+      cell: (row) => (
+        <span
+          className={`tabular-nums ${
+            row.outstandingCents > 0 ? "text-warning font-semibold" : "text-muted"
+          }`}
+        >
+          {formatEuroFromCents(row.outstandingCents)}
+        </span>
+      ),
+    },
+    {
+      id: "nextRenewalAt",
+      header: "Volgende incasso",
+      accessorKey: "nextRenewalAt",
+      allowsSorting: true,
+      minWidth: 150,
+      cell: (row) => (
+        <span className="text-foreground text-sm">{formatDate(row.nextRenewalAt)}</span>
+      ),
+    },
+    {
+      id: "monthlyPriceCents",
+      header: "Per termijn",
+      accessorKey: "monthlyPriceCents",
+      align: "end",
+      allowsSorting: true,
+      minWidth: 120,
+      cell: (row) => (
+        <span className="text-muted tabular-nums text-sm">
+          {row.monthlyPriceCents > 0 ? formatEuroFromCents(row.monthlyPriceCents) : "—"}
+        </span>
+      ),
+    },
+  ];
+
+  const actionQueueInvoices = snapshot.billingBackoffice.invoices
+    .filter((invoice) => invoice.status === "failed" || invoice.retryCount >= 2)
+    .sort((left, right) => right.retryCount - left.retryCount)
+    .slice(0, 6);
+
+  const activityFeed = [
+    ...snapshot.billingBackoffice.webhooks.map((event) => ({
+      id: event.id,
+      timestamp: event.receivedAt,
+      title: event.eventType,
+      detail: event.payloadSummary,
+      chipLabel: getBillingWebhookStatusLabel(event.status),
+      chipColor:
+        event.status === "processed"
+          ? "success"
+          : event.status === "failed"
+            ? "danger"
+            : "default",
+    })),
+    ...snapshot.billingBackoffice.refunds.map((refund) => ({
+      id: `refund-${refund.id}`,
+      timestamp: refund.processedAt ?? refund.requestedAt,
+      title: "Terugbetaling",
+      detail: `${formatEuroFromCents(refund.amountCents)} — ${refund.reason}`,
+      chipLabel:
+        refund.status === "processed"
+          ? "Verwerkt"
+          : refund.status === "failed"
+            ? "Mislukt"
+            : "In behandeling",
+      chipColor:
+        refund.status === "processed"
+          ? "success"
+          : refund.status === "failed"
+            ? "danger"
+            : "warning",
+    })),
+  ]
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+    .slice(0, 10);
+
+  const heroKpis = [
+    {
+      label: "MRR",
+      value: formatEuroFromCents(monthlyRecurringRevenueCents),
+      helper: `${activeMembers.length} actieve leden · ${trialMembers.length} proef`,
+    },
+    {
+      label: "Deze maand ontvangen",
+      value: formatEuroFromCents(receivedThisMonthCents),
+      helper: "Som betaalde facturen binnen deze maand.",
+    },
+    {
+      label: "Openstaand",
+      value: formatEuroFromCents(outstandingCents),
+      helper: `${outstandingInvoices.length} open/draft factu${
+        outstandingInvoices.length === 1 ? "ur" : "ren"
+      }.`,
+    },
+    {
+      label: "Mislukt",
+      value: formatEuroFromCents(failedCents),
+      helper:
+        failedInvoices.length === 0
+          ? "Geen mislukte betalingen."
+          : `${failedInvoices.length} factu${
+              failedInvoices.length === 1 ? "ur" : "ren"
+            } vragen actie.`,
+      tone: failedInvoices.length > 0 ? ("warning" as const) : undefined,
+    },
+    {
+      label: "Terugbetaald deze maand",
+      value: formatEuroFromCents(refundedThisMonthCents),
+      helper: "Bedrag dat is teruggeboekt sinds de eerste van deze maand.",
+    },
+    {
+      label: "Actieve abonnementen",
+      value: String(activeMembers.length),
+      helper: `${snapshot.members.length} leden in totaal.`,
+    },
+  ];
+
   useEffect(() => {
     setWebshopCollectionName(snapshot.revenueWorkspace.webshopCollectionName);
     setPointOfSaleMode(snapshot.revenueWorkspace.pointOfSaleMode);
@@ -356,6 +703,147 @@ export function PaymentsDashboardPage({ snapshot }: DashboardPageProps) {
 
   return (
     <div className="section-stack min-w-0 max-w-full overflow-x-clip">
+        <PageSection
+          title="Betalingen overzicht"
+          description="Wat er nu binnenkomt, wat openstaat en welke betalingen je aandacht vragen."
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {heroKpis.map((kpi) => (
+              <Card
+                key={kpi.label}
+                className="border-border/80 bg-surface rounded-2xl border shadow-none"
+              >
+                <Card.Content className="space-y-2 p-5">
+                  <p className="text-muted text-sm">{kpi.label}</p>
+                  <p
+                    className={`text-3xl font-semibold tabular-nums ${
+                      kpi.tone === "warning" ? "text-warning" : "text-foreground"
+                    }`}
+                  >
+                    {kpi.value}
+                  </p>
+                  <p className="text-muted text-sm leading-6">{kpi.helper}</p>
+                </Card.Content>
+              </Card>
+            ))}
+          </div>
+        </PageSection>
+
+        <PageSection
+          title="Lidmaatschapsbetalingen"
+          description="Per lid: aantal betaalde termijnen, openstaand bedrag en datum van de volgende incasso. Leden met openstaande of mislukte betalingen staan bovenaan."
+        >
+          {memberInstalments.length > 0 ? (
+            <DataGrid
+              allowsColumnResize
+              aria-label="Lidmaatschapsbetalingen"
+              className="rounded-2xl"
+              columns={memberInstalmentColumns}
+              contentClassName="min-w-[960px]"
+              data={memberInstalments}
+              defaultSortDescriptor={{ column: "memberName", direction: "ascending" }}
+              getRowId={(row) => row.memberId}
+              scrollContainerClassName="max-w-full overflow-x-auto"
+              variant="primary"
+            />
+          ) : (
+            <div className="border-border/80 bg-surface text-muted rounded-2xl border border-dashed px-4 py-8 text-center">
+              <p className="text-foreground font-medium">Nog geen leden met lidmaatschap</p>
+              <p className="mt-1 text-sm">
+                Zodra je leden hebt verschijnen hier hun betaaltermijnen, totalen en openstaande bedragen.
+              </p>
+            </div>
+          )}
+        </PageSection>
+
+        {actionQueueInvoices.length > 0 ? (
+          <PageSection
+            title="Actie nodig"
+            description="Mislukte of vastgelopen betalingen die nu opvolging vragen."
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {actionQueueInvoices.map((invoice) => (
+                <Card
+                  key={invoice.id}
+                  className="border-warning/40 bg-surface rounded-2xl border shadow-none"
+                >
+                  <Card.Content className="space-y-3 p-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-foreground truncate font-semibold">
+                          {invoice.memberName}
+                        </p>
+                        <p className="text-muted truncate text-xs">
+                          {invoice.description}
+                        </p>
+                      </div>
+                      <Chip color="warning" size="sm" variant="soft">
+                        {getBillingInvoiceStatusLabel(invoice.status)}
+                      </Chip>
+                    </div>
+                    <div className="text-muted grid gap-1 text-sm">
+                      <span className="text-foreground text-lg font-semibold tabular-nums">
+                        {formatEuroFromCents(invoice.amountCents)}
+                      </span>
+                      <span>Vervalt {formatDate(invoice.dueAt)}</span>
+                      <span>{invoice.retryCount} pogingen geweest</span>
+                    </div>
+                    {invoice.checkoutUrl ? (
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onPress={() =>
+                          window.open(invoice.checkoutUrl, "_blank", "noopener,noreferrer")
+                        }
+                      >
+                        Betaallink openen
+                      </Button>
+                    ) : null}
+                  </Card.Content>
+                </Card>
+              ))}
+            </div>
+          </PageSection>
+        ) : null}
+
+        {activityFeed.length > 0 ? (
+          <PageSection
+            title="Recente activiteit"
+            description="Laatste tien betaalevents uit Mollie en interne terugbetalingen."
+          >
+            <Card className="border-border/80 bg-surface rounded-2xl border shadow-none">
+              <Card.Content className="divide-border/60 divide-y p-0">
+                {activityFeed.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-foreground truncate font-medium">{entry.title}</p>
+                      <p className="text-muted truncate text-sm">{entry.detail}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Chip
+                        color={
+                          entry.chipColor as "success" | "danger" | "warning" | "default"
+                        }
+                        size="sm"
+                        variant="soft"
+                      >
+                        {entry.chipLabel}
+                      </Chip>
+                      <span className="text-muted text-xs tabular-nums">
+                        {formatDate(entry.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </Card.Content>
+            </Card>
+          </PageSection>
+        ) : null}
+
         <div id="revenue-setup" className="scroll-mt-28">
           <PageSection
             title="Omzetinstellingen"
