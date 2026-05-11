@@ -1761,7 +1761,7 @@ export function PlatformWorkbench({
               </p>
             ) : (
               <form
-                className="section-stack"
+                className="space-y-5"
                 onSubmit={(event) => {
                   event.preventDefault();
                   runAction(async () => {
@@ -1785,281 +1785,352 @@ export function PlatformWorkbench({
                   });
                 }}
               >
-                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
-                  <Card.Content className="space-y-2">
-                    <p className="font-medium">Betaalstatus</p>
-                    <p className="text-muted text-sm leading-6">
-                      {snapshot.payments.helpText}
-                    </p>
-                  </Card.Content>
-                </Card>
-
-                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
-                  <Card.Header className="items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <Card.Title>Betaalgegevens koppelen</Card.Title>
-                      <Card.Description>
-                        {isMollieConnectConnected
-                          ? "De betaalgegevens zijn veilig gekoppeld. Beheer hier mandaatcontrole, opnieuw koppelen of ontkoppelen."
-                          : "Koppel betaalgegevens of maak een aanmeldlink voordat GymOS betalingen kan verwerken."}
-                      </Card.Description>
-                    </div>
-                    <Chip
-                      color={isMollieConnectConnected ? "success" : "default"}
-                      size="sm"
-                      variant={isMollieConnectConnected ? "soft" : "tertiary"}
-                    >
-                      {isMollieConnectConnected
-                        ? snapshot.payments.mollieConnectTestMode
-                          ? "Test gekoppeld"
-                          : "Live gekoppeld"
-                        : "Niet gekoppeld"}
-                    </Chip>
-                  </Card.Header>
-                  <Card.Content className="section-stack">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {isMollieConnectConnected ? (
-                        <>
-                          <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Betaalprofiel gekoppeld</p>
-                            <p className="text-muted mt-1 text-sm leading-6">
-                              {snapshot.payments.profileLabel || "Profielnaam onbekend"}
-                              {snapshot.payments.profileId
-                                ? ` · ${snapshot.payments.profileId}`
-                                : ""}
-                            </p>
+                {/* 1. Connection */}
+                {isMollieConnectConnected ? (
+                  <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                    <Card.Content className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span
+                          aria-hidden
+                          className="bg-success/15 text-success mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                        >
+                          ✓
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold">Verbonden met Mollie</p>
+                            <Chip color="success" size="sm" variant="soft">
+                              {snapshot.payments.mollieConnectTestMode ? "Testmodus" : "Live"}
+                            </Chip>
                           </div>
-                          <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Betalingen apart activeren</p>
-                            <p className="text-muted mt-1 text-sm leading-6">
-                              De betaalgegevens zijn klaar. Zet betalingen pas actief nadat betaalroutes, supportmail en notities kloppen.
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Bestaande incasso’s herkennen</p>
-                            <p className="text-muted mt-1 text-sm leading-6">
-                              Koppel de bestaande betaalgegevens van de gym. GymOS kan daarna bestaande incasso’s herkennen en mandaten controleren voor migratie.
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                            <p className="text-sm font-medium">Nieuwe betaalomgeving aanmelden</p>
-                            <p className="text-muted mt-1 text-sm leading-6">
-                              Maak een aanmeldlink zodat de gym de betaalomgeving met GymOS-context kan afronden.
-                            </p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-muted text-sm leading-6">
-                      {snapshot.payments.mollieConnectMigrationHint}
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-3">
-                      <Button
-                        isDisabled={Boolean(billingConnectDisabledReason)}
-                        type="button"
-                        variant="outline"
-                        onPress={() => {
-                          window.location.href = "/api/platform/billing/mollie/connect";
-                        }}
-                      >
-                        {isMollieConnectConnected ? "Opnieuw veilig koppelen" : "Betaalgegevens veilig koppelen"}
-                      </Button>
-                      {!isMollieConnectConnected && snapshot.payments.mollieConnectOnboardingUrl ? (
+                          <p className="text-muted truncate text-xs leading-5">
+                            {snapshot.payments.profileLabel || "Profielnaam onbekend"}
+                            {snapshot.payments.profileId
+                              ? ` · ${snapshot.payments.profileId}`
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
                         <Button
+                          isDisabled={Boolean(billingConnectDisabledReason)}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onPress={() => {
+                            window.location.href = "/api/platform/billing/mollie/connect";
+                          }}
+                        >
+                          Opnieuw koppelen
+                        </Button>
+                        <Button
+                          isDisabled={isPending}
+                          size="sm"
                           type="button"
                           variant="outline"
                           onPress={() =>
-                            window.open(
-                              snapshot.payments.mollieConnectOnboardingUrl,
-                              "_blank",
-                              "noopener,noreferrer",
-                            )
+                            runAction(async () => {
+                              const preview = await submitJson<{
+                                reusableMandates: number;
+                                totalMandates: number;
+                              }>("/api/platform/billing/mollie/mandates", {});
+                              toast.success(
+                                `${preview.reusableMandates} van ${preview.totalMandates} mandaten zijn direct herbruikbaar.`,
+                              );
+                            })
                           }
                         >
-                          Laatste aanmeldlink openen
+                          Mandaten controleren
                         </Button>
-                      ) : null}
-                      {isMollieConnectConnected ? (
-                        <>
+                        <Button
+                          isDisabled={isPending}
+                          size="sm"
+                          type="button"
+                          variant="danger"
+                          onPress={() => {
+                            if (!window.confirm("Betaalgegevens ontkoppelen?")) {
+                              return;
+                            }
+                            runAction(async () => {
+                              await submitJson(
+                                "/api/platform/billing/mollie/disconnect",
+                                {},
+                              );
+                              toast.success("Betaalgegevens ontkoppeld.");
+                            });
+                          }}
+                        >
+                          Ontkoppelen
+                        </Button>
+                      </div>
+                    </Card.Content>
+                    {billingConnectDisabledReason ? (
+                      <Card.Footer>
+                        <DisabledActionReason reason={billingConnectDisabledReason} />
+                      </Card.Footer>
+                    ) : null}
+                  </Card>
+                ) : (
+                  <Card className="rounded-2xl border-accent/30 bg-accent/5">
+                    <Card.Content className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-1.5">
+                        <p className="text-sm font-semibold">Mollie nog niet gekoppeld</p>
+                        <p className="text-muted text-sm leading-6">
+                          Koppel het Mollie-account om online betalingen, automatische incasso en testcheckouts mogelijk te maken.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          isDisabled={Boolean(billingConnectDisabledReason)}
+                          type="button"
+                          onPress={() => {
+                            window.location.href = "/api/platform/billing/mollie/connect";
+                          }}
+                        >
+                          Mollie koppelen
+                        </Button>
+                        {snapshot.payments.mollieConnectOnboardingUrl ? (
                           <Button
-                            isDisabled={isPending}
                             type="button"
                             variant="outline"
                             onPress={() =>
-                              runAction(async () => {
-                                const preview = await submitJson<{
-                                  reusableMandates: number;
-                                  totalMandates: number;
-                                }>("/api/platform/billing/mollie/mandates", {});
-
-                                toast.success(
-                                  `${preview.reusableMandates} van ${preview.totalMandates} mandaten zijn direct herbruikbaar.`,
-                                );
-                              })
+                              window.open(
+                                snapshot.payments.mollieConnectOnboardingUrl,
+                                "_blank",
+                                "noopener,noreferrer",
+                              )
                             }
                           >
-                            Mandaten controleren
+                            Laatste aanmeldlink openen
                           </Button>
-                          <Button
-                            isDisabled={isPending}
-                            type="button"
-                            variant="danger"
-                            onPress={() => {
-                              if (!window.confirm("Betaalgegevens ontkoppelen?")) {
-                                return;
-                              }
-
-                              runAction(async () => {
-                                await submitJson(
-                                  "/api/platform/billing/mollie/disconnect",
-                                  {},
-                                );
-                                toast.success("Betaalgegevens ontkoppeld.");
-                              });
-                            }}
-                          >
-                            Koppeling verwijderen
-                          </Button>
-                        </>
-                      ) : null}
+                        ) : null}
                       </div>
-                      <DisabledActionReason reason={billingConnectDisabledReason} />
-                    </div>
-                  </Card.Content>
-                </Card>
+                    </Card.Content>
+                    {billingConnectDisabledReason ? (
+                      <Card.Footer>
+                        <DisabledActionReason reason={billingConnectDisabledReason} />
+                      </Card.Footer>
+                    ) : null}
+                  </Card>
+                )}
 
+                {/* 2. Activation switch */}
                 <Card className="rounded-2xl border-border/70 bg-surface-secondary">
-                  <Card.Content className="space-y-2">
-                    <p className="font-medium">
-                      {isMollieConnectConnected
-                        ? "Koppeling klaar, verwerking nog bewust apart"
-                        : "Koppel betaalgegevens voordat je live verwerking aanzet"}
-                    </p>
-                    <p className="text-muted text-sm leading-6">
-                      {isMollieConnectConnected
-                        ? "De veilige koppeling geeft GymOS toegang tot het gekoppelde betaalprofiel. De schakelaar hieronder bepaalt of deze gym daadwerkelijk betaalverzoeken en incasso's mag verwerken."
-                        : "Zodra betaalgegevens gekoppeld zijn, vult GymOS profielnaam en profiel-ID automatisch in. Daarna kies je de betaalroutes en activeer je verwerking."}
-                    </p>
-                  </Card.Content>
-                </Card>
-
-                <Switch isSelected={billingEnabled} onChange={setBillingEnabled}>
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                  <Switch.Content>
-                    <Label>Betalingen actief voor deze gym</Label>
-                  </Switch.Content>
-                </Switch>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-border/70 bg-surface px-4 py-3">
-                    <p className="text-sm font-medium">Betaalprovider</p>
-                    <p className="text-muted mt-1 text-sm leading-6">
-                      {snapshot.payments.providerLabel}
-                    </p>
-                  </div>
-                  <Field label="Gekoppeld betaalprofiel">
-                    <Input fullWidth readOnly value={billingProfileLabel || "Nog niet gekoppeld"} />
-                  </Field>
-                  <Field label="Profiel-ID voor betalingen">
-                    <Input fullWidth readOnly value={billingProfileId || "Nog niet bekend"} />
-                  </Field>
-                  <Field label="Uitbetalingslabel">
-                    <Input fullWidth placeholder="Jouw sportschool" value={billingSettlementLabel} onChange={(event) => setBillingSettlementLabel(event.target.value)} />
-                  </Field>
-                  <div className="md:col-span-2">
-                    <Field label="Supportmail voor betalingen">
-                      <Input fullWidth placeholder="billing@jouwgym.nl" type="email" value={billingSupportEmail} onChange={(event) => setBillingSupportEmail(event.target.value)} />
-                    </Field>
-                  </div>
-                </div>
-
-                <div className="section-stack rounded-2xl border border-border/70 bg-surface-secondary px-4 py-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="font-medium">Betaalroutes voor leden</p>
+                  <Card.Content className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <Label className="text-sm font-semibold">
+                        Betalingen actief voor deze gym
+                      </Label>
                       <p className="text-muted text-sm leading-6">
-                        Bepaal welke betaalroutes GymOS voor deze gym mag gebruiken. Automatische incasso int maandelijks; Volledige contractbetaling rekent de volledige contractperiode in één keer af.
+                        {isMollieConnectConnected
+                          ? "Wanneer aan, verwerkt Mollie echte betaalverzoeken en incasso's voor deze gym."
+                          : "Koppel eerst Mollie. Daarna kun je deze schakelaar omzetten."}
                       </p>
                     </div>
+                    <Switch isSelected={billingEnabled} onChange={setBillingEnabled}>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch>
+                  </Card.Content>
+                </Card>
+
+                {/* 3. Payment routes */}
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Header className="items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <Card.Title>Betaalroutes</Card.Title>
+                      <Card.Description>
+                        Welke betaalmethoden mag GymOS voor deze gym aanbieden.
+                      </Card.Description>
+                    </div>
                     <Chip size="sm" variant="tertiary">
-                      {billingPaymentMethods.length} geselecteerd
+                      {billingPaymentMethods.length} actief
                     </Chip>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-3">
+                  </Card.Header>
+                  <Card.Content className="grid gap-3 md:grid-cols-3">
                     {BILLING_PAYMENT_METHOD_OPTIONS.map((paymentMethod) => {
                       const active = billingPaymentMethods.includes(paymentMethod.key);
-
                       return (
-                        <div
+                        <button
                           key={paymentMethod.key}
-                          className={`rounded-2xl border px-3 py-3 ${
-                            active ? "border-accent/60 bg-accent/10" : "border-border/70 bg-surface"
+                          type="button"
+                          onClick={() => toggleBillingMethod(paymentMethod.key)}
+                          className={`flex min-w-0 flex-col items-start gap-2 rounded-2xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                            active
+                              ? "border-accent bg-accent/10 shadow-sm"
+                              : "border-border/60 bg-surface hover:border-border"
                           }`}
                         >
-                          <Button
-                            type="button"
-                            variant={active ? "primary" : "outline"}
-                            onPress={() => toggleBillingMethod(paymentMethod.key)}
-                          >
-                            {paymentMethod.label}
-                          </Button>
-                          <p className="text-muted mt-2 text-sm leading-6">
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <span className="text-foreground text-sm font-semibold">
+                              {paymentMethod.label}
+                            </span>
+                            <span
+                              aria-hidden
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                                active
+                                  ? "bg-accent text-white"
+                                  : "border-border/60 text-muted border bg-surface"
+                              }`}
+                            >
+                              {active ? "✓" : ""}
+                            </span>
+                          </div>
+                          <p className="text-muted text-xs leading-5">
                             {paymentMethod.helper}
                           </p>
-                        </div>
+                        </button>
                       );
                     })}
-                  </div>
+                  </Card.Content>
+                </Card>
+
+                {/* 4. Profile and member-facing details */}
+                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
+                  <Card.Header>
+                    <Card.Title>Gegevens voor leden</Card.Title>
+                    <Card.Description>
+                      Wat leden te zien krijgen op hun afschrift en in de checkout.
+                    </Card.Description>
+                  </Card.Header>
+                  <Card.Content className="grid gap-4 md:grid-cols-2">
+                    <Field label="Betaalprovider">
+                      <Input fullWidth readOnly value={snapshot.payments.providerLabel} />
+                    </Field>
+                    <Field label="Gekoppeld betaalprofiel">
+                      <Input
+                        fullWidth
+                        readOnly
+                        value={billingProfileLabel || "Nog niet gekoppeld"}
+                      />
+                    </Field>
+                    <Field label="Uitbetalingslabel">
+                      <Input
+                        fullWidth
+                        placeholder="Jouw sportschool"
+                        value={billingSettlementLabel}
+                        onChange={(event) => setBillingSettlementLabel(event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Supportmail voor leden">
+                      <Input
+                        fullWidth
+                        placeholder="billing@jouwgym.nl"
+                        type="email"
+                        value={billingSupportEmail}
+                        onChange={(event) => setBillingSupportEmail(event.target.value)}
+                      />
+                    </Field>
+                    <div className="md:col-span-2">
+                      <Field label="Notities (alleen intern)">
+                        <TextArea
+                          fullWidth
+                          rows={3}
+                          placeholder="eerst lidmaatschappen via incasso, intake via los betaalverzoek"
+                          value={billingNotes}
+                          onChange={(event) => setBillingNotes(event.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  </Card.Content>
+                </Card>
+
+                {/* 5. Save action */}
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <DisabledActionReason reason={billingSettingsDisabledReason} />
+                  <Button isDisabled={Boolean(billingSettingsDisabledReason)} type="submit">
+                    {isPending ? "Opslaan..." : "Instellingen opslaan"}
+                  </Button>
                 </div>
 
-                <Field label="Notities">
-                  <TextArea fullWidth rows={4} placeholder="eerst lidmaatschappen via incasso, intake via los betaalverzoek" value={billingNotes} onChange={(event) => setBillingNotes(event.target.value)} />
-                </Field>
-
+                {/* 6. New Mollie environment — only when not connected */}
                 {!isMollieConnectConnected ? (
                   <Card className="rounded-2xl border-border/70 bg-surface-secondary">
                     <Card.Header>
-                      <Card.Title>Nieuwe betaalomgeving aanmelden</Card.Title>
+                      <Card.Title>Nog geen Mollie-account?</Card.Title>
                       <Card.Description>
-                        Gebruik dit wanneer een gym nog geen betaalaccount heeft. De link opent de testomgeving.
+                        Maak een aanmeldlink. De gymeigenaar rondt de aanvraag bij Mollie zelf af.
                       </Card.Description>
                     </Card.Header>
                     <Card.Content className="grid gap-4 md:grid-cols-2">
                       <Field label="Organisatienaam">
-                        <Input fullWidth value={mollieClientName} onChange={(event) => setMollieClientName(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientName}
+                          onChange={(event) => setMollieClientName(event.target.value)}
+                        />
                       </Field>
                       <Field label="E-mail">
-                        <Input fullWidth type="email" value={mollieClientEmail} onChange={(event) => setMollieClientEmail(event.target.value)} />
+                        <Input
+                          fullWidth
+                          type="email"
+                          value={mollieClientEmail}
+                          onChange={(event) => setMollieClientEmail(event.target.value)}
+                        />
                       </Field>
                       <Field label="Straat en nummer">
-                        <Input fullWidth value={mollieClientStreet} onChange={(event) => setMollieClientStreet(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientStreet}
+                          onChange={(event) => setMollieClientStreet(event.target.value)}
+                        />
                       </Field>
                       <Field label="Postcode">
-                        <Input fullWidth value={mollieClientPostalCode} onChange={(event) => setMollieClientPostalCode(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientPostalCode}
+                          onChange={(event) => setMollieClientPostalCode(event.target.value)}
+                        />
                       </Field>
                       <Field label="Plaats">
-                        <Input fullWidth value={mollieClientCity} onChange={(event) => setMollieClientCity(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientCity}
+                          onChange={(event) => setMollieClientCity(event.target.value)}
+                        />
                       </Field>
                       <Field label="Landcode">
-                        <Input fullWidth maxLength={2} value={mollieClientCountry} onChange={(event) => setMollieClientCountry(event.target.value.toUpperCase())} />
+                        <Input
+                          fullWidth
+                          maxLength={2}
+                          value={mollieClientCountry}
+                          onChange={(event) =>
+                            setMollieClientCountry(event.target.value.toUpperCase())
+                          }
+                        />
                       </Field>
                       <Field label="KvK-nummer">
-                        <Input fullWidth value={mollieClientRegistrationNumber} onChange={(event) => setMollieClientRegistrationNumber(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientRegistrationNumber}
+                          onChange={(event) =>
+                            setMollieClientRegistrationNumber(event.target.value)
+                          }
+                        />
                       </Field>
                       <Field label="BTW-nummer">
-                        <Input fullWidth value={mollieClientVatNumber} onChange={(event) => setMollieClientVatNumber(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientVatNumber}
+                          onChange={(event) => setMollieClientVatNumber(event.target.value)}
+                        />
                       </Field>
                       <Field label="Rechtsvorm">
-                        <Input fullWidth value={mollieClientLegalEntity} onChange={(event) => setMollieClientLegalEntity(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientLegalEntity}
+                          onChange={(event) => setMollieClientLegalEntity(event.target.value)}
+                        />
                       </Field>
                       <Field label="Registratiekantoor">
-                        <Input fullWidth value={mollieClientRegistrationOffice} onChange={(event) => setMollieClientRegistrationOffice(event.target.value)} />
+                        <Input
+                          fullWidth
+                          value={mollieClientRegistrationOffice}
+                          onChange={(event) =>
+                            setMollieClientRegistrationOffice(event.target.value)
+                          }
+                        />
                       </Field>
                       <div className="md:col-span-2">
                         <Field label="Oprichtingsdatum">
@@ -2071,7 +2142,8 @@ export function PlatformWorkbench({
                         </Field>
                       </div>
                     </Card.Content>
-                    <Card.Footer className="flex-col items-stretch gap-2 sm:items-end">
+                    <Card.Footer className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+                      <DisabledActionReason reason={mollieClientLinkDisabledReason} />
                       <Button
                         isDisabled={Boolean(mollieClientLinkDisabledReason)}
                         type="button"
@@ -2107,98 +2179,107 @@ export function PlatformWorkbench({
                       >
                         Aanmeldlink maken
                       </Button>
-                      <DisabledActionReason reason={mollieClientLinkDisabledReason} />
                     </Card.Footer>
                   </Card>
                 ) : null}
 
-                <Card className="rounded-2xl border-border/70 bg-surface-secondary">
-                  <Card.Header>
-                    <Card.Title>Testbetaling starten</Card.Title>
-                    <Card.Description>
-                      Start los van de opgeslagen instellingen een testcheckout voor volledige contractbetaling of een los betaalverzoek. Automatische incasso controleer je apart via mandaten.
-                    </Card.Description>
-                  </Card.Header>
-                  <Card.Content className="grid gap-4 md:grid-cols-2">
-                    <SelectField
-                      label="Betaalroute"
-                      options={checkoutPreviewMethodOptions.map((paymentMethod) => ({
-                        value: paymentMethod.key,
-                        label: paymentMethod.label,
-                      }))}
-                      value={selectedBillingPreviewMethod}
-                      onChange={(value) => setBillingPreviewMethod(value as typeof billingPreviewMethod)}
-                    />
-                    <Field label="Testbedrag (€)">
-                      <Input
-                        fullWidth
-                        inputMode="decimal"
-                        placeholder="€ 24,95"
-                        type="text"
-                        value={billingPreviewAmount}
-                        onBlur={() =>
-                          setBillingPreviewAmount(
-                            formatEuroFromCents(billingPreviewAmountCents),
-                          )
+                {/* 7. Test checkout — only when connected */}
+                {isMollieConnectConnected ? (
+                  <Card className="rounded-2xl border border-dashed border-border/60 bg-surface-secondary/60">
+                    <Card.Header>
+                      <Card.Title className="text-base">Testbetaling starten</Card.Title>
+                      <Card.Description>
+                        Start een losse testcheckout zonder de opgeslagen instellingen te wijzigen.
+                      </Card.Description>
+                    </Card.Header>
+                    <Card.Content className="grid gap-4 md:grid-cols-2">
+                      <SelectField
+                        label="Betaalroute"
+                        options={checkoutPreviewMethodOptions.map((paymentMethod) => ({
+                          value: paymentMethod.key,
+                          label: paymentMethod.label,
+                        }))}
+                        value={selectedBillingPreviewMethod}
+                        onChange={(value) =>
+                          setBillingPreviewMethod(value as typeof billingPreviewMethod)
                         }
-                        onChange={(event) => setBillingPreviewAmount(event.target.value)}
                       />
-                    </Field>
-                    <Field label="Omschrijving">
-                      <Input fullWidth placeholder="Intakepakket" value={billingPreviewDescription} onChange={(event) => setBillingPreviewDescription(event.target.value)} />
-                    </Field>
-                    <Field label="Lidnaam">
-                      <Input fullWidth placeholder="Optioneel" value={billingPreviewMemberName} onChange={(event) => setBillingPreviewMemberName(event.target.value)} />
-                    </Field>
-                  </Card.Content>
-                </Card>
-
-                <div className="flex flex-wrap justify-end gap-3">
-                  <p className="text-muted mr-auto max-w-2xl text-sm leading-6">
-                    Betaalinstellingen bewaren bewaart alleen actieve betaalroutes, supportmail en aan/uit-stand voor deze gym. Testbetaling starten maakt los daarvan een losse testcheckout.
-                  </p>
-                  <div className="flex max-w-full flex-col items-start gap-2 sm:items-end">
-                    <Button
-                      isDisabled={Boolean(billingSettingsDisabledReason)}
-                      type="submit"
-                    >
-                      {isPending ? "Opslaan..." : "Betaalinstellingen bewaren"}
-                    </Button>
-                    <DisabledActionReason reason={billingSettingsDisabledReason} />
-                  </div>
-                  <div className="flex max-w-full flex-col items-start gap-2 sm:items-end">
-                    <Button
-                      isDisabled={Boolean(billingPreviewDisabledReason)}
-                      type="button"
-                      variant="outline"
-                      onPress={() =>
-                        runAction(async () => {
-                          const receipt = await submitJson<{
-                            summary: string;
-                            checkoutUrl?: string;
-                          }>(
-                            "/api/platform/billing/preview",
-                            {
-                              paymentMethod: selectedBillingPreviewMethod,
-                              amountCents: billingPreviewAmountCents,
-                              currency: "EUR",
-                              description: billingPreviewDescription,
-                              memberName: billingPreviewMemberName || undefined,
-                            },
-                          );
-
-                          toast.success(receipt.summary);
-                          if (receipt.checkoutUrl) {
-                            window.open(receipt.checkoutUrl, "_blank", "noopener,noreferrer");
+                      <Field label="Testbedrag (€)">
+                        <Input
+                          fullWidth
+                          inputMode="decimal"
+                          placeholder="€ 24,95"
+                          type="text"
+                          value={billingPreviewAmount}
+                          onBlur={() =>
+                            setBillingPreviewAmount(
+                              formatEuroFromCents(billingPreviewAmountCents),
+                            )
                           }
-                        })
-                      }
-                    >
-                      Testbetaling starten
-                    </Button>
-                    <DisabledActionReason reason={billingPreviewDisabledReason} />
-                  </div>
-                </div>
+                          onChange={(event) =>
+                            setBillingPreviewAmount(event.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="Omschrijving">
+                        <Input
+                          fullWidth
+                          placeholder="Intakepakket"
+                          value={billingPreviewDescription}
+                          onChange={(event) =>
+                            setBillingPreviewDescription(event.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="Lidnaam (optioneel)">
+                        <Input
+                          fullWidth
+                          placeholder="Bijv. Anna Jansen"
+                          value={billingPreviewMemberName}
+                          onChange={(event) =>
+                            setBillingPreviewMemberName(event.target.value)
+                          }
+                        />
+                      </Field>
+                    </Card.Content>
+                    <Card.Footer className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+                      <DisabledActionReason reason={billingPreviewDisabledReason} />
+                      <Button
+                        isDisabled={Boolean(billingPreviewDisabledReason)}
+                        type="button"
+                        variant="outline"
+                        onPress={() =>
+                          runAction(async () => {
+                            const receipt = await submitJson<{
+                              summary: string;
+                              checkoutUrl?: string;
+                            }>(
+                              "/api/platform/billing/preview",
+                              {
+                                paymentMethod: selectedBillingPreviewMethod,
+                                amountCents: billingPreviewAmountCents,
+                                currency: "EUR",
+                                description: billingPreviewDescription,
+                                memberName: billingPreviewMemberName || undefined,
+                              },
+                            );
+
+                            toast.success(receipt.summary);
+                            if (receipt.checkoutUrl) {
+                              window.open(
+                                receipt.checkoutUrl,
+                                "_blank",
+                                "noopener,noreferrer",
+                              );
+                            }
+                          })
+                        }
+                      >
+                        Testbetaling starten
+                      </Button>
+                    </Card.Footer>
+                  </Card>
+                ) : null}
               </form>
             )}
           </SectionCard>
