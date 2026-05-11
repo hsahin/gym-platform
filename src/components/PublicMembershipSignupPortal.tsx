@@ -303,8 +303,9 @@ export function PublicMembershipSignupPortal({
           <Card.Header className="space-y-3">
             <Card.Title className="text-3xl">Word lid bij {snapshot.tenantName}</Card.Title>
             <Card.Description className="max-w-2xl text-base">
-              Kies je lidmaatschap en betaalwijze. Bij incasso geef je een SEPA machtiging af;
-              bij volledige contractbetaling open je de betaling voor de hele contractduur.
+              {manualReviewMode
+                ? "Kies je lidmaatschap. De club regelt de betaling persoonlijk met je nadat je aanmelding binnen is."
+                : "Kies je lidmaatschap en betaalwijze. Bij incasso geef je een SEPA machtiging af; bij volledige contractbetaling open je de betaling voor de hele contractduur."}
             </Card.Description>
           </Card.Header>
           {paymentReturn?.isReturn ? (
@@ -613,9 +614,11 @@ export function PublicMembershipSignupPortal({
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-muted max-w-xl text-sm leading-6">
-                  {paymentMethod === "direct_debit"
-                    ? "Na je SEPA machtiging staan je lidmaatschap, contract en ledenportaal klaar."
-                    : "Na je volledige contractbetaling staan je lidmaatschap, contract en ledenportaal klaar."}
+                  {manualReviewMode
+                    ? "Na het versturen neemt de club contact met je op om de betaling en je lidmaatschap af te ronden."
+                    : paymentMethod === "direct_debit"
+                      ? "Na je SEPA machtiging staan je lidmaatschap, contract en ledenportaal klaar."
+                      : "Na je volledige contractbetaling staan je lidmaatschap, contract en ledenportaal klaar."}
                 </p>
                 <Button
                   fullWidth
@@ -625,9 +628,11 @@ export function PublicMembershipSignupPortal({
                 >
                   {isPending
                     ? "Aanmelding verwerken..."
-                    : paymentMethod === "direct_debit"
-                      ? "SEPA machtiging afgeven"
-                      : "Betaling starten"}
+                    : manualReviewMode
+                      ? "Aanmelding versturen"
+                      : paymentMethod === "direct_debit"
+                        ? "SEPA machtiging afgeven"
+                        : "Betaling starten"}
                 </Button>
               </div>
             </Card.Content>
